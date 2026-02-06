@@ -745,36 +745,46 @@ def _render_sheet_blueprint(
             _render_block_inputs(items, param_map)
 
 
+def _extract_dep_label(dep: str) -> str:
+    """Extract a plain label from a dependency string like 'label (address)'."""
+    if " (" in dep:
+        return dep.split(" (")[0].strip()
+    # If it looks like a cell address, return as-is but clean it
+    return dep.replace("'", "").strip()
+
+
 def _render_kpi_banner(kpis: List[KPIDefinition]) -> None:
-    """Show KPIs as a banner explaining what the inputs calculate."""
+    """Show KPIs as informational banner -- no action needed from the user.
+
+    Only shows KPI names and which inputs feed them, in plain language.
+    Raw formulas and cell addresses are hidden.
+    """
     li_items: List[str] = []
     for kpi in kpis:
-        formula = (
-            kpi.human_readable_formula
-            or kpi.human_formula
-            or kpi.raw_formula
-            or ""
-        )
         name_esc = _esc(kpi.name)
-        formula_esc = _esc(formula)
-
         line = f"<strong>{name_esc}</strong>"
-        if formula_esc:
-            line += f" = <code>{formula_esc}</code>"
 
-        # Show dependencies (which inputs feed this KPI)
+        # Show dependency labels in plain language (no cell addresses)
         if kpi.dependencies:
-            dep_labels = []
-            for d in kpi.dependencies[:6]:
-                # Dependencies are in "label (address)" format; extract label
-                if " (" in d:
-                    dep_labels.append(_esc(d.split(" (")[0]))
-                else:
-                    dep_labels.append(_esc(d))
-            deps_str = ", ".join(dep_labels)
-            if len(kpi.dependencies) > 6:
-                deps_str += f" ... (+{len(kpi.dependencies) - 6})"
-            line += f'<br><span class="kpi-dep">&#8678; {deps_str}</span>'
+            seen: set[str] = set()
+            dep_labels: list[str] = []
+            for d in kpi.dependencies:
+                label = _extract_dep_label(d)
+                if label and label not in seen:
+                    seen.add(label)
+                    dep_labels.append(_esc(label))
+            if dep_labels:
+                # Show up to 5 dependency labels
+                shown = dep_labels[:5]
+                rest = len(dep_labels) - 5
+                deps_str = "、".join(shown)
+                if rest > 0:
+                    deps_str += f" など（計 {len(dep_labels)} 項目）"
+                line += (
+                    f'<br><span class="kpi-dep">'
+                    f'&#8592; {deps_str} から算出'
+                    f'</span>'
+                )
 
         li_items.append(f"<li>{line}</li>")
 
@@ -782,7 +792,7 @@ def _render_kpi_banner(kpis: List[KPIDefinition]) -> None:
     st.markdown(f"""
     <div class="kpi-banner">
         <div class="kpi-banner-title">
-            算出指標 &#8212; 入力値から自動計算されます
+            計算結果（操作不要 &#8212; 下の入力値から自動計算されます）
         </div>
         <ul>{kpi_html}</ul>
     </div>
@@ -877,19 +887,26 @@ def _render_block_inputs(
 
 
 def _render_kpi_banner_inline(kpis: List[KPIDefinition]) -> None:
-    """Alternative inline KPI display within model details."""
+    """KPI list for the detail section -- slightly more info than the banner."""
     for kpi in kpis:
-        formula = kpi.raw_formula or kpi.excel_formula or ""
-        human = kpi.human_readable_formula or kpi.human_formula or ""
-        with st.expander(f"{kpi.name} ({kpi.sheet}!{kpi.cell})"):
-            if formula:
-                st.code(formula, language=None)
-            if human:
-                st.caption(human)
+        # Show KPI name and sheet (without raw cell address)
+        with st.expander(f"{kpi.name}（{kpi.sheet} シート）"):
+            # Dependencies in plain language
             if kpi.dependencies:
-                st.markdown(
-                    "依存先: " + ", ".join(f"`{d}`" for d in kpi.dependencies)
-                )
+                seen: set[str] = set()
+                labels: list[str] = []
+                for d in kpi.dependencies:
+                    label = _extract_dep_label(d)
+                    if label and label not in seen:
+                        seen.add(label)
+                        labels.append(label)
+                if labels:
+                    st.markdown(
+                        "**算出に使われる入力:** "
+                        + "、".join(labels)
+                    )
+            else:
+                st.caption("依存する入力項目が見つかりませんでした")
 
 
 def _render_detail_section(
@@ -929,11 +946,11 @@ def _render_detail_section(
                 use_container_width=True, hide_index=True,
             )
 
-        st.markdown("**KPI 定義:**")
+        st.markdown("**自動計算される指標:**")
         if analysis.kpis:
             _render_kpi_banner_inline(analysis.kpis)
         else:
-            st.info("KPI が検出されませんでした。")
+            st.info("自動計算される指標が検出されませんでした。")
 
     with tab_evidence:
         has_evidence = [
