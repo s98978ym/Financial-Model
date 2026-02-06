@@ -4,6 +4,9 @@ All prompt constants are exposed so the Streamlit UI can display them
 in an editable "プロンプト設定" section.  Custom overrides are accepted
 via the ``overrides`` dict parameter on :func:`build_extraction_prompt`.
 """
+from __future__ import annotations
+
+from typing import Optional
 
 # ------------------------------------------------------------------
 # System prompts
@@ -159,9 +162,9 @@ def build_extraction_prompt(
     industry: str = "",
     business_model: str = "",
     strictness: str = "normal",
-    cases: list = None,
+    cases: Optional[list] = None,
     *,
-    overrides: dict | None = None,
+    overrides: Optional[dict] = None,
 ) -> list:
     """Build the ``messages`` list for LLM extraction.
 

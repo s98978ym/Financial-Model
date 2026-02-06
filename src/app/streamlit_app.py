@@ -38,38 +38,45 @@ if _PROJECT_ROOT not in sys.path:
 import streamlit as st
 
 # ---------------------------------------------------------------------------
-# Project imports
+# Project imports  (wrapped so Streamlit Cloud shows the real error)
 # ---------------------------------------------------------------------------
 
-from src.config.models import (
-    PhaseAConfig,
-    InputCatalog,
-    CatalogItem,
-    AnalysisReport,
-    KPIDefinition,
-    DependencyNode,
-    FormulaInfo,
-    ExtractedParameter,
-    ExtractionResult,
-    Evidence,
-    CellTarget,
-)
-from src.ingest.reader import read_document
-from src.ingest.base import DocumentContent
-from src.catalog.scanner import scan_template, export_catalog_json
-from src.modelmap.analyzer import analyze_model, generate_model_report_md
-from src.extract.extractor import ParameterExtractor
-from src.extract.llm_client import LLMClient, LLMError
-from src.extract.prompts import (
-    SYSTEM_PROMPT_NORMAL,
-    SYSTEM_PROMPT_STRICT,
-    INDUSTRY_PROMPTS,
-    BUSINESS_MODEL_PROMPTS,
-    USER_PROMPT_TEMPLATE,
-)
-from src.excel.writer import PLWriter
-from src.excel.validator import PLValidator, generate_needs_review_csv
-from src.excel.case_generator import CaseGenerator
+try:
+    from src.config.models import (
+        PhaseAConfig,
+        InputCatalog,
+        CatalogItem,
+        AnalysisReport,
+        KPIDefinition,
+        DependencyNode,
+        FormulaInfo,
+        ExtractedParameter,
+        ExtractionResult,
+        Evidence,
+        CellTarget,
+    )
+    from src.ingest.reader import read_document
+    from src.ingest.base import DocumentContent
+    from src.catalog.scanner import scan_template, export_catalog_json
+    from src.modelmap.analyzer import analyze_model, generate_model_report_md
+    from src.extract.extractor import ParameterExtractor
+    from src.extract.llm_client import LLMClient, LLMError
+    from src.extract.prompts import (
+        SYSTEM_PROMPT_NORMAL,
+        SYSTEM_PROMPT_STRICT,
+        INDUSTRY_PROMPTS,
+        BUSINESS_MODEL_PROMPTS,
+        USER_PROMPT_TEMPLATE,
+    )
+    from src.excel.writer import PLWriter
+    from src.excel.validator import PLValidator, generate_needs_review_csv
+    from src.excel.case_generator import CaseGenerator
+except Exception as _import_exc:
+    st.error(
+        f"モジュール読み込みエラー: {type(_import_exc).__name__}: {_import_exc}\n\n"
+        f"```\n{traceback.format_exc()}\n```"
+    )
+    st.stop()
 
 _IMPORT_ERRORS: List[str] = []
 try:
