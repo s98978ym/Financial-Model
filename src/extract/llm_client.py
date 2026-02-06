@@ -72,12 +72,15 @@ class LLMClient:
                     conversation.append(msg)
 
             # Ensure JSON output instruction in system prompt
-            if "JSON" not in system_text and "json" not in system_text:
-                system_text += "\n\n有効なJSONのみを返してください。マークダウンや説明文は不要です。"
+            system_text += (
+                "\n\n【出力形式の厳守】JSONのみを返してください。"
+                "```json等のマークダウン記法で囲まないでください。"
+                "説明文やコメントも不要です。最初の文字は { で始めてください。"
+            )
 
             kwargs: Dict[str, Any] = {
                 "model": self.model,
-                "max_tokens": 8192,
+                "max_tokens": 16384,
                 "temperature": temperature,
                 "messages": conversation,
             }
@@ -86,6 +89,18 @@ class LLMClient:
 
             response = self.client.messages.create(**kwargs)
             content = response.content[0].text
+
+            # Strip markdown code block wrapper if present
+            stripped = content.strip()
+            if stripped.startswith("```"):
+                # Remove opening ```json or ```
+                first_newline = stripped.find("\n")
+                if first_newline > 0:
+                    stripped = stripped[first_newline + 1:]
+                # Remove closing ```
+                if stripped.rstrip().endswith("```"):
+                    stripped = stripped.rstrip()[:-3].rstrip()
+                content = stripped
 
             result = json.loads(content)
             return result
@@ -100,7 +115,7 @@ class LLMClient:
 
     def _try_extract_json(self, text: str) -> Dict[str, Any]:
         """Try to extract JSON from text that may contain markdown or other formatting."""
-        # Try finding JSON block in markdown
+        # Strategy 1: Regex patterns for well-formed responses
         patterns = [r'```json\s*(.*?)\s*```', r'```\s*(.*?)\s*```', r'\{.*\}']
         for pattern in patterns:
             match = re.search(pattern, text, re.DOTALL)
@@ -109,6 +124,30 @@ class LLMClient:
                     return json.loads(match.group(1) if '```' in pattern else match.group(0))
                 except json.JSONDecodeError:
                     continue
+
+        # Strategy 2: Strip markdown wrapper and try direct parse
+        stripped = text.strip()
+        if stripped.startswith("```"):
+            first_nl = stripped.find("\n")
+            if first_nl > 0:
+                stripped = stripped[first_nl + 1:]
+            if stripped.rstrip().endswith("```"):
+                stripped = stripped.rstrip()[:-3].rstrip()
+            try:
+                return json.loads(stripped)
+            except json.JSONDecodeError:
+                pass
+
+        # Strategy 3: Find first { and try to parse from there
+        brace_pos = text.find("{")
+        if brace_pos >= 0:
+            candidate = text[brace_pos:]
+            try:
+                return json.loads(candidate)
+            except json.JSONDecodeError:
+                # Truncated response: try to repair by closing brackets
+                pass
+
         raise LLMError(f"LLM応答からJSONを抽出できませんでした。応答先頭200文字: {text[:200]}")
 
     def process_instruction(self, instruction: str, parameters_json: str) -> Dict[str, Any]:
