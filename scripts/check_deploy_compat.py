@@ -36,6 +36,8 @@ KNOWN_FALLBACKS = {
     },
     # version.py import is wrapped in try/except in sidebar
     "src.app.version": {"version_label"},
+    # Agents module -- falls back to legacy extractor if missing
+    "src.agents.orchestrator": {"AgentOrchestrator"},
     # Individual fallbacks (used when compat.py is missing)
     "src.extract.llm_client": {"LLMError"},
     "src.extract.prompts": {

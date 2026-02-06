@@ -666,19 +666,91 @@ def _run_phase_a_analysis(
         analysis = analyze_model(template_path, catalog)
         st.session_state["analysis"] = analysis
 
-        progress.progress(70, text="LLM パラメータ抽出中...")
+        progress.progress(70, text="Agent 1: ビジネスモデル分析中...")
         llm_ok = False
         parameters: List[ExtractedParameter] = []
         llm_error_msg = ""
         prompt_overrides = _collect_prompt_overrides()
+
         try:
             llm_client = LLMClient()
-            extractor = ParameterExtractor(
-                config, llm_client=llm_client,
-                prompt_overrides=prompt_overrides,
-            )
-            parameters = extractor.extract_parameters(document, catalog)
-            llm_ok = len(parameters) > 0
+
+            # --- NEW: Two-agent pipeline ---
+            try:
+                from src.agents.orchestrator import AgentOrchestrator
+                orch = AgentOrchestrator(llm_client)
+
+                # Build catalog dicts for the agent
+                writable_items = [
+                    {
+                        "sheet": item.sheet,
+                        "cell": item.cell,
+                        "labels": item.label_candidates,
+                        "units": item.unit_candidates,
+                        "period": item.year_or_period,
+                        "block": item.block,
+                        "current_value": item.current_value,
+                    }
+                    for item in catalog.items
+                    if not item.has_formula
+                ]
+
+                def _update_progress(step: Any) -> None:
+                    if step.agent_name == "Business Model Analyzer":
+                        if step.status == "running":
+                            progress.progress(72, text="Agent 1: ビジネスモデル分析中...")
+                        elif step.status == "success":
+                            progress.progress(80, text=f"Agent 1 完了: {step.summary}")
+                    elif step.agent_name == "FM Designer":
+                        if step.status == "running":
+                            progress.progress(85, text="Agent 2: テンプレートマッピング中...")
+                        elif step.status == "success":
+                            progress.progress(95, text=f"Agent 2 完了: {step.summary}")
+
+                orch_result = orch.run(
+                    document_text=document.full_text,
+                    catalog_items=writable_items,
+                    on_step=_update_progress,
+                )
+
+                st.session_state["agent_result"] = orch_result
+
+                # Convert agent extractions to ExtractedParameter format
+                if orch_result.design:
+                    for ext in orch_result.design.extractions:
+                        if ext.value is not None:
+                            param = ExtractedParameter(
+                                key=f"{ext.sheet}::{ext.cell}",
+                                label=ext.label,
+                                value=ext.value,
+                                unit=ext.unit,
+                                mapped_targets=[CellTarget(sheet=ext.sheet, cell=ext.cell)],
+                                evidence=Evidence(
+                                    quote=ext.evidence,
+                                    page_or_slide="",
+                                    rationale=f"segment: {ext.segment}",
+                                ),
+                                confidence=ext.confidence,
+                                source=ext.source,
+                            )
+                            parameters.append(param)
+
+                llm_ok = len(parameters) > 0
+
+                if not llm_ok and orch_result.warnings:
+                    llm_error_msg = "; ".join(orch_result.warnings)
+
+            except ImportError:
+                # Fall back to old single-pass extractor if agents module missing
+                logger.warning("agents module not available, falling back to legacy extractor")
+                progress.progress(75, text="LLM パラメータ抽出中 (レガシー)...")
+                extractor = ParameterExtractor(
+                    config, llm_client=llm_client,
+                    prompt_overrides=prompt_overrides,
+                )
+                parameters = extractor.extract_parameters(document, catalog)
+                llm_ok = len(parameters) > 0
+
         except LLMError as llm_exc:
             llm_error_msg = str(llm_exc)
             logger.error("LLM extraction failed: %s", llm_exc)
@@ -761,27 +833,37 @@ def _render_phase_b() -> None:
 
     param_map = _build_param_cell_map(parameters)
 
-    # --- LLM status banner ---
+    # --- Agent status banner ---
     llm_ok = st.session_state.get("llm_ok", False)
     llm_error = st.session_state.get("llm_error", "")
+    orch_result = st.session_state.get("agent_result")
+
     if llm_error:
         st.error(
-            f"**AI 抽出に失敗しました:** {llm_error}\n\n"
+            f"**AI Agent に失敗しました:** {llm_error}\n\n"
             "下記はテンプレートの構造のみです。"
             "値はすべて手動入力が必要です。"
         )
     elif not llm_ok:
         st.warning(
-            "**AI が事業計画書からパラメータを抽出できませんでした。**\n\n"
+            "**AI Agent がパラメータを抽出できませんでした。**\n\n"
             "考えられる原因: OPENAI_API_KEY 未設定、ドキュメントに数値データが少ない、"
             "またはテンプレートとの対応関係が見つからなかった。\n\n"
             "下記はテンプレートの構造のみです。値は手動で入力してください。"
         )
     else:
+        agent_info = ""
+        if orch_result and orch_result.analysis:
+            bm = orch_result.analysis
+            n_seg = len(bm.segments)
+            agent_info = f" (検出: {bm.industry} / {n_seg}セグメント)"
         st.success(
-            f"**AI が事業計画書から {len(parameters)} 件のパラメータを抽出しました。**"
+            f"**AI Agent が {len(parameters)} 件のパラメータを抽出しました。**{agent_info}\n\n"
             " 緑バッジ = AI抽出済み、グレー = 未抽出（手動入力してください）"
         )
+
+    # --- Agent analysis results (if available) ---
+    _render_agent_analysis()
 
     # --- Summary Dashboard ---
     _render_blueprint_summary(catalog, parameters, analysis, param_map)
@@ -838,6 +920,68 @@ def _render_phase_b() -> None:
     # --- Run generation if clicked (after rendering so all widgets exist) ---
     if generate_clicked:
         _run_generation_from_blueprint()
+
+
+def _render_agent_analysis() -> None:
+    """Display the two-agent analysis results."""
+    orch_result = st.session_state.get("agent_result")
+    if orch_result is None:
+        return
+
+    with st.expander("Agent 分析結果（ビジネスモデル理解 → テンプレートマッピング）", expanded=True):
+        # Step status
+        for step in orch_result.steps:
+            if step.status == "success":
+                icon = "white_check_mark"
+                st.markdown(f":{icon}: **{step.agent_name}** — {step.summary}  ({step.elapsed_seconds:.1f}秒)")
+            elif step.status == "error":
+                st.markdown(f":x: **{step.agent_name}** — {step.error_message}")
+            else:
+                st.markdown(f":hourglass: **{step.agent_name}** — {step.status}")
+
+        # Business model analysis
+        bm = orch_result.analysis
+        if bm and bm.segments:
+            st.divider()
+            st.markdown(f"**事業概要:** {bm.executive_summary}")
+            st.markdown(f"**業種:** {bm.industry} | **モデル:** {bm.business_model_type} | **期間:** {bm.time_horizon}")
+
+            st.markdown("**事業セグメント:**")
+            for seg in bm.segments:
+                with st.container():
+                    st.markdown(
+                        f"- **{seg.name}** ({seg.model_type}) — `{seg.revenue_formula}`"
+                    )
+                    if seg.revenue_drivers:
+                        drivers_str = ", ".join(
+                            f"{d.name}={d.estimated_value}" if d.estimated_value
+                            else d.name
+                            for d in seg.revenue_drivers
+                        )
+                        st.caption(f"  ドライバー: {drivers_str}")
+
+            if bm.shared_costs:
+                cost_names = ", ".join(c.name for c in bm.shared_costs[:5])
+                st.markdown(f"**共通コスト:** {cost_names}")
+
+        # Sheet mappings
+        design = orch_result.design
+        if design and design.sheet_mappings:
+            st.divider()
+            st.markdown("**シート → セグメント マッピング:**")
+            for sm in design.sheet_mappings:
+                conf_pct = int(sm.confidence * 100)
+                st.markdown(
+                    f"- `{sm.sheet_name}` → **{sm.mapped_segment}** "
+                    f"({sm.sheet_purpose}) [{conf_pct}%]"
+                )
+
+        # Warnings
+        if design and design.warnings:
+            st.divider()
+            st.markdown("**:warning: 警告:**")
+            for w in design.warnings:
+                st.warning(w)
 
 
 def _render_blueprint_summary(
