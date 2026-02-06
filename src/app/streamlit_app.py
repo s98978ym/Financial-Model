@@ -59,7 +59,7 @@ from src.ingest.base import DocumentContent
 from src.catalog.scanner import scan_template, export_catalog_json
 from src.modelmap.analyzer import analyze_model, generate_model_report_md
 from src.extract.extractor import ParameterExtractor
-from src.extract.llm_client import LLMClient
+from src.extract.llm_client import LLMClient, LLMError
 from src.excel.writer import PLWriter
 from src.excel.validator import PLValidator, generate_needs_review_csv
 from src.excel.case_generator import CaseGenerator
@@ -516,10 +516,24 @@ def _run_phase_a_analysis(
         st.session_state["analysis"] = analysis
 
         progress.progress(70, text="LLM パラメータ抽出中...")
-        llm_client = LLMClient()
-        extractor = ParameterExtractor(config, llm_client=llm_client)
-        parameters = extractor.extract_parameters(document, catalog)
+        llm_ok = False
+        parameters: List[ExtractedParameter] = []
+        llm_error_msg = ""
+        try:
+            llm_client = LLMClient()
+            extractor = ParameterExtractor(config, llm_client=llm_client)
+            parameters = extractor.extract_parameters(document, catalog)
+            llm_ok = len(parameters) > 0
+        except LLMError as llm_exc:
+            llm_error_msg = str(llm_exc)
+            logger.error("LLM extraction failed: %s", llm_exc)
+        except Exception as llm_exc:
+            llm_error_msg = str(llm_exc)
+            logger.error("LLM extraction failed: %s", llm_exc)
+
         st.session_state["parameters"] = parameters
+        st.session_state["llm_ok"] = llm_ok
+        st.session_state["llm_error"] = llm_error_msg
 
         # Clear old blueprint state
         for key in list(st.session_state.keys()):
@@ -591,6 +605,28 @@ def _render_phase_b() -> None:
         return
 
     param_map = _build_param_cell_map(parameters)
+
+    # --- LLM status banner ---
+    llm_ok = st.session_state.get("llm_ok", False)
+    llm_error = st.session_state.get("llm_error", "")
+    if llm_error:
+        st.error(
+            f"**AI 抽出に失敗しました:** {llm_error}\n\n"
+            "下記はテンプレートの構造のみです。"
+            "値はすべて手動入力が必要です。"
+        )
+    elif not llm_ok:
+        st.warning(
+            "**AI が事業計画書からパラメータを抽出できませんでした。**\n\n"
+            "考えられる原因: OPENAI_API_KEY 未設定、ドキュメントに数値データが少ない、"
+            "またはテンプレートとの対応関係が見つからなかった。\n\n"
+            "下記はテンプレートの構造のみです。値は手動で入力してください。"
+        )
+    else:
+        st.success(
+            f"**AI が事業計画書から {len(parameters)} 件のパラメータを抽出しました。**"
+            " 緑バッジ = AI抽出済み、グレー = 未抽出（手動入力してください）"
+        )
 
     # --- Summary Dashboard ---
     _render_blueprint_summary(catalog, parameters, analysis, param_map)
@@ -844,26 +880,25 @@ def _render_block_inputs(
                         label_visibility="collapsed",
                     )
             else:
-                # GAP cell -- allow user to type a value
-                if (
+                # GAP cell -- no LLM extraction. Show empty input.
+                # Do NOT pre-fill with template current_value (that's misleading)
+                has_template_default = (
                     item.current_value is not None
-                    and isinstance(item.current_value, (int, float))
-                ):
-                    st.number_input(
-                        label_display,
-                        value=float(item.current_value),
-                        key=state_key,
-                        label_visibility="collapsed",
-                        format="%.2f",
-                    )
-                else:
-                    st.text_input(
-                        label_display,
-                        value="",
-                        key=state_key,
-                        label_visibility="collapsed",
-                        placeholder="値を入力...",
-                    )
+                    and item.current_value != ""
+                    and not (isinstance(item.current_value, str)
+                             and item.current_value.startswith("="))
+                )
+                st.text_input(
+                    label_display,
+                    value="",
+                    key=state_key,
+                    label_visibility="collapsed",
+                    placeholder=(
+                        f"テンプレート参考値: {item.current_value}"
+                        if has_template_default
+                        else "値を入力..."
+                    ),
+                )
 
         with cols[2]:
             if unit:
