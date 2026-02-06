@@ -43,23 +43,24 @@ import streamlit as st
 # ---------------------------------------------------------------------------
 _API_KEY_SOURCE = "not found"
 try:
-    if os.environ.get("OPENAI_API_KEY"):
+    if os.environ.get("ANTHROPIC_API_KEY"):
         _API_KEY_SOURCE = "os.environ (pre-set)"
     else:
+        # Try flat format: ANTHROPIC_API_KEY = "sk-ant-..."
         try:
-            _val = st.secrets.get("OPENAI_API_KEY", "")
+            _val = st.secrets.get("ANTHROPIC_API_KEY", "")
             if _val:
-                os.environ["OPENAI_API_KEY"] = str(_val)
+                os.environ["ANTHROPIC_API_KEY"] = str(_val)
                 _API_KEY_SOURCE = "st.secrets (bridged)"
         except (KeyError, FileNotFoundError, AttributeError):
             pass
-        # Also try nested TOML format: [openai]\n api_key = "..."
+        # Also try nested TOML format: [anthropic]\n api_key = "..."
         if _API_KEY_SOURCE == "not found":
             try:
-                _val = st.secrets.get("openai", {}).get("api_key", "")
+                _val = st.secrets.get("anthropic", {}).get("api_key", "")
                 if _val:
-                    os.environ["OPENAI_API_KEY"] = str(_val)
-                    _API_KEY_SOURCE = "st.secrets.openai.api_key (bridged)"
+                    os.environ["ANTHROPIC_API_KEY"] = str(_val)
+                    _API_KEY_SOURCE = "st.secrets.anthropic.api_key (bridged)"
             except (KeyError, FileNotFoundError, AttributeError):
                 pass
 except Exception:
@@ -704,54 +705,52 @@ def _run_phase_a_analysis(
             llm_client = LLMClient()
 
             # ============================================================
-            # PRE-FLIGHT CHECK: Verify LLM is actually reachable
-            # Uses direct OpenAI API call — does NOT depend on extract()
-            # which may silently swallow errors on older deployments.
+            # PRE-FLIGHT CHECK: Verify Claude API is actually reachable
+            # Uses direct Anthropic API call for clear diagnostics.
             # ============================================================
             import time as _time
 
             # Step 1: Check API key availability
-            _api_key = os.environ.get("OPENAI_API_KEY", "")
+            _api_key = os.environ.get("ANTHROPIC_API_KEY", "")
             if not _api_key:
                 raise RuntimeError(
-                    "OPENAI_API_KEY が見つかりません。\n"
+                    "ANTHROPIC_API_KEY が見つかりません。\n"
                     f"APIキー検索結果: {_API_KEY_SOURCE}\n"
-                    "Streamlit Cloud: Settings → Secrets で OPENAI_API_KEY を設定してください。\n"
-                    "形式: OPENAI_API_KEY = \"sk-proj-...\""
+                    "Streamlit Cloud: Settings → Secrets で ANTHROPIC_API_KEY を設定してください。\n"
+                    "形式: ANTHROPIC_API_KEY = \"sk-ant-...\""
                 )
 
-            # Step 2: Direct API connectivity test (bypass llm_client.extract)
+            # Step 2: Direct API connectivity test
             _preflight_start = _time.time()
             try:
-                from openai import OpenAI as _OpenAI
-                _test_client = _OpenAI(api_key=_api_key)
-                _test_resp = _test_client.chat.completions.create(
-                    model="gpt-4o",
+                from anthropic import Anthropic as _Anthropic
+                _test_client = _Anthropic(api_key=_api_key)
+                _test_resp = _test_client.messages.create(
+                    model="claude-sonnet-4-5-20250929",
+                    max_tokens=16,
                     messages=[{"role": "user", "content": "Reply with exactly: OK"}],
-                    max_tokens=5,
-                    temperature=0,
                 )
                 _preflight_elapsed = _time.time() - _preflight_start
-                _test_content = (_test_resp.choices[0].message.content or "").strip()
+                _test_content = (_test_resp.content[0].text or "").strip()
                 if not _test_content:
                     raise RuntimeError(
-                        f"LLM API応答が空です (時間={_preflight_elapsed:.1f}秒)。"
+                        f"Claude API応答が空です (時間={_preflight_elapsed:.1f}秒)。"
                         f"APIキーソース: {_API_KEY_SOURCE}"
                     )
             except ImportError:
                 raise RuntimeError(
-                    "openai パッケージが見つかりません。"
-                    "requirements.txt に openai を追加してください。"
+                    "anthropic パッケージが見つかりません。"
+                    "requirements.txt に anthropic を追加してください。"
                 )
             except RuntimeError:
                 raise
             except Exception as _pf_exc:
                 _preflight_elapsed = _time.time() - _preflight_start
                 raise RuntimeError(
-                    f"LLM API 接続失敗: {type(_pf_exc).__name__}: {_pf_exc}\n"
+                    f"Claude API 接続失敗: {type(_pf_exc).__name__}: {_pf_exc}\n"
                     f"時間={_preflight_elapsed:.1f}秒, "
                     f"APIキーソース: {_API_KEY_SOURCE}, "
-                    f"キー先頭: {_api_key[:8]}..., キー末尾: ...{_api_key[-4:]}"
+                    f"キー先頭: {_api_key[:12]}..., キー末尾: ...{_api_key[-4:]}"
                 ) from _pf_exc
 
             progress.progress(73, text="LLM接続確認OK — ビジネスモデル分析中...")
@@ -974,7 +973,7 @@ def _render_phase_b() -> None:
     elif not llm_ok:
         st.warning(
             "**AI Agent がパラメータを抽出できませんでした。**\n\n"
-            "考えられる原因: OPENAI_API_KEY 未設定、ドキュメントに数値データが少ない、"
+            "考えられる原因: ANTHROPIC_API_KEY 未設定、ドキュメントに数値データが少ない、"
             "またはテンプレートとの対応関係が見つからなかった。\n\n"
             "下記はテンプレートの構造のみです。値は手動で入力してください。"
         )
@@ -1073,9 +1072,9 @@ def _render_agent_analysis() -> None:
             st.warning(
                 "**LLM APIが応答していない可能性があります。**\n\n"
                 "確認事項:\n"
-                "1. Streamlit Cloud の Settings → Secrets に `OPENAI_API_KEY` が設定されているか\n"
+                "1. Streamlit Cloud の Settings → Secrets に `ANTHROPIC_API_KEY` が設定されているか\n"
                 "2. APIキーが有効で、残高があるか\n"
-                "3. キーの形式: `OPENAI_API_KEY = \"sk-...\"`"
+                "3. キーの形式: `ANTHROPIC_API_KEY = \"sk-ant-...\"`"
             )
 
         # Business model analysis

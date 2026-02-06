@@ -1,4 +1,4 @@
-"""LLM client for parameter extraction."""
+"""LLM client for parameter extraction — Anthropic Claude API."""
 import json
 import os
 import logging
@@ -13,12 +13,17 @@ class LLMError(Exception):
 
 
 class LLMClient:
-    """Client for LLM API calls (OpenAI-compatible)."""
+    """Client for LLM API calls (Anthropic Claude)."""
 
-    def __init__(self, api_key: Optional[str] = None, model: str = "gpt-4o", base_url: Optional[str] = None):
-        self.api_key = api_key or os.environ.get("OPENAI_API_KEY", "")
+    def __init__(
+        self,
+        api_key: Optional[str] = None,
+        model: str = "claude-sonnet-4-5-20250929",
+        base_url: Optional[str] = None,
+    ):
+        self.api_key = api_key or os.environ.get("ANTHROPIC_API_KEY", "")
         self.model = model
-        self.base_url = base_url or "https://api.openai.com/v1"
+        self.base_url = base_url
         self._client = None
 
     @property
@@ -26,35 +31,63 @@ class LLMClient:
         if self._client is None:
             if not self.api_key:
                 raise LLMError(
-                    "OPENAI_API_KEY が設定されていません。"
+                    "ANTHROPIC_API_KEY が設定されていません。"
                     "Streamlit Cloud の場合: Settings → Secrets で設定してください。"
-                    "ローカルの場合: export OPENAI_API_KEY='sk-...' を実行してください。"
+                    "ローカルの場合: export ANTHROPIC_API_KEY='sk-ant-...' を実行してください。"
                 )
             try:
-                from openai import OpenAI
-                self._client = OpenAI(api_key=self.api_key, base_url=self.base_url)
+                from anthropic import Anthropic
+                kwargs: Dict[str, Any] = {"api_key": self.api_key}
+                if self.base_url:
+                    kwargs["base_url"] = self.base_url
+                self._client = Anthropic(**kwargs)
             except ImportError:
-                raise LLMError("openai パッケージが必要です。pip install openai を実行してください。")
+                raise LLMError(
+                    "anthropic パッケージが必要です。pip install anthropic を実行してください。"
+                )
         return self._client
 
     def extract(self, messages: List[Dict[str, str]], temperature: float = 0.1) -> Dict[str, Any]:
         """Send extraction request to LLM and parse JSON response.
 
         Raises LLMError on failure instead of returning empty results silently.
+
+        Parameters
+        ----------
+        messages : list[dict]
+            Chat messages in OpenAI format: [{"role": "system"|"user"|"assistant", "content": "..."}]
+            The system message is extracted and passed as Claude's system parameter.
+        temperature : float
+            Sampling temperature.
         """
         content = ""
         try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=messages,
-                temperature=temperature,
-                response_format={"type": "json_object"}
-            )
-            content = response.choices[0].message.content
+            # Separate system message from conversation messages
+            system_text = ""
+            conversation = []
+            for msg in messages:
+                if msg["role"] == "system":
+                    system_text = msg["content"]
+                else:
+                    conversation.append(msg)
+
+            # Ensure JSON output instruction in system prompt
+            if "JSON" not in system_text and "json" not in system_text:
+                system_text += "\n\n有効なJSONのみを返してください。マークダウンや説明文は不要です。"
+
+            kwargs: Dict[str, Any] = {
+                "model": self.model,
+                "max_tokens": 8192,
+                "temperature": temperature,
+                "messages": conversation,
+            }
+            if system_text:
+                kwargs["system"] = system_text
+
+            response = self.client.messages.create(**kwargs)
+            content = response.content[0].text
+
             result = json.loads(content)
-            # Validate that LLM returned actual values
-            if not result.get("values"):
-                logger.warning("LLM returned empty values -- document may lack extractable data")
             return result
         except json.JSONDecodeError as e:
             logger.error(f"Failed to parse LLM response as JSON: {e}")
@@ -76,7 +109,7 @@ class LLMClient:
                     return json.loads(match.group(1) if '```' in pattern else match.group(0))
                 except json.JSONDecodeError:
                     continue
-        return {"values": {}, "confidence": {}, "evidence": {}, "assumptions": {}, "mapping_hints": {}}
+        raise LLMError(f"LLM応答からJSONを抽出できませんでした。応答先頭200文字: {text[:200]}")
 
     def process_instruction(self, instruction: str, parameters_json: str) -> Dict[str, Any]:
         """Process a text customization instruction into proposed changes."""
