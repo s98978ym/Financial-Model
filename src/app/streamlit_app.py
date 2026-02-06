@@ -59,7 +59,14 @@ from src.ingest.base import DocumentContent
 from src.catalog.scanner import scan_template, export_catalog_json
 from src.modelmap.analyzer import analyze_model, generate_model_report_md
 from src.extract.extractor import ParameterExtractor
-from src.extract.llm_client import LLMClient
+from src.extract.llm_client import LLMClient, LLMError
+from src.extract.prompts import (
+    SYSTEM_PROMPT_NORMAL,
+    SYSTEM_PROMPT_STRICT,
+    INDUSTRY_PROMPTS,
+    BUSINESS_MODEL_PROMPTS,
+    USER_PROMPT_TEMPLATE,
+)
 from src.excel.writer import PLWriter
 from src.excel.validator import PLValidator, generate_needs_review_csv
 from src.excel.case_generator import CaseGenerator
@@ -461,6 +468,108 @@ def _render_phase_a() -> None:
         with tc2:
             st.toggle("合計色を適用", value=False, key="toggle_total_color")
 
+    # --- Prompt settings (separate expander) ---
+    with st.expander("プロンプト設定（AI 抽出に使用される指示文）", expanded=False):
+        _render_prompt_settings()
+
+
+def _get_default_system_prompt(strictness: str = "normal") -> str:
+    """Return the default system prompt based on strictness."""
+    return (
+        SYSTEM_PROMPT_STRICT if strictness == "strict"
+        else SYSTEM_PROMPT_NORMAL
+    )
+
+
+def _get_default_industry_hint(industry: str) -> str:
+    return INDUSTRY_PROMPTS.get(industry, "")
+
+
+def _get_default_biz_model_hint(biz_model: str) -> str:
+    return BUSINESS_MODEL_PROMPTS.get(biz_model, "")
+
+
+def _render_prompt_settings() -> None:
+    """Show editable prompt text areas."""
+    st.caption(
+        "AI がパラメータを抽出する際に使用するプロンプトです。"
+        "内容を確認し、必要に応じて編集できます。"
+        "空欄にするとデフォルトが使用されます。"
+    )
+
+    # Determine defaults based on current settings
+    strictness = st.session_state.get("strictness_select", "ノーマル (normal)")
+    strict_mode = "strict" if "厳密" in strictness else "normal"
+    industry = st.session_state.get("industry_select", "SaaS")
+    biz_model = st.session_state.get("biz_model_select", "B2B")
+
+    # System prompt
+    st.markdown("**システムプロンプト** — AI の役割と抽出ルール")
+    default_sys = _get_default_system_prompt(strict_mode)
+    st.text_area(
+        "システムプロンプト",
+        value=default_sys,
+        height=220,
+        key="prompt_system",
+        label_visibility="collapsed",
+    )
+
+    # Industry hint
+    col_ind, col_biz = st.columns(2)
+    with col_ind:
+        st.markdown("**業種ガイダンス** — 業種固有の抽出指示")
+        default_ind = _get_default_industry_hint(industry)
+        st.text_area(
+            "業種ガイダンス",
+            value=default_ind,
+            height=80,
+            key="prompt_industry",
+            label_visibility="collapsed",
+            placeholder="例: Focus on: MRR, ARPU, churn rate ...",
+        )
+    with col_biz:
+        st.markdown("**ビジネスモデルガイダンス** — モデル固有の抽出指示")
+        default_biz = _get_default_biz_model_hint(biz_model)
+        st.text_area(
+            "ビジネスモデルガイダンス",
+            value=default_biz,
+            height=80,
+            key="prompt_biz_model",
+            label_visibility="collapsed",
+            placeholder="例: Focus on enterprise sales: deal size ...",
+        )
+
+    # User message template
+    st.markdown(
+        "**抽出指示テンプレート** — ドキュメント+カタログと共に送信される指示文  \n"
+        "`{cases}` `{catalog_block}` `{document_chunk}` は実行時に自動置換されます"
+    )
+    st.text_area(
+        "抽出指示テンプレート",
+        value=USER_PROMPT_TEMPLATE,
+        height=280,
+        key="prompt_user_template",
+        label_visibility="collapsed",
+    )
+
+
+def _collect_prompt_overrides() -> dict:
+    """Collect prompt overrides from session state."""
+    overrides: dict = {}
+    sys_prompt = st.session_state.get("prompt_system", "").strip()
+    if sys_prompt:
+        overrides["system_prompt"] = sys_prompt
+    ind_hint = st.session_state.get("prompt_industry", "").strip()
+    if ind_hint:
+        overrides["industry_hint"] = ind_hint
+    biz_hint = st.session_state.get("prompt_biz_model", "").strip()
+    if biz_hint:
+        overrides["biz_model_hint"] = biz_hint
+    user_tpl = st.session_state.get("prompt_user_template", "").strip()
+    if user_tpl:
+        overrides["user_template"] = user_tpl
+    return overrides
+
 
 def _run_phase_a_analysis(
     *, industry: str, business_model: str, strictness: str,
@@ -516,10 +625,28 @@ def _run_phase_a_analysis(
         st.session_state["analysis"] = analysis
 
         progress.progress(70, text="LLM パラメータ抽出中...")
-        llm_client = LLMClient()
-        extractor = ParameterExtractor(config, llm_client=llm_client)
-        parameters = extractor.extract_parameters(document, catalog)
+        llm_ok = False
+        parameters: List[ExtractedParameter] = []
+        llm_error_msg = ""
+        prompt_overrides = _collect_prompt_overrides()
+        try:
+            llm_client = LLMClient()
+            extractor = ParameterExtractor(
+                config, llm_client=llm_client,
+                prompt_overrides=prompt_overrides,
+            )
+            parameters = extractor.extract_parameters(document, catalog)
+            llm_ok = len(parameters) > 0
+        except LLMError as llm_exc:
+            llm_error_msg = str(llm_exc)
+            logger.error("LLM extraction failed: %s", llm_exc)
+        except Exception as llm_exc:
+            llm_error_msg = str(llm_exc)
+            logger.error("LLM extraction failed: %s", llm_exc)
+
         st.session_state["parameters"] = parameters
+        st.session_state["llm_ok"] = llm_ok
+        st.session_state["llm_error"] = llm_error_msg
 
         # Clear old blueprint state
         for key in list(st.session_state.keys()):
@@ -591,6 +718,28 @@ def _render_phase_b() -> None:
         return
 
     param_map = _build_param_cell_map(parameters)
+
+    # --- LLM status banner ---
+    llm_ok = st.session_state.get("llm_ok", False)
+    llm_error = st.session_state.get("llm_error", "")
+    if llm_error:
+        st.error(
+            f"**AI 抽出に失敗しました:** {llm_error}\n\n"
+            "下記はテンプレートの構造のみです。"
+            "値はすべて手動入力が必要です。"
+        )
+    elif not llm_ok:
+        st.warning(
+            "**AI が事業計画書からパラメータを抽出できませんでした。**\n\n"
+            "考えられる原因: OPENAI_API_KEY 未設定、ドキュメントに数値データが少ない、"
+            "またはテンプレートとの対応関係が見つからなかった。\n\n"
+            "下記はテンプレートの構造のみです。値は手動で入力してください。"
+        )
+    else:
+        st.success(
+            f"**AI が事業計画書から {len(parameters)} 件のパラメータを抽出しました。**"
+            " 緑バッジ = AI抽出済み、グレー = 未抽出（手動入力してください）"
+        )
 
     # --- Summary Dashboard ---
     _render_blueprint_summary(catalog, parameters, analysis, param_map)
@@ -745,36 +894,46 @@ def _render_sheet_blueprint(
             _render_block_inputs(items, param_map)
 
 
+def _extract_dep_label(dep: str) -> str:
+    """Extract a plain label from a dependency string like 'label (address)'."""
+    if " (" in dep:
+        return dep.split(" (")[0].strip()
+    # If it looks like a cell address, return as-is but clean it
+    return dep.replace("'", "").strip()
+
+
 def _render_kpi_banner(kpis: List[KPIDefinition]) -> None:
-    """Show KPIs as a banner explaining what the inputs calculate."""
+    """Show KPIs as informational banner -- no action needed from the user.
+
+    Only shows KPI names and which inputs feed them, in plain language.
+    Raw formulas and cell addresses are hidden.
+    """
     li_items: List[str] = []
     for kpi in kpis:
-        formula = (
-            kpi.human_readable_formula
-            or kpi.human_formula
-            or kpi.raw_formula
-            or ""
-        )
         name_esc = _esc(kpi.name)
-        formula_esc = _esc(formula)
-
         line = f"<strong>{name_esc}</strong>"
-        if formula_esc:
-            line += f" = <code>{formula_esc}</code>"
 
-        # Show dependencies (which inputs feed this KPI)
+        # Show dependency labels in plain language (no cell addresses)
         if kpi.dependencies:
-            dep_labels = []
-            for d in kpi.dependencies[:6]:
-                # Dependencies are in "label (address)" format; extract label
-                if " (" in d:
-                    dep_labels.append(_esc(d.split(" (")[0]))
-                else:
-                    dep_labels.append(_esc(d))
-            deps_str = ", ".join(dep_labels)
-            if len(kpi.dependencies) > 6:
-                deps_str += f" ... (+{len(kpi.dependencies) - 6})"
-            line += f'<br><span class="kpi-dep">&#8678; {deps_str}</span>'
+            seen: set[str] = set()
+            dep_labels: list[str] = []
+            for d in kpi.dependencies:
+                label = _extract_dep_label(d)
+                if label and label not in seen:
+                    seen.add(label)
+                    dep_labels.append(_esc(label))
+            if dep_labels:
+                # Show up to 5 dependency labels
+                shown = dep_labels[:5]
+                rest = len(dep_labels) - 5
+                deps_str = "、".join(shown)
+                if rest > 0:
+                    deps_str += f" など（計 {len(dep_labels)} 項目）"
+                line += (
+                    f'<br><span class="kpi-dep">'
+                    f'&#8592; {deps_str} から算出'
+                    f'</span>'
+                )
 
         li_items.append(f"<li>{line}</li>")
 
@@ -782,7 +941,7 @@ def _render_kpi_banner(kpis: List[KPIDefinition]) -> None:
     st.markdown(f"""
     <div class="kpi-banner">
         <div class="kpi-banner-title">
-            算出指標 &#8212; 入力値から自動計算されます
+            計算結果（操作不要 &#8212; 下の入力値から自動計算されます）
         </div>
         <ul>{kpi_html}</ul>
     </div>
@@ -834,26 +993,25 @@ def _render_block_inputs(
                         label_visibility="collapsed",
                     )
             else:
-                # GAP cell -- allow user to type a value
-                if (
+                # GAP cell -- no LLM extraction. Show empty input.
+                # Do NOT pre-fill with template current_value (that's misleading)
+                has_template_default = (
                     item.current_value is not None
-                    and isinstance(item.current_value, (int, float))
-                ):
-                    st.number_input(
-                        label_display,
-                        value=float(item.current_value),
-                        key=state_key,
-                        label_visibility="collapsed",
-                        format="%.2f",
-                    )
-                else:
-                    st.text_input(
-                        label_display,
-                        value="",
-                        key=state_key,
-                        label_visibility="collapsed",
-                        placeholder="値を入力...",
-                    )
+                    and item.current_value != ""
+                    and not (isinstance(item.current_value, str)
+                             and item.current_value.startswith("="))
+                )
+                st.text_input(
+                    label_display,
+                    value="",
+                    key=state_key,
+                    label_visibility="collapsed",
+                    placeholder=(
+                        f"テンプレート参考値: {item.current_value}"
+                        if has_template_default
+                        else "値を入力..."
+                    ),
+                )
 
         with cols[2]:
             if unit:
@@ -877,19 +1035,26 @@ def _render_block_inputs(
 
 
 def _render_kpi_banner_inline(kpis: List[KPIDefinition]) -> None:
-    """Alternative inline KPI display within model details."""
+    """KPI list for the detail section -- slightly more info than the banner."""
     for kpi in kpis:
-        formula = kpi.raw_formula or kpi.excel_formula or ""
-        human = kpi.human_readable_formula or kpi.human_formula or ""
-        with st.expander(f"{kpi.name} ({kpi.sheet}!{kpi.cell})"):
-            if formula:
-                st.code(formula, language=None)
-            if human:
-                st.caption(human)
+        # Show KPI name and sheet (without raw cell address)
+        with st.expander(f"{kpi.name}（{kpi.sheet} シート）"):
+            # Dependencies in plain language
             if kpi.dependencies:
-                st.markdown(
-                    "依存先: " + ", ".join(f"`{d}`" for d in kpi.dependencies)
-                )
+                seen: set[str] = set()
+                labels: list[str] = []
+                for d in kpi.dependencies:
+                    label = _extract_dep_label(d)
+                    if label and label not in seen:
+                        seen.add(label)
+                        labels.append(label)
+                if labels:
+                    st.markdown(
+                        "**算出に使われる入力:** "
+                        + "、".join(labels)
+                    )
+            else:
+                st.caption("依存する入力項目が見つかりませんでした")
 
 
 def _render_detail_section(
@@ -929,11 +1094,11 @@ def _render_detail_section(
                 use_container_width=True, hide_index=True,
             )
 
-        st.markdown("**KPI 定義:**")
+        st.markdown("**自動計算される指標:**")
         if analysis.kpis:
             _render_kpi_banner_inline(analysis.kpis)
         else:
-            st.info("KPI が検出されませんでした。")
+            st.info("自動計算される指標が検出されませんでした。")
 
     with tab_evidence:
         has_evidence = [

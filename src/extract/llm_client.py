@@ -8,6 +8,10 @@ from typing import List, Dict, Any, Optional
 logger = logging.getLogger(__name__)
 
 
+class LLMError(Exception):
+    """Raised when the LLM API call fails."""
+
+
 class LLMClient:
     """Client for LLM API calls (OpenAI-compatible)."""
 
@@ -20,15 +24,24 @@ class LLMClient:
     @property
     def client(self):
         if self._client is None:
+            if not self.api_key:
+                raise LLMError(
+                    "OPENAI_API_KEY が設定されていません。"
+                    "Streamlit Cloud の場合: Settings → Secrets で設定してください。"
+                    "ローカルの場合: export OPENAI_API_KEY='sk-...' を実行してください。"
+                )
             try:
                 from openai import OpenAI
                 self._client = OpenAI(api_key=self.api_key, base_url=self.base_url)
             except ImportError:
-                raise ImportError("openai package required. Install with: pip install openai")
+                raise LLMError("openai パッケージが必要です。pip install openai を実行してください。")
         return self._client
 
     def extract(self, messages: List[Dict[str, str]], temperature: float = 0.1) -> Dict[str, Any]:
-        """Send extraction request to LLM and parse JSON response."""
+        """Send extraction request to LLM and parse JSON response.
+
+        Raises LLMError on failure instead of returning empty results silently.
+        """
         content = ""
         try:
             response = self.client.chat.completions.create(
@@ -38,14 +51,19 @@ class LLMClient:
                 response_format={"type": "json_object"}
             )
             content = response.choices[0].message.content
-            return json.loads(content)
+            result = json.loads(content)
+            # Validate that LLM returned actual values
+            if not result.get("values"):
+                logger.warning("LLM returned empty values -- document may lack extractable data")
+            return result
         except json.JSONDecodeError as e:
             logger.error(f"Failed to parse LLM response as JSON: {e}")
             # Try to extract JSON from response
             return self._try_extract_json(content)
+        except LLMError:
+            raise  # Re-raise our own errors
         except Exception as e:
-            logger.error(f"LLM API call failed: {e}")
-            return {"values": {}, "confidence": {}, "evidence": {}, "assumptions": {}, "mapping_hints": {}}
+            raise LLMError(f"LLM API 呼び出しに失敗しました: {e}") from e
 
     def _try_extract_json(self, text: str) -> Dict[str, Any]:
         """Try to extract JSON from text that may contain markdown or other formatting."""

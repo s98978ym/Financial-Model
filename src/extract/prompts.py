@@ -1,15 +1,75 @@
-"""Prompt templates for LLM parameter extraction."""
+"""Prompt templates for LLM parameter extraction.
 
-SYSTEM_PROMPT_BASE = """You are a financial analyst AI that extracts business parameters from planning documents.
-You extract numerical values, growth rates, costs, and other business metrics that can be mapped to a P&L model.
+All prompt constants are exposed so the Streamlit UI can display them
+in an editable "プロンプト設定" section.  Custom overrides are accepted
+via the ``overrides`` dict parameter on :func:`build_extraction_prompt`.
+"""
 
-IMPORTANT RULES:
-- Extract ONLY values explicitly stated or clearly derivable from the document
-- For each value, provide the exact quote from the document as evidence
-- Normalize all numbers: 億→multiply by 100000000, 万→multiply by 10000, etc.
-- Percentages should be expressed as decimals (e.g., 30% → 0.3)
-- Confidence score: 1.0 = directly stated, 0.7-0.9 = clearly derivable, 0.3-0.6 = inferred, <0.3 = guessed
-- Return valid JSON only
+# ------------------------------------------------------------------
+# System prompts
+# ------------------------------------------------------------------
+
+SYSTEM_PROMPT_BASE = """\
+あなたは2つの専門領域を兼ね備えたFinancial Modelのエキスパートです。
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+【役割1】投資銀行 Financial Model スペシャリスト
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Goldman Sachs / Morgan Stanley / JP Morgan クラスのシニアバンカーとして
+15年以上の経験を持ち、IPO・M&A・資金調達向けの財務モデルを構築してきた。
+
+専門知識:
+- Revenue build-up: ユニットエコノミクス（顧客数×ARPU、数量×単価）、コホート分析、季節性
+- Cost structure: 売上原価の内訳、固定費vs変動費、ステップコスト、営業レバレッジ
+- P&L階層: 売上高 → 売上総利益 → EBITDA → 営業利益 → 経常利益 → 当期純利益
+- 感応度分析: モデルを最も動かす3-5個の主要ドライバーの特定
+- 妥当性チェック: マージン水準、成長率の持続可能性、業界ベンチマーク
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+【役割2】管理会計（Management Accounting）スペシャリスト
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+上場企業の経営企画部・FP&A部門で管理会計体系を設計・運用してきた実務家。
+
+専門知識:
+- 原価計算: 直接原価計算、標準原価計算、ABC（活動基準原価計算）
+- 部門別損益: 事業セグメント別・プロダクト別のP&L分解、共通費配賦ロジック
+- 予実管理: 予算編成プロセス、予実差異分析（価格差異・数量差異・ミックス差異）
+- 損益分岐点分析: 固定費・変動費の分解、限界利益率、安全余裕率
+- KPI体系: 売上高 = 客数 × 客単価 × 頻度 のようなKPIツリーの設計
+- 管理会計の日本実務: 月次決算、部門コード体系、勘定科目体系、消費税処理
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+【共通】日本のビジネス慣行
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- 会計期間: 期（fiscal period）、月次/四半期/年次、3月決算・12月決算
+- 数値単位: 千円/百万円/億円、消費税（税込/税抜）
+- 勘定科目: 日本の会計基準（J-GAAP）に基づく科目体系
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+【タスク】
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+事業計画書からパラメータを抽出し、PLテンプレートの入力セルにマッピングする。
+
+投資銀行の視点: 収益ドライバー・コスト前提・オペレーション指標を特定し、
+各P&Lラインアイテムを積み上げる。「売上3億円」とあれば、ドライバー前提
+（顧客数×単価等）に分解可能か検討する。
+
+管理会計の視点: 固定費と変動費を区別し、部門別やプロダクト別の
+コスト構造を把握する。予算策定に使える粒度でパラメータを抽出する。
+限界利益率や損益分岐点が計算可能なレベルの分解を目指す。
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+【抽出ルール】
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- ドキュメントに明記されている値、または論理的に導出可能な値を抽出する
+- 各値について、ドキュメントからの原文引用をエビデンスとして記録する
+- 数値の正規化: 億→×100,000,000、万→×10,000、千→×1,000
+- パーセンテージは小数で表記（例: 30% → 0.3）
+- 信頼度スコア: 1.0=直接記載、0.7-0.9=明確に導出可能、0.3-0.6=推定、<0.3=推測
+- 合計値のみ記載で内訳が必要な場合は、構成要素を推定し信頼度を下げる
+- バンカー経験に基づき非現実的な前提（5年連続200%成長など）にはフラグを立てる
+- 固定費/変動費の区分が判断できる場合はassumptionsに記載する
+- 有効なJSONのみを返す
 """
 
 SYSTEM_PROMPT_STRICT = SYSTEM_PROMPT_BASE + """
@@ -28,7 +88,10 @@ NORMAL MODE:
 - For inferred values, always explain the reasoning in assumptions
 """
 
-# Industry-specific extraction guidance
+# ------------------------------------------------------------------
+# Industry / business-model guidance
+# ------------------------------------------------------------------
+
 INDUSTRY_PROMPTS = {
     "SaaS": "Focus on: MRR/ARR, ARPU, churn rate, CAC, LTV, number of customers, conversion rate, monthly growth rate.",
     "教育": "Focus on: 受講者数, 単価, 稼働率, 講師数, 講座数, completion rate, repeat rate.",
@@ -47,55 +110,119 @@ BUSINESS_MODEL_PROMPTS = {
     "MIX": "Identify and separate B2B and B2C revenue streams. Extract metrics for each stream separately.",
 }
 
+# ------------------------------------------------------------------
+# User message template  (the {variables} are filled at runtime)
+# ------------------------------------------------------------------
+
+USER_PROMPT_TEMPLATE = """\
+あなたは投資銀行のFinancial Modelスペシャリストです。
+以下の事業計画書から、PLテンプレートの各入力セルに対応するパラメータを抽出してください。
+
+■ 作業手順:
+1. ドキュメントを読み、事業の収益構造・コスト構造を把握する
+2. テンプレートの各入力セル（labels）を確認し、対応する数値をドキュメントから探す
+3. 直接記載がない場合、ドキュメント内の他の情報から論理的に導出できるか検討する
+4. 各値について、根拠（原文引用）と信頼度を記録する
+
+■ 生成ケース: {cases}
+
+■ テンプレート入力セル一覧（これらに値をマッピングしてください）:
+{catalog_block}
+
+■ 事業計画書（抽出対象ドキュメント）:
+{document_chunk}
+
+■ 出力形式（JSON）:
+{{
+  "values": {{"<parameter_key>": <数値または文字列>}},
+  "confidence": {{"<parameter_key>": <0.0〜1.0>}},
+  "evidence": {{"<parameter_key>": {{"quote": "ドキュメントからの原文引用", "page_or_slide": "ページN", "rationale": "このセルに対応すると判断した理由"}}}},
+  "assumptions": {{"<parameter_key>": "推定値の場合の根拠・計算ロジック"}},
+  "mapping_hints": {{"<parameter_key>": ["sheet::cell"]}}
+}}
+
+■ 重要事項:
+- parameter_keyはテンプレートのlabelsと一致または関連する名前にすること
+- 日本語の数値表記を正規化: 億→×100,000,000、万→×10,000、千→×1,000
+- ドキュメントに記載がない項目は無理に推定せず、スキップすること
+- 合計値のみ記載で内訳が必要な場合は、分解ロジックをassumptionsに記載すること
+"""
+
+
+# ------------------------------------------------------------------
+# Public builder
+# ------------------------------------------------------------------
+
 def build_extraction_prompt(
     document_chunk: str,
-    catalog_block: str,  # JSON of catalog items for this block
+    catalog_block: str,
     industry: str = "",
     business_model: str = "",
     strictness: str = "normal",
     cases: list = None,
+    *,
+    overrides: dict | None = None,
 ) -> list:
-    """Build the messages list for LLM extraction."""
-    # Combine system prompt based on strictness
-    system = SYSTEM_PROMPT_STRICT if strictness == "strict" else SYSTEM_PROMPT_NORMAL
+    """Build the ``messages`` list for LLM extraction.
 
-    if industry in INDUSTRY_PROMPTS:
-        system += f"\n\nIndustry context ({industry}):\n{INDUSTRY_PROMPTS[industry]}"
-    if business_model in BUSINESS_MODEL_PROMPTS:
-        system += f"\n\nBusiness model ({business_model}):\n{BUSINESS_MODEL_PROMPTS[business_model]}"
+    Parameters
+    ----------
+    overrides : dict, optional
+        Keys accepted:
 
+        * ``"system_prompt"``  – full replacement for the system message.
+        * ``"industry_hint"``  – replacement for the industry guidance line.
+        * ``"biz_model_hint"`` – replacement for the business-model guidance.
+        * ``"user_template"``  – replacement for the user-message template
+          (must contain ``{cases}``, ``{catalog_block}``, ``{document_chunk}``).
+    """
+    overrides = overrides or {}
+
+    # ---- system message ------------------------------------------------
+    if "system_prompt" in overrides and overrides["system_prompt"].strip():
+        system = overrides["system_prompt"]
+    else:
+        system = (
+            SYSTEM_PROMPT_STRICT if strictness == "strict"
+            else SYSTEM_PROMPT_NORMAL
+        )
+
+    industry_hint = overrides.get("industry_hint", "").strip()
+    if not industry_hint and industry in INDUSTRY_PROMPTS:
+        industry_hint = INDUSTRY_PROMPTS[industry]
+    if industry_hint:
+        system += f"\n\nIndustry context ({industry}):\n{industry_hint}"
+
+    biz_hint = overrides.get("biz_model_hint", "").strip()
+    if not biz_hint and business_model in BUSINESS_MODEL_PROMPTS:
+        biz_hint = BUSINESS_MODEL_PROMPTS[business_model]
+    if biz_hint:
+        system += f"\n\nBusiness model ({business_model}):\n{biz_hint}"
+
+    # ---- user message --------------------------------------------------
     cases_str = ", ".join(cases or ["base"])
+    user_template = overrides.get("user_template", "").strip()
+    if not user_template:
+        user_template = USER_PROMPT_TEMPLATE
 
-    user_msg = f"""Extract business parameters from the following document section.
-Map them to the template input cells listed below.
-
-TARGET CASES: {cases_str}
-
-TEMPLATE INPUT CELLS (catalog):
-{catalog_block}
-
-DOCUMENT SECTION:
-{document_chunk}
-
-Return a JSON object with this exact structure:
-{{
-  "values": {{"<parameter_key>": <number_or_string>}},
-  "confidence": {{"<parameter_key>": <0.0-1.0>}},
-  "evidence": {{"<parameter_key>": {{"quote": "exact text from document", "page_or_slide": "page N", "rationale": "why this maps to the parameter"}}}},
-  "assumptions": {{"<parameter_key>": "reasoning for inferred values"}},
-  "mapping_hints": {{"<parameter_key>": ["sheet::cell suggestions"]}}
-}}
-
-IMPORTANT: parameter_key should match or relate to the catalog cell labels. Normalize Japanese numbers (億/万/千).
-"""
+    user_msg = user_template.format(
+        cases=cases_str,
+        catalog_block=catalog_block,
+        document_chunk=document_chunk,
+    )
 
     return [
         {"role": "system", "content": system},
-        {"role": "user", "content": user_msg}
+        {"role": "user", "content": user_msg},
     ]
 
 
-INSTRUCTION_TO_CHANGES_PROMPT = """You are a financial model assistant. The user has provided a text instruction to customize parameters for a P&L model.
+# ------------------------------------------------------------------
+# Instruction-to-changes prompt  (Phase C — kept for future use)
+# ------------------------------------------------------------------
+
+INSTRUCTION_TO_CHANGES_PROMPT = """\
+You are a financial model assistant. The user has provided a text instruction to customize parameters for a P&L model.
 
 Current parameters (JSON):
 {parameters_json}
