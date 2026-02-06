@@ -1,3 +1,6 @@
+# Install the project itself so `from src.*` imports work everywhere
+-e .
+
 # Core dependencies
 openpyxl>=3.1.0
 pydantic>=2.0.0
