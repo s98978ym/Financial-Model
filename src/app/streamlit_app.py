@@ -20,12 +20,18 @@ import io
 import json
 import logging
 import os
+import sys
 import tempfile
 import traceback
 from copy import deepcopy
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+
+# Ensure project root is on sys.path (needed for Streamlit Cloud deployment)
+_PROJECT_ROOT = str(Path(__file__).resolve().parent.parent.parent)
+if _PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, _PROJECT_ROOT)
 
 import streamlit as st
 
