@@ -316,18 +316,8 @@ class TestDetectUnits:
 # ===================================================================
 
 class TestExportCatalogJson:
-    """Test JSON catalog export.
+    """Test JSON catalog export."""
 
-    NOTE: export_catalog_json calls catalog.to_dict() which does not exist
-    on the pydantic InputCatalog at runtime (the on-disk source defines it
-    for the dataclass version).  These tests verify the bug is known and
-    also test a workaround using model_dump().
-    """
-
-    @pytest.mark.xfail(
-        reason="InputCatalog.to_dict() not available on pydantic model",
-        raises=AttributeError,
-    )
     def test_export_from_scanned_catalog(self, tmp_path):
         """Scan a real template and export to JSON -- end-to-end test."""
         tpl = str(tmp_path / "tpl.xlsx")
@@ -337,10 +327,6 @@ class TestExportCatalogJson:
         export_catalog_json(catalog, out_path)
         assert os.path.exists(out_path)
 
-    @pytest.mark.xfail(
-        reason="InputCatalog.to_dict() not available on pydantic model",
-        raises=AttributeError,
-    )
     def test_export_valid_json(self, tmp_path):
         """Exported file should be valid JSON."""
         tpl = str(tmp_path / "tpl.xlsx")
@@ -352,10 +338,6 @@ class TestExportCatalogJson:
             data = json.load(f)
         assert isinstance(data, dict)
 
-    @pytest.mark.xfail(
-        reason="InputCatalog.to_dict() not available on pydantic model",
-        raises=AttributeError,
-    )
     def test_export_creates_parent_dirs(self, tmp_path):
         tpl = str(tmp_path / "tpl.xlsx")
         _make_template(tpl)
@@ -364,10 +346,6 @@ class TestExportCatalogJson:
         export_catalog_json(catalog, out_path)
         assert os.path.exists(out_path)
 
-    @pytest.mark.xfail(
-        reason="InputCatalog.to_dict() not available on pydantic model",
-        raises=AttributeError,
-    )
     def test_export_contains_items(self, tmp_path):
         tpl = str(tmp_path / "tpl.xlsx")
         _make_template(tpl)
