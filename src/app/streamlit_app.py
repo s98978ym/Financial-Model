@@ -60,23 +60,52 @@ try:
     from src.catalog.scanner import scan_template, export_catalog_json
     from src.modelmap.analyzer import analyze_model, generate_model_report_md
     from src.extract.extractor import ParameterExtractor
-    from src.extract.llm_client import LLMClient
-    try:
-        from src.extract.llm_client import LLMError
-    except ImportError:
-        # Fallback for older deployments where LLMError doesn't exist yet
-        class LLMError(Exception):  # type: ignore[no-redef]
-            """Raised when the LLM API call fails."""
-    from src.extract.prompts import (
-        SYSTEM_PROMPT_NORMAL,
-        SYSTEM_PROMPT_STRICT,
-        INDUSTRY_PROMPTS,
-        BUSINESS_MODEL_PROMPTS,
-        USER_PROMPT_TEMPLATE,
-    )
+    from src.extract.prompts import build_extraction_prompt  # noqa: F401
     from src.excel.writer import PLWriter
     from src.excel.validator import PLValidator, generate_needs_review_csv
     from src.excel.case_generator import CaseGenerator
+
+    # Compat layer: centralised fallbacks for names that may not exist
+    # in older deployments.  If compat.py itself is missing (because it
+    # hasn't been merged yet), fall back to inline definitions.
+    try:
+        from src.app.compat import (  # noqa: F811
+            LLMClient, LLMError,
+            SYSTEM_PROMPT_NORMAL, SYSTEM_PROMPT_STRICT,
+            INDUSTRY_PROMPTS, BUSINESS_MODEL_PROMPTS,
+            USER_PROMPT_TEMPLATE,
+        )
+    except ImportError:
+        # compat.py not yet deployed -- define everything inline
+        from src.extract.llm_client import LLMClient  # noqa: F811
+        try:
+            from src.extract.llm_client import LLMError  # noqa: F811
+        except ImportError:
+            class LLMError(Exception):  # type: ignore[no-redef]
+                """Raised when the LLM API call fails."""
+        try:
+            from src.extract.prompts import SYSTEM_PROMPT_NORMAL  # noqa: F811
+        except ImportError:
+            SYSTEM_PROMPT_NORMAL = "You are a financial model specialist."  # type: ignore[assignment]
+        try:
+            from src.extract.prompts import SYSTEM_PROMPT_STRICT  # noqa: F811
+        except ImportError:
+            SYSTEM_PROMPT_STRICT = SYSTEM_PROMPT_NORMAL + "\nSTRICT MODE."  # type: ignore[assignment]
+        try:
+            from src.extract.prompts import INDUSTRY_PROMPTS  # noqa: F811
+        except ImportError:
+            INDUSTRY_PROMPTS = {}  # type: ignore[assignment]
+        try:
+            from src.extract.prompts import BUSINESS_MODEL_PROMPTS  # noqa: F811
+        except ImportError:
+            BUSINESS_MODEL_PROMPTS = {}  # type: ignore[assignment]
+        try:
+            from src.extract.prompts import USER_PROMPT_TEMPLATE  # noqa: F811
+        except ImportError:
+            USER_PROMPT_TEMPLATE = (  # type: ignore[assignment]
+                "事業計画書からパラメータを抽出してください。\n\n"
+                "■ ケース: {cases}\n■ セル:\n{catalog_block}\n■ 文書:\n{document_chunk}\n"
+            )
 except Exception as _import_exc:
     st.error(
         f"モジュール読み込みエラー: {type(_import_exc).__name__}: {_import_exc}\n\n"
@@ -1424,6 +1453,13 @@ def _render_sidebar() -> None:
                     mime=mime,
                     key=f"sidebar_dl_{fname}", use_container_width=True,
                 )
+
+        # Version stamp -- always visible so we know what's deployed
+        try:
+            from src.app.version import version_label
+            st.caption(f"Version: {version_label()}")
+        except Exception:
+            st.caption("Version: unknown")
 
         st.divider()
         if not st.session_state.get("reset_confirm", False):
