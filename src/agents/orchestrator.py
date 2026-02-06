@@ -53,6 +53,8 @@ class OrchestrationResult:
     design: Optional[FMDesignResult] = None
     steps: List[AgentStep] = field(default_factory=list)
     total_elapsed: float = 0.0
+    document_chars: int = 0
+    document_preview: str = ""
 
     @property
     def is_success(self) -> bool:
@@ -121,6 +123,8 @@ class AgentOrchestrator:
             Callback ``(step: AgentStep) -> None`` for progress updates.
         """
         result = OrchestrationResult()
+        result.document_chars = len(document_text) if document_text else 0
+        result.document_preview = (document_text[:300] if document_text else "")
         t_start = time.time()
 
         # ---- Step 1: Business Model Analysis ----

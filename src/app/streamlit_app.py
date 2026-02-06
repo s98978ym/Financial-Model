@@ -1126,7 +1126,18 @@ def _render_agent_analysis() -> None:
         any_error = any(s.status == "error" for s in orch_result.steps)
         if any_error:
             st.divider()
-            with st.expander("Debug: LLM Raw Response", expanded=False):
+            with st.expander("Debug: LLM Raw Response", expanded=True):
+                # Document info
+                _doc_chars = getattr(orch_result, "document_chars", 0)
+                _doc_preview = getattr(orch_result, "document_preview", "")
+                st.markdown(f"**入力ドキュメント:** {_doc_chars:,} 文字")
+                if _doc_preview:
+                    st.code(_doc_preview[:500], language=None)
+                else:
+                    st.warning("ドキュメントテキストが空です！PDF読み取りを確認してください。")
+
+                st.markdown(f"**APIキーソース:** `{_API_KEY_SOURCE}`")
+
                 if bm and hasattr(bm, "raw_json") and bm.raw_json:
                     st.markdown("**Agent 1 (BM Analyzer) raw JSON:**")
                     try:
