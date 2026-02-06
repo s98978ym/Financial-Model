@@ -36,69 +36,33 @@ if _PROJECT_ROOT not in sys.path:
 import streamlit as st
 
 # ---------------------------------------------------------------------------
-# Project imports -- wrapped so the app can surface helpful errors
+# Project imports
 # ---------------------------------------------------------------------------
 
+from src.config.models import (
+    PhaseAConfig,
+    InputCatalog,
+    CatalogItem,
+    AnalysisReport,
+    KPIDefinition,
+    DependencyNode,
+    FormulaInfo,
+    ExtractedParameter,
+    ExtractionResult,
+    Evidence,
+    CellTarget,
+)
+from src.ingest.reader import read_document
+from src.ingest.base import DocumentContent
+from src.catalog.scanner import scan_template, export_catalog_json
+from src.modelmap.analyzer import analyze_model, generate_model_report_md
+from src.extract.extractor import ParameterExtractor
+from src.extract.llm_client import LLMClient
+from src.excel.writer import PLWriter
+from src.excel.validator import PLValidator, generate_needs_review_csv
+from src.excel.case_generator import CaseGenerator
+
 _IMPORT_ERRORS: List[str] = []
-
-try:
-    from src.config.models import (
-        PhaseAConfig,
-        InputCatalog,
-        CatalogItem,
-        AnalysisReport,
-        KPIDefinition,
-        DependencyNode,
-        FormulaInfo,
-        ExtractedParameter,
-        ExtractionResult,
-        Evidence,
-        CellTarget,
-    )
-except ImportError as exc:
-    _IMPORT_ERRORS.append(f"config.models: {exc}")
-
-try:
-    from src.ingest.reader import read_document
-    from src.ingest.base import DocumentContent
-except ImportError as exc:
-    _IMPORT_ERRORS.append(f"ingest: {exc}")
-
-try:
-    from src.catalog.scanner import scan_template, export_catalog_json
-except ImportError as exc:
-    _IMPORT_ERRORS.append(f"catalog.scanner: {exc}")
-
-try:
-    from src.modelmap.analyzer import analyze_model, generate_model_report_md
-except ImportError as exc:
-    _IMPORT_ERRORS.append(f"modelmap.analyzer: {exc}")
-
-try:
-    from src.extract.extractor import ParameterExtractor
-except ImportError as exc:
-    _IMPORT_ERRORS.append(f"extract.extractor: {exc}")
-
-try:
-    from src.extract.llm_client import LLMClient
-except ImportError as exc:
-    _IMPORT_ERRORS.append(f"extract.llm_client: {exc}")
-
-try:
-    from src.excel.writer import PLWriter
-except ImportError as exc:
-    _IMPORT_ERRORS.append(f"excel.writer: {exc}")
-
-try:
-    from src.excel.validator import PLValidator, generate_needs_review_csv
-except ImportError as exc:
-    _IMPORT_ERRORS.append(f"excel.validator: {exc}")
-
-try:
-    from src.excel.case_generator import CaseGenerator
-except ImportError as exc:
-    _IMPORT_ERRORS.append(f"excel.case_generator: {exc}")
-
 try:
     from src.simulation.engine import (
         SimulationEngine,
@@ -106,6 +70,8 @@ try:
     )
 except ImportError as exc:
     _IMPORT_ERRORS.append(f"simulation.engine: {exc}")
+    SimulationEngine = None  # type: ignore[assignment,misc]
+    export_simulation_summary = None  # type: ignore[assignment]
 
 logger = logging.getLogger(__name__)
 
