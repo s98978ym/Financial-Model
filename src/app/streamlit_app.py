@@ -569,13 +569,13 @@ def _render_model_content_tab(
     st.text(analysis.summary)
 
     # Sheets overview
-    sheet_names = catalog.metadata.get("sheet_names", [])
+    sheet_names = sorted({item.sheet for item in catalog.items if item.sheet})
     if sheet_names:
         st.markdown("**シート一覧:**")
         for sn in sheet_names:
-            items_count = len(catalog.items_for_sheet(sn))
+            items_count = sum(1 for item in catalog.items if item.sheet == sn)
             formula_kpis = [
-                k for k in analysis.kpis if k.sheet == sn
+                k for k in (analysis.kpis or []) if getattr(k, "sheet", None) == sn
             ]
             st.markdown(
                 f"- **{sn}** -- 入力セル: {items_count}, KPI数: {len(formula_kpis)}"
