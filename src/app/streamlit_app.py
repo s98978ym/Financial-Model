@@ -590,8 +590,6 @@ def _render_model_content_tab(
                     st.markdown(f"**Excel数式:** `{kpi.raw_formula}`")
                 if kpi.human_readable_formula:
                     st.markdown(f"**読みやすい形:** {kpi.human_readable_formula}")
-                if kpi.unit:
-                    st.markdown(f"**単位:** {kpi.unit}")
                 if kpi.dependencies:
                     st.markdown("**依存先 (Dependencies):**")
                     for dep in kpi.dependencies:
