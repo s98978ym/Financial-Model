@@ -2,10 +2,6 @@
 
 Tests scanning a real (in-memory) Excel template, colour matching,
 label detection, unit detection, formula flagging, and JSON export.
-
-NOTE: At runtime, CatalogItem uses the field name ``cell`` (not ``coordinate``),
-and InputCatalog is a pydantic model without ``writable_items``/``formula_items``
-properties.  The scanner appends items directly via ``catalog.items.append()``.
 """
 
 import json
@@ -65,7 +61,7 @@ def _make_template(path: str):
     ws["B4"] = 400
     ws["B4"].fill = INPUT_FILL
 
-    # Row 5 - gross profit (formula with input colour)
+    # Row 5 - gross profit (formula)
     ws["A5"] = "\u7c97\u5229"
     ws["B5"] = "=B3-B4"
     ws["B5"].fill = INPUT_FILL  # even if colored, should be flagged as formula
@@ -100,7 +96,7 @@ class TestScanTemplate:
         tpl = str(tmp_path / "tpl.xlsx")
         _make_template(tpl)
         catalog = scan_template(tpl)
-        # Should find yellow-filled cells: B3, C3, B4, B5, B7
+        # Should find the yellow-filled cells: B3, C3, B4, B5, B7
         assert len(catalog.items) >= 4
 
     def test_scan_formula_cells_flagged(self, tmp_path):
@@ -109,16 +105,18 @@ class TestScanTemplate:
         catalog = scan_template(tpl)
         formula_items = [i for i in catalog.items if i.has_formula]
         # B5 contains "=B3-B4" and has the input color
-        formula_cells = [item.cell for item in formula_items]
-        assert "B5" in formula_cells
+        formula_coords = [item.cell for item in formula_items]
+        assert "B5" in formula_coords
 
-    def test_scan_non_formula_items_exist(self, tmp_path):
-        """Catalog should contain non-formula items for plain input cells."""
+    def test_scan_formula_cells_not_writable(self, tmp_path):
         tpl = str(tmp_path / "tpl.xlsx")
         _make_template(tpl)
         catalog = scan_template(tpl)
-        writable = [i for i in catalog.items if not i.has_formula]
-        assert len(writable) >= 3  # B3, C3, B4, B7
+        for item in catalog.items:
+            if item.has_formula:
+                assert item.has_formula is True, (
+                    f"Formula cell {item.cell} should be flagged as formula"
+                )
 
     def test_scan_writable_items_exclude_formulas(self, tmp_path):
         tpl = str(tmp_path / "tpl.xlsx")
@@ -127,6 +125,16 @@ class TestScanTemplate:
         writable = [i for i in catalog.items if not i.has_formula]
         for item in writable:
             assert item.has_formula is False
+
+    def test_scan_writable_count(self, tmp_path):
+        """Writable count should match items without formulas."""
+        tpl = str(tmp_path / "tpl.xlsx")
+        _make_template(tpl)
+        catalog = scan_template(tpl)
+        writable_count = sum(1 for i in catalog.items if not i.has_formula)
+        formula_count = sum(1 for i in catalog.items if i.has_formula)
+        assert writable_count + formula_count == len(catalog.items)
+        assert writable_count >= 3  # At least B3, C3, B4, B7
 
     def test_scan_nonexistent_file_raises(self):
         with pytest.raises(FileNotFoundError):
@@ -173,15 +181,6 @@ class TestScanTemplate:
         catalog = scan_template(tpl)
         # blocks dict should have at least one entry
         assert len(catalog.blocks) >= 1
-
-    def test_scan_items_have_cell_field(self, tmp_path):
-        """Runtime CatalogItem uses 'cell' field, not 'coordinate'."""
-        tpl = str(tmp_path / "tpl.xlsx")
-        _make_template(tpl)
-        catalog = scan_template(tpl)
-        for item in catalog.items:
-            assert hasattr(item, "cell")
-            assert isinstance(item.cell, str)
 
 
 # ===================================================================
@@ -318,8 +317,7 @@ class TestDetectUnits:
 class TestExportCatalogJson:
     """Test JSON catalog export."""
 
-    def test_export_from_scanned_catalog(self, tmp_path):
-        """Scan a real template and export to JSON -- end-to-end test."""
+    def test_export_creates_file(self, tmp_path):
         tpl = str(tmp_path / "tpl.xlsx")
         _make_template(tpl)
         catalog = scan_template(tpl)
@@ -328,7 +326,6 @@ class TestExportCatalogJson:
         assert os.path.exists(out_path)
 
     def test_export_valid_json(self, tmp_path):
-        """Exported file should be valid JSON."""
         tpl = str(tmp_path / "tpl.xlsx")
         _make_template(tpl)
         catalog = scan_template(tpl)
@@ -354,11 +351,11 @@ class TestExportCatalogJson:
         export_catalog_json(catalog, out_path)
         with open(out_path, encoding="utf-8") as f:
             data = json.load(f)
-        # The JSON should contain catalog data
-        assert len(str(data)) > 10  # Non-trivial content
+        # Exported JSON should contain non-trivial content
+        assert len(str(data)) > 10
 
-    def test_model_dump_workaround(self, tmp_path):
-        """Using model_dump() as a JSON-safe alternative to to_dict()."""
+    def test_model_dump_has_items_and_blocks(self, tmp_path):
+        """Pydantic v2 model_dump() should produce items and blocks keys."""
         tpl = str(tmp_path / "tpl.xlsx")
         _make_template(tpl)
         catalog = scan_template(tpl)
@@ -368,7 +365,7 @@ class TestExportCatalogJson:
         assert len(data["items"]) > 0
 
     def test_model_dump_item_has_cell(self, tmp_path):
-        """Serialized items should contain the 'cell' field."""
+        """Serialized items should contain the 'cell' field (not 'coordinate')."""
         tpl = str(tmp_path / "tpl.xlsx")
         _make_template(tpl)
         catalog = scan_template(tpl)

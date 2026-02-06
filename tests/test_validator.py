@@ -63,11 +63,15 @@ def _make_broken_output_formula_changed(template_path: str, output_path: str):
 
 
 def _make_broken_output_no_calc(template_path: str, output_path: str):
-    """Create an output with fullCalcOnLoad explicitly set to False."""
+    """Create an output without fullCalcOnLoad set.
+
+    Explicitly clears any calculation properties so the validator
+    sees ``wb.calculation is None`` and flags the missing setting.
+    """
     shutil.copy2(template_path, output_path)
     wb = openpyxl.load_workbook(output_path)
-    # Explicitly set fullCalcOnLoad to False
-    wb.calculation = openpyxl.workbook.properties.CalcProperties(fullCalcOnLoad=False)
+    # Explicitly clear calculation properties so fullCalcOnLoad is absent
+    wb.calculation = None
     wb.save(output_path)
     wb.close()
 

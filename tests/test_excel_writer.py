@@ -15,6 +15,7 @@ from openpyxl.styles import PatternFill
 from src.config.models import (
     CellTarget,
     ColorConfig,
+    Evidence,
     ExtractedParameter,
     PhaseAConfig,
 )
@@ -42,6 +43,28 @@ def writer_setup(sample_template_path, tmp_path, default_phase_a_config):
         config=default_phase_a_config,
     )
     return writer, output_path
+
+
+def _make_formula_target_param():
+    """Create a parameter that targets a formula cell (B5).
+
+    Built inline to avoid the conftest fixture which passes evidence=None
+    to a non-Optional Evidence field.
+    """
+    return ExtractedParameter(
+        key="gross_profit_fy2024",
+        label="\u7c97\u5229 FY2024",
+        value=90000000,
+        unit="\u5186",
+        mapped_targets=[CellTarget(sheet="PL\u8a2d\u8a08", cell="B5")],
+        evidence=Evidence(
+            quote="\u7c97\u5229\u306f\u7d049\u5343\u4e07\u5186",
+            page_or_slide="5",
+        ),
+        confidence=0.9,
+        source="document",
+        selected=True,
+    )
 
 
 # ===================================================================
@@ -100,10 +123,11 @@ class TestFormulaPreservation:
         assert ws["B7"].value == "=B5-B6"
         wb.close()
 
-    def test_formula_target_blocked(self, writer_setup, formula_target_parameter):
+    def test_formula_target_blocked(self, writer_setup):
         """A parameter targeting a formula cell should be blocked."""
+        param = _make_formula_target_param()
         writer, output_path = writer_setup
-        writer.generate([formula_target_parameter])
+        writer.generate([param])
 
         wb = openpyxl.load_workbook(output_path)
         ws = wb["PL\u8a2d\u8a08"]
@@ -111,9 +135,11 @@ class TestFormulaPreservation:
         assert ws["B5"].value == "=B3-B4"
         wb.close()
 
-    def test_formula_target_in_skipped_log(self, writer_setup, formula_target_parameter):
+    def test_formula_target_in_skipped_log(self, writer_setup):
+        """A parameter targeting a formula cell should appear in skipped log."""
+        param = _make_formula_target_param()
         writer, output_path = writer_setup
-        writer.generate([formula_target_parameter])
+        writer.generate([param])
         summary = writer.get_change_summary()
         assert summary["total_skipped"] > 0
         skipped_reasons = [s["reason"] for s in summary["skipped"]]
@@ -179,7 +205,7 @@ class TestWriterEdgeCases:
         """Parameter targeting a non-existent sheet should be skipped."""
         param = ExtractedParameter(
             key="nonexistent",
-            label="Nonexistent",
+            label="\u5b58\u5728\u3057\u306a\u3044\u30b7\u30fc\u30c8",
             value=999,
             mapped_targets=[CellTarget(sheet="DoesNotExist", cell="A1")],
             selected=True,
@@ -201,7 +227,7 @@ class TestWriterEdgeCases:
         """A single parameter with multiple targets should write to all."""
         param = ExtractedParameter(
             key="revenue",
-            label="\u58f2\u4e0a",
+            label="\u58f2\u4e0a\u9ad8",
             value=5000,
             mapped_targets=[
                 CellTarget(sheet="PL\u8a2d\u8a08", cell="B3"),
