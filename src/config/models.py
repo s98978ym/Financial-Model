@@ -158,6 +158,14 @@ class PhaseAConfig(BaseModel):
         default_factory=ColorConfig,
         description="Excel output colour settings.",
     )
+    template_path: str = Field(
+        default="",
+        description="Path to the Excel template file.",
+    )
+    document_paths: List[str] = Field(
+        default_factory=list,
+        description="Paths to uploaded business-plan documents.",
+    )
 
     # -- validators ----------------------------------------------------------
 
