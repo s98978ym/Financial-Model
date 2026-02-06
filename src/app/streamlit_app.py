@@ -64,16 +64,36 @@ try:
     try:
         from src.extract.llm_client import LLMError
     except ImportError:
-        # Fallback for older deployments where LLMError doesn't exist yet
         class LLMError(Exception):  # type: ignore[no-redef]
             """Raised when the LLM API call fails."""
-    from src.extract.prompts import (
-        SYSTEM_PROMPT_NORMAL,
-        SYSTEM_PROMPT_STRICT,
-        INDUSTRY_PROMPTS,
-        BUSINESS_MODEL_PROMPTS,
-        USER_PROMPT_TEMPLATE,
-    )
+
+    # Prompt constants -- some may not exist in older deployments
+    from src.extract.prompts import build_extraction_prompt  # noqa: F401
+    try:
+        from src.extract.prompts import SYSTEM_PROMPT_NORMAL
+    except ImportError:
+        SYSTEM_PROMPT_NORMAL = "You are a financial model specialist. Extract parameters from business plan documents and map them to P&L template cells."
+    try:
+        from src.extract.prompts import SYSTEM_PROMPT_STRICT
+    except ImportError:
+        SYSTEM_PROMPT_STRICT = SYSTEM_PROMPT_NORMAL + "\nSTRICT MODE: Only include values explicitly stated in the document."
+    try:
+        from src.extract.prompts import INDUSTRY_PROMPTS
+    except ImportError:
+        INDUSTRY_PROMPTS = {}
+    try:
+        from src.extract.prompts import BUSINESS_MODEL_PROMPTS
+    except ImportError:
+        BUSINESS_MODEL_PROMPTS = {}
+    try:
+        from src.extract.prompts import USER_PROMPT_TEMPLATE
+    except ImportError:
+        USER_PROMPT_TEMPLATE = (
+            "以下の事業計画書から、PLテンプレートの各入力セルに対応するパラメータを抽出してください。\n\n"
+            "■ 生成ケース: {cases}\n\n"
+            "■ テンプレート入力セル一覧:\n{catalog_block}\n\n"
+            "■ 事業計画書:\n{document_chunk}\n"
+        )
     from src.excel.writer import PLWriter
     from src.excel.validator import PLValidator, generate_needs_review_csv
     from src.excel.case_generator import CaseGenerator
