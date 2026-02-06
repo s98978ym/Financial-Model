@@ -675,12 +675,41 @@ def _run_phase_a_analysis(
         try:
             llm_client = LLMClient()
 
-            # --- NEW: Two-agent pipeline ---
+            # ============================================================
+            # PRE-FLIGHT CHECK: Verify LLM is actually reachable
+            # (The old llm_client.py silently returns {} on all errors)
+            # ============================================================
+            import time as _time
+            _preflight_start = _time.time()
+            try:
+                _test_msgs = [
+                    {"role": "system", "content": "Return exactly: {\"status\":\"ok\"}"},
+                    {"role": "user", "content": "ping"},
+                ]
+                _test_result = llm_client.extract(_test_msgs)
+                _preflight_elapsed = _time.time() - _preflight_start
+                _preflight_ok = bool(_test_result and _test_result.get("status") == "ok")
+                if not _preflight_ok and _preflight_elapsed < 1.0:
+                    # Fast empty response = API not working
+                    raise RuntimeError(
+                        f"LLM API プリフライトチェック失敗: "
+                        f"応答={_test_result}, 時間={_preflight_elapsed:.1f}秒。"
+                        f"OPENAI_API_KEY が正しく設定されているか確認してください。"
+                    )
+            except RuntimeError:
+                raise
+            except Exception as _pf_exc:
+                raise RuntimeError(f"LLM API 接続失敗: {_pf_exc}") from _pf_exc
+
+            progress.progress(73, text="LLM接続確認OK — ビジネスモデル分析中...")
+
+            # ============================================================
+            # TWO-AGENT PIPELINE
+            # ============================================================
             try:
                 from src.agents.orchestrator import AgentOrchestrator
                 orch = AgentOrchestrator(llm_client)
 
-                # Build catalog dicts for the agent
                 writable_items = [
                     {
                         "sheet": item.sheet,
@@ -698,9 +727,9 @@ def _run_phase_a_analysis(
                 def _update_progress(step: Any) -> None:
                     if step.agent_name == "Business Model Analyzer":
                         if step.status == "running":
-                            progress.progress(72, text="Agent 1: ビジネスモデル分析中...")
+                            progress.progress(75, text="Agent 1: ビジネスモデル分析中...")
                         elif step.status == "success":
-                            progress.progress(80, text=f"Agent 1 完了: {step.summary}")
+                            progress.progress(82, text=f"Agent 1 完了: {step.summary}")
                     elif step.agent_name == "FM Designer":
                         if step.status == "running":
                             progress.progress(85, text="Agent 2: テンプレートマッピング中...")
@@ -712,6 +741,32 @@ def _run_phase_a_analysis(
                     catalog_items=writable_items,
                     on_step=_update_progress,
                 )
+
+                # ============================================================
+                # POST-PIPELINE VALIDATION (in streamlit_app.py, not in agents)
+                # ============================================================
+                for step in orch_result.steps:
+                    # Check 1: Fast empty response = LLM not functioning
+                    if step.status == "success" and step.elapsed_seconds < 2.0:
+                        if step.agent_name == "Business Model Analyzer":
+                            if not orch_result.analysis or not orch_result.analysis.segments:
+                                step.status = "error"
+                                step.error_message = (
+                                    f"応答が {step.elapsed_seconds:.1f}秒で完了しましたが"
+                                    f"セグメント0件 — LLM APIが正常に機能していない可能性があります"
+                                )
+
+                    # Check 2: Agent 1 "succeeded" but returned nothing
+                    if (step.agent_name == "Business Model Analyzer"
+                            and step.status == "success"
+                            and orch_result.analysis):
+                        a = orch_result.analysis
+                        if not a.segments and not a.industry and not a.executive_summary:
+                            step.status = "error"
+                            step.error_message = (
+                                "LLMが空の分析結果を返しました。"
+                                "OPENAI_API_KEY の設定を確認してください。"
+                            )
 
                 st.session_state["agent_result"] = orch_result
 
@@ -737,8 +792,13 @@ def _run_phase_a_analysis(
 
                 llm_ok = len(parameters) > 0
 
-                if not llm_ok and orch_result.warnings:
-                    llm_error_msg = "; ".join(orch_result.warnings)
+                # Generate error message from all failures
+                error_parts = []
+                for step in orch_result.steps:
+                    if step.status == "error":
+                        error_parts.append(f"{step.agent_name}: {step.error_message}")
+                if error_parts and not llm_ok:
+                    llm_error_msg = "; ".join(error_parts)
 
             except ImportError:
                 # Fall back to old single-pass extractor if agents module missing
@@ -754,6 +814,9 @@ def _run_phase_a_analysis(
         except LLMError as llm_exc:
             llm_error_msg = str(llm_exc)
             logger.error("LLM extraction failed: %s", llm_exc)
+        except RuntimeError as rt_exc:
+            llm_error_msg = str(rt_exc)
+            logger.error("LLM pre-flight failed: %s", rt_exc)
         except Exception as llm_exc:
             llm_error_msg = str(llm_exc)
             logger.error("LLM extraction failed: %s", llm_exc)
