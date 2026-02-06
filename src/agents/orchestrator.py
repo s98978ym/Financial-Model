@@ -150,39 +150,41 @@ class AgentOrchestrator:
             if on_step:
                 on_step(step1)
 
-        # ---- Step 2: FM Design (only if Step 1 succeeded) ----
+        # ---- Step 2: FM Design ----
+        # Runs even if Step 1 failed -- uses empty analysis as fallback
+        # so the LLM can still attempt direct extraction from the document.
         step2 = AgentStep(agent_name="FM Designer")
         result.steps.append(step2)
+        step2.status = "running"
+        step2.started_at = time.time()
+        if on_step:
+            on_step(step2)
 
-        if result.analysis and result.analysis.segments:
-            step2.status = "running"
-            step2.started_at = time.time()
-            if on_step:
-                on_step(step2)
+        # Use analysis from Step 1, or an empty fallback
+        analysis_for_step2 = result.analysis or BusinessModelAnalysis()
 
-            try:
-                design = self.agent2.design(
-                    analysis=result.analysis,
-                    catalog_items=catalog_items,
-                    document_text=document_text,
-                )
-                result.design = design
-                step2.status = "success"
-                n_ext = len(design.extractions)
-                n_unmap = len(design.unmapped_cells)
-                step2.summary = f"抽出: {n_ext}件 | 未マッピング: {n_unmap}件 | 警告: {len(design.warnings)}件"
-                logger.info("Step 2 complete: %s", step2.summary)
-            except Exception as e:
-                step2.status = "error"
-                step2.error_message = str(e)
-                logger.error("Step 2 failed: %s", e)
-            finally:
-                step2.finished_at = time.time()
-                if on_step:
-                    on_step(step2)
-        else:
+        if not result.analysis or not result.analysis.segments:
+            step2.summary = "Agent 1 未完了のため、直接抽出モードで実行"
+            logger.info("Step 2: running in direct extraction mode (no business model analysis)")
+
+        try:
+            design = self.agent2.design(
+                analysis=analysis_for_step2,
+                catalog_items=catalog_items,
+                document_text=document_text,
+            )
+            result.design = design
+            step2.status = "success"
+            n_ext = len(design.extractions)
+            n_unmap = len(design.unmapped_cells)
+            step2.summary = f"抽出: {n_ext}件 | 未マッピング: {n_unmap}件 | 警告: {len(design.warnings)}件"
+            logger.info("Step 2 complete: %s", step2.summary)
+        except Exception as e:
             step2.status = "error"
-            step2.error_message = "Step 1 (Business Model Analysis) が失敗したため、スキップされました"
+            step2.error_message = str(e)
+            logger.error("Step 2 failed: %s", e)
+        finally:
+            step2.finished_at = time.time()
             if on_step:
                 on_step(step2)
 

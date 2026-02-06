@@ -935,9 +935,21 @@ def _render_agent_analysis() -> None:
                 icon = "white_check_mark"
                 st.markdown(f":{icon}: **{step.agent_name}** — {step.summary}  ({step.elapsed_seconds:.1f}秒)")
             elif step.status == "error":
-                st.markdown(f":x: **{step.agent_name}** — {step.error_message}")
+                st.error(f"**{step.agent_name}:** {step.error_message}")
             else:
                 st.markdown(f":hourglass: **{step.agent_name}** — {step.status}")
+
+        # LLM diagnostic hint
+        all_failed = all(s.status == "error" for s in orch_result.steps)
+        any_fast = any(s.elapsed_seconds < 1.0 and s.status == "error" for s in orch_result.steps)
+        if all_failed and any_fast:
+            st.warning(
+                "**LLM APIが応答していない可能性があります。**\n\n"
+                "確認事項:\n"
+                "1. Streamlit Cloud の Settings → Secrets に `OPENAI_API_KEY` が設定されているか\n"
+                "2. APIキーが有効で、残高があるか\n"
+                "3. キーの形式: `OPENAI_API_KEY = \"sk-...\"`"
+            )
 
         # Business model analysis
         bm = orch_result.analysis

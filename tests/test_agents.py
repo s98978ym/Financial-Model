@@ -227,16 +227,28 @@ class TestAgentOrchestrator:
         assert len(result.extractions) == 2
         assert result.analysis.industry == "SaaS"
 
-    def test_pipeline_handles_agent1_failure(self) -> None:
+    def test_pipeline_handles_agent1_failure_and_still_runs_agent2(self) -> None:
+        # Agent 1 raises, Agent 2 should still try (direct extraction mode)
         llm = MagicMock()
-        llm.extract = MagicMock(side_effect=Exception("API error"))
+        llm.extract = MagicMock(side_effect=[
+            Exception("API error"),  # Agent 1 fails
+            MOCK_FM_RESPONSE,        # Agent 2 gets response
+        ])
         orch = AgentOrchestrator(llm)
         result = orch.run("doc", SAMPLE_CATALOG)
 
-        assert not result.is_success
         assert result.steps[0].status == "error"
         assert "API error" in result.steps[0].error_message
-        assert result.steps[1].status == "error"  # skipped
+        # Agent 2 still ran
+        assert result.steps[1].status == "success"
+        assert len(result.extractions) == 2
+
+    def test_agent1_raises_on_empty_llm_response(self) -> None:
+        """Agent 1 should raise RuntimeError when LLM returns empty/useless response."""
+        llm = _make_mock_llm([{}])  # empty response
+        agent = BusinessModelAnalyzer(llm)
+        with pytest.raises(RuntimeError, match="LLMがビジネスモデル分析を返しませんでした"):
+            agent.analyze("some document text")
 
     def test_pipeline_calls_progress_callback(self) -> None:
         llm = _make_mock_llm([MOCK_BM_RESPONSE, MOCK_FM_RESPONSE])

@@ -188,7 +188,15 @@ class BusinessModelAnalyzer:
         -------
         BusinessModelAnalysis
             Structured analysis of the business model.
+
+        Raises
+        ------
+        RuntimeError
+            If the LLM returns an empty or unusable response.
         """
+        if not document_text or not document_text.strip():
+            raise RuntimeError("事業計画書のテキストが空です。PDFが正しく読み取れているか確認してください。")
+
         # Truncate if too long for a single call (keep first 12K chars)
         max_chars = 12000
         if len(document_text) > max_chars:
@@ -206,7 +214,19 @@ class BusinessModelAnalyzer:
 
         logger.info("BusinessModelAnalyzer: sending document (%d chars) to LLM", len(truncated))
         result = self.llm.extract(messages)
-        logger.info("BusinessModelAnalyzer: received analysis with %d segments", len(result.get("segments", [])))
+        logger.info("BusinessModelAnalyzer: received response keys=%s", list(result.keys()))
+
+        # Validate: if the LLM returned nothing useful, raise an error
+        # (Old llm_client.py silently returns {} on API errors)
+        if not result or not result.get("segments"):
+            raw_keys = list(result.keys()) if result else []
+            raise RuntimeError(
+                f"LLMがビジネスモデル分析を返しませんでした。"
+                f"レスポンス内容: {raw_keys}。"
+                f"考えられる原因: OPENAI_API_KEY未設定、APIエラー、"
+                f"またはドキュメントの内容が不十分。"
+                f"ドキュメント先頭100文字: {document_text[:100]!r}"
+            )
 
         return self._parse_result(result)
 
