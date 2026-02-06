@@ -193,7 +193,10 @@ class LLMClient:
                 return json.loads(candidate)
             except json.JSONDecodeError:
                 # Truncated response: try to repair by closing brackets
-                pass
+                repaired = self._repair_truncated_json(text)
+                if repaired is not None:
+                    logger.info("Repaired truncated JSON in _try_extract_json fallback")
+                    return repaired
 
         raise LLMError(f"LLM応答からJSONを抽出できませんでした。応答先頭200文字: {text[:200]}")
 
