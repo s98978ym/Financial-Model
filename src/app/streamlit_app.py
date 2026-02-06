@@ -60,7 +60,13 @@ try:
     from src.catalog.scanner import scan_template, export_catalog_json
     from src.modelmap.analyzer import analyze_model, generate_model_report_md
     from src.extract.extractor import ParameterExtractor
-    from src.extract.llm_client import LLMClient, LLMError
+    from src.extract.llm_client import LLMClient
+    try:
+        from src.extract.llm_client import LLMError
+    except ImportError:
+        # Fallback for older deployments where LLMError doesn't exist yet
+        class LLMError(Exception):  # type: ignore[no-redef]
+            """Raised when the LLM API call fails."""
     from src.extract.prompts import (
         SYSTEM_PROMPT_NORMAL,
         SYSTEM_PROMPT_STRICT,
