@@ -41,14 +41,26 @@ import streamlit as st
 # Bridge Streamlit Secrets → os.environ  (Streamlit Cloud does NOT do this
 # automatically, but LLMClient reads from os.environ)
 # ---------------------------------------------------------------------------
+_API_KEY_SOURCE = "not found"
 try:
-    for _secret_key in ["OPENAI_API_KEY"]:
-        if _secret_key not in os.environ:
+    if os.environ.get("OPENAI_API_KEY"):
+        _API_KEY_SOURCE = "os.environ (pre-set)"
+    else:
+        try:
+            _val = st.secrets.get("OPENAI_API_KEY", "")
+            if _val:
+                os.environ["OPENAI_API_KEY"] = str(_val)
+                _API_KEY_SOURCE = "st.secrets (bridged)"
+        except (KeyError, FileNotFoundError, AttributeError):
+            pass
+        # Also try nested TOML format: [openai]\n api_key = "..."
+        if _API_KEY_SOURCE == "not found":
             try:
-                _val = st.secrets[_secret_key]
+                _val = st.secrets.get("openai", {}).get("api_key", "")
                 if _val:
-                    os.environ[_secret_key] = str(_val)
-            except (KeyError, FileNotFoundError):
+                    os.environ["OPENAI_API_KEY"] = str(_val)
+                    _API_KEY_SOURCE = "st.secrets.openai.api_key (bridged)"
+            except (KeyError, FileNotFoundError, AttributeError):
                 pass
 except Exception:
     pass  # st.secrets may not be available outside Streamlit
@@ -693,29 +705,54 @@ def _run_phase_a_analysis(
 
             # ============================================================
             # PRE-FLIGHT CHECK: Verify LLM is actually reachable
-            # (The old llm_client.py silently returns {} on all errors)
+            # Uses direct OpenAI API call — does NOT depend on extract()
+            # which may silently swallow errors on older deployments.
             # ============================================================
             import time as _time
+
+            # Step 1: Check API key availability
+            _api_key = os.environ.get("OPENAI_API_KEY", "")
+            if not _api_key:
+                raise RuntimeError(
+                    "OPENAI_API_KEY が見つかりません。\n"
+                    f"APIキー検索結果: {_API_KEY_SOURCE}\n"
+                    "Streamlit Cloud: Settings → Secrets で OPENAI_API_KEY を設定してください。\n"
+                    "形式: OPENAI_API_KEY = \"sk-proj-...\""
+                )
+
+            # Step 2: Direct API connectivity test (bypass llm_client.extract)
             _preflight_start = _time.time()
             try:
-                _test_msgs = [
-                    {"role": "system", "content": "Return exactly: {\"status\":\"ok\"}"},
-                    {"role": "user", "content": "ping"},
-                ]
-                _test_result = llm_client.extract(_test_msgs)
+                from openai import OpenAI as _OpenAI
+                _test_client = _OpenAI(api_key=_api_key)
+                _test_resp = _test_client.chat.completions.create(
+                    model="gpt-4o",
+                    messages=[{"role": "user", "content": "Reply with exactly: OK"}],
+                    max_tokens=5,
+                    temperature=0,
+                )
                 _preflight_elapsed = _time.time() - _preflight_start
-                _preflight_ok = bool(_test_result and _test_result.get("status") == "ok")
-                if not _preflight_ok and _preflight_elapsed < 1.0:
-                    # Fast empty response = API not working
+                _test_content = (_test_resp.choices[0].message.content or "").strip()
+                if not _test_content:
                     raise RuntimeError(
-                        f"LLM API プリフライトチェック失敗: "
-                        f"応答={_test_result}, 時間={_preflight_elapsed:.1f}秒。"
-                        f"OPENAI_API_KEY が正しく設定されているか確認してください。"
+                        f"LLM API応答が空です (時間={_preflight_elapsed:.1f}秒)。"
+                        f"APIキーソース: {_API_KEY_SOURCE}"
                     )
+            except ImportError:
+                raise RuntimeError(
+                    "openai パッケージが見つかりません。"
+                    "requirements.txt に openai を追加してください。"
+                )
             except RuntimeError:
                 raise
             except Exception as _pf_exc:
-                raise RuntimeError(f"LLM API 接続失敗: {_pf_exc}") from _pf_exc
+                _preflight_elapsed = _time.time() - _preflight_start
+                raise RuntimeError(
+                    f"LLM API 接続失敗: {type(_pf_exc).__name__}: {_pf_exc}\n"
+                    f"時間={_preflight_elapsed:.1f}秒, "
+                    f"APIキーソース: {_API_KEY_SOURCE}, "
+                    f"キー先頭: {_api_key[:8]}..., キー末尾: ...{_api_key[-4:]}"
+                ) from _pf_exc
 
             progress.progress(73, text="LLM接続確認OK — ビジネスモデル分析中...")
 
