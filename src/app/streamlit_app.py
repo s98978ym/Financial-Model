@@ -388,130 +388,127 @@ def _dep_tree_to_dot(node, seen: set | None = None) -> str:
 # ===================================================================
 
 def _render_phase_a() -> None:
-    st.markdown("業種・ビジネスモデルを設定し、事業計画書をアップロードしてください。")
+    # ── Primary action: Upload file ──
+    st.markdown(
+        "#### 事業計画書をアップロードしてください"
+    )
+    doc_file = st.file_uploader(
+        "事業計画書", type=ALLOWED_DOC_EXTENSIONS,
+        key="doc_upload",
+        label_visibility="collapsed",
+    )
 
-    # -- Section 1: Business Context --
-    st.markdown("#### 事業情報 (Business Context)")
-    col1, col2, col3 = st.columns(3)
-
-    with col1:
-        industry_choice = st.selectbox(
-            "業種 (Industry)", options=INDUSTRY_OPTIONS, index=0,
-            key="industry_select",
-        )
-        if "その他" in industry_choice:
-            industry = st.text_input(
-                "業種を入力", value="", key="industry_freetext",
-                placeholder="例: フィンテック",
-            )
-            if not industry.strip():
-                industry = "その他"
-        else:
-            industry = industry_choice
-
-    with col2:
-        business_model = st.selectbox(
-            "ビジネスモデル", options=BUSINESS_MODEL_OPTIONS, index=0,
-            key="biz_model_select",
+    if doc_file:
+        ext = doc_file.name.split(".")[-1].upper()
+        size_kb = len(doc_file.getvalue()) / 1024
+        st.markdown(
+            f'<div class="file-ok">&#10003; {doc_file.name} ({ext}, {size_kb:.0f} KB) アップロード済み</div>',
+            unsafe_allow_html=True,
         )
 
-    with col3:
-        strictness_label = st.selectbox(
-            "モデル厳密度",
-            options=["ノーマル (normal)", "厳密 (strict)"],
-            index=0, key="strictness_select",
-            help="厳密: エビデンス必須。ノーマル: LLM推定で補完。",
-        )
-        strictness = "strict" if "厳密" in strictness_label else "normal"
-
-    # -- Section 2: Case & Options --
-    st.markdown("#### ケース設定 (Scenario)")
-    col_case, col_sim = st.columns([3, 1])
-    with col_case:
-        cases = st.multiselect(
-            "生成ケース", options=CASE_OPTIONS, default=["Base"],
-            key="case_multiselect",
-        )
-        if not cases:
-            cases = ["Base"]
-    with col_sim:
-        run_simulation = st.checkbox(
-            "Monte Carlo", value=False, key="sim_checkbox",
-            help="500回のモンテカルロシミュレーションを実行",
-        )
-
-    # -- Section 3: File Uploads --
-    st.markdown("#### ファイル (Files)")
-    col_doc, col_tmpl = st.columns(2)
-
-    with col_doc:
-        doc_file = st.file_uploader(
-            "事業計画書 (Business Plan)", type=ALLOWED_DOC_EXTENSIONS,
-            key="doc_upload", help="PDF / DOCX / PPTX",
-        )
-        if doc_file:
-            ext = doc_file.name.split(".")[-1].upper()
-            size_kb = len(doc_file.getvalue()) / 1024
-            st.markdown(
-                f'<div class="file-ok">&#10003; {doc_file.name} ({ext}, {size_kb:.0f} KB)</div>',
-                unsafe_allow_html=True,
-            )
-
-    with col_tmpl:
-        template_file = st.file_uploader(
-            "Excel テンプレート (任意)", type=["xlsx"],
-            key="template_upload", help="未指定ならデフォルト使用",
-        )
-        if template_file:
-            size_kb = len(template_file.getvalue()) / 1024
-            st.markdown(
-                f'<div class="file-ok">&#10003; {template_file.name} ({size_kb:.0f} KB)</div>',
-                unsafe_allow_html=True,
-            )
-        else:
-            st.caption("デフォルト: templates/base.xlsx")
-
-    # -- Advanced Settings --
-    with st.expander("詳細設定 (Advanced)", expanded=False):
-        c1, c2, c3 = st.columns(3)
-        with c1:
-            input_color = st.color_picker("入力セル色", value=DEFAULT_INPUT_COLOR, key="color_input")
-        with c2:
-            formula_color = st.color_picker("数式フォント色", value=DEFAULT_FORMULA_COLOR, key="color_formula")
-        with c3:
-            total_color = st.color_picker("合計セル色", value=DEFAULT_TOTAL_COLOR, key="color_total")
-        tc1, tc2 = st.columns(2)
-        with tc1:
-            apply_formula_color = st.toggle("数式色を適用", value=False, key="toggle_formula_color")
-        with tc2:
-            apply_total_color = st.toggle("合計色を適用", value=False, key="toggle_total_color")
-
-    # -- Start button --
-    st.divider()
-    if doc_file is None:
-        st.info("事業計画書をアップロードすると分析を開始できます。")
-
-    col_s1, col_btn, col_s2 = st.columns([1, 2, 1])
-    with col_btn:
+        # ── Start button (immediately after upload) ──
         if st.button(
-            "分析開始 (Start Analysis)", type="primary",
-            disabled=(doc_file is None), use_container_width=True,
+            "分析開始",
+            type="primary",
+            use_container_width=True,
             key="btn_start_analysis",
         ):
+            # Collect settings (use defaults for anything not customized)
+            industry = st.session_state.get("industry_select", "SaaS")
+            if "その他" in industry:
+                industry = st.session_state.get("industry_freetext", "その他") or "その他"
+            business_model = st.session_state.get("biz_model_select", "B2B")
+            strictness_label = st.session_state.get("strictness_select", "ノーマル (normal)")
+            strictness = "strict" if "厳密" in strictness_label else "normal"
+            cases_raw = st.session_state.get("case_multiselect", ["Base"])
+            if not cases_raw:
+                cases_raw = ["Base"]
+            run_simulation = st.session_state.get("sim_checkbox", False)
+            template_file = st.session_state.get("template_upload_value", None)
+
             _run_phase_a_analysis(
                 industry=industry, business_model=business_model,
-                strictness=strictness, cases=[c.lower() for c in cases],
+                strictness=strictness, cases=[c.lower() for c in cases_raw],
                 run_simulation=run_simulation,
                 input_color=st.session_state.get("color_input", DEFAULT_INPUT_COLOR),
                 formula_color=st.session_state.get("color_formula", DEFAULT_FORMULA_COLOR),
                 total_color=st.session_state.get("color_total", DEFAULT_TOTAL_COLOR),
                 apply_formula_color=st.session_state.get("toggle_formula_color", False),
                 apply_total_color=st.session_state.get("toggle_total_color", False),
-                doc_file=doc_file, template_file=template_file,
+                doc_file=doc_file,
+                template_file=st.session_state.get("template_upload_file", None),
             )
 
-    if doc_file is not None:
-        st.markdown('<p class="nav-hint">通常 30〜60 秒かかります</p>', unsafe_allow_html=True)
+        st.caption("通常 30〜60 秒かかります")
+
+    else:
+        st.markdown(
+            '<div style="text-align:center; padding:3rem 1rem; '
+            'color:#999; border:2px dashed #ddd; border-radius:12px; '
+            'margin:1rem 0;">'
+            '<p style="font-size:1.2rem;">PDF / DOCX / PPTX ファイルを'
+            'ドラッグ＆ドロップ</p>'
+            '<p style="font-size:0.85rem;">またはクリックしてファイルを選択</p>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+
+    # ── Optional settings (collapsed) ──
+    st.markdown("")
+    with st.expander("設定をカスタマイズ（任意 - デフォルトでも動作します）", expanded=False):
+        st.caption("通常は変更不要です。必要な場合のみ調整してください。")
+
+        col1, col2 = st.columns(2)
+        with col1:
+            industry_choice = st.selectbox(
+                "業種", options=INDUSTRY_OPTIONS, index=0,
+                key="industry_select",
+            )
+            if "その他" in industry_choice:
+                st.text_input("業種を入力", value="", key="industry_freetext", placeholder="例: フィンテック")
+            st.selectbox(
+                "ビジネスモデル", options=BUSINESS_MODEL_OPTIONS, index=0,
+                key="biz_model_select",
+            )
+        with col2:
+            st.selectbox(
+                "厳密度",
+                options=["ノーマル (normal)", "厳密 (strict)"],
+                index=0, key="strictness_select",
+                help="厳密: エビデンス必須。ノーマル: LLM推定で補完。",
+            )
+            st.multiselect(
+                "生成ケース", options=CASE_OPTIONS, default=["Base"],
+                key="case_multiselect",
+            )
+            st.checkbox(
+                "Monte Carlo シミュレーション", value=False, key="sim_checkbox",
+            )
+
+        # Template upload
+        st.markdown("---")
+        template_file = st.file_uploader(
+            "Excel テンプレート（任意 - 未指定ならデフォルト使用）", type=["xlsx"],
+            key="template_upload",
+        )
+        if template_file:
+            st.session_state["template_upload_file"] = template_file
+
+        # Color settings
+        st.markdown("---")
+        st.caption("セル色設定")
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            st.color_picker("入力セル色", value=DEFAULT_INPUT_COLOR, key="color_input")
+        with c2:
+            st.color_picker("数式フォント色", value=DEFAULT_FORMULA_COLOR, key="color_formula")
+        with c3:
+            st.color_picker("合計セル色", value=DEFAULT_TOTAL_COLOR, key="color_total")
+        tc1, tc2 = st.columns(2)
+        with tc1:
+            st.toggle("数式色を適用", value=False, key="toggle_formula_color")
+        with tc2:
+            st.toggle("合計色を適用", value=False, key="toggle_total_color")
 
 
 def _run_phase_a_analysis(
@@ -609,32 +606,50 @@ def _render_phase_b() -> None:
     # -- Summary Dashboard --
     _render_analysis_summary(analysis, catalog, parameters)
 
+    # -- Primary action: proceed or adjust --
+    st.markdown("")
+    col_gen, col_custom = st.columns(2)
+    with col_gen:
+        if st.button(
+            "このまま Excel 生成 →",
+            type="primary",
+            use_container_width=True,
+            key="b_direct_generate",
+            help="パラメータを調整せずにそのまま生成します",
+        ):
+            st.session_state["phase"] = "C"
+            st.rerun()
+    with col_custom:
+        if st.button(
+            "パラメータを調整してから生成",
+            use_container_width=True,
+            key="b_forward",
+        ):
+            st.session_state["phase"] = "C"
+            st.rerun()
+
+    st.caption("下記の分析結果を確認し、問題なければ「このまま Excel 生成」をクリックしてください。")
+
     st.divider()
 
-    # -- Tabs --
-    tab_model, tab_params, tab_evidence = st.tabs([
-        "モデル構造",
+    # -- Detail tabs (scrollable, for those who want to inspect) --
+    tab_params, tab_model, tab_evidence = st.tabs([
         f"抽出パラメータ ({len(parameters)})",
+        "モデル構造",
         "エビデンス",
     ])
-    with tab_model:
-        _render_model_content_tab(analysis, catalog)
     with tab_params:
         _render_extracted_parameters_tab(parameters)
+    with tab_model:
+        _render_model_content_tab(analysis, catalog)
     with tab_evidence:
         _render_evidence_tab(parameters)
 
-    # -- Navigation --
+    # -- Back --
     st.divider()
-    col_back, col_spacer, col_fwd = st.columns([1, 2, 1])
-    with col_back:
-        if st.button("← Phase A", key="b_back"):
-            st.session_state["phase"] = "A"
-            st.rerun()
-    with col_fwd:
-        if st.button("カスタマイズへ →", type="primary", use_container_width=True, key="b_forward"):
-            st.session_state["phase"] = "C"
-            st.rerun()
+    if st.button("← やり直す (Phase A)", key="b_back"):
+        st.session_state["phase"] = "A"
+        st.rerun()
 
 
 def _render_analysis_summary(analysis, catalog, parameters) -> None:
@@ -817,11 +832,22 @@ def _render_phase_c() -> None:
             st.rerun()
         return
 
-    # -- Pre-flight summary --
+    # -- Pre-flight summary + Generate button (TOP) --
     _render_preflight_summary(parameters, config)
+
+    if st.button(
+        "Excel を生成する",
+        type="primary",
+        use_container_width=True,
+        key="btn_generate",
+    ):
+        _run_generation()
+
+    st.caption("下記でパラメータの値を調整できます（任意）。調整後に「Excel を生成する」をクリック。")
+
     st.divider()
 
-    # -- Case customisation --
+    # -- Case customisation (collapsed by default) --
     multiple_cases = config and len(config.cases) > 1
     if multiple_cases:
         case_tabs = st.tabs([f"{c.title()} ケース" for c in config.cases])
@@ -838,16 +864,11 @@ def _render_phase_c() -> None:
     st.divider()
     _render_custom_instructions_section(parameters)
 
-    # -- Navigation --
+    # -- Back --
     st.divider()
-    col_back, col_spacer, col_gen = st.columns([1, 1, 2])
-    with col_back:
-        if st.button("← Phase B", key="c_back"):
-            st.session_state["phase"] = "B"
-            st.rerun()
-    with col_gen:
-        if st.button("Excel 生成 (Generate)", type="primary", use_container_width=True, key="btn_generate"):
-            _run_generation()
+    if st.button("← 分析結果に戻る", key="c_back"):
+        st.session_state["phase"] = "B"
+        st.rerun()
 
 
 def _render_preflight_summary(parameters, config) -> None:
