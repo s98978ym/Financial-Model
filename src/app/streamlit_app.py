@@ -38,6 +38,22 @@ if _PROJECT_ROOT not in sys.path:
 import streamlit as st
 
 # ---------------------------------------------------------------------------
+# Bridge Streamlit Secrets → os.environ  (Streamlit Cloud does NOT do this
+# automatically, but LLMClient reads from os.environ)
+# ---------------------------------------------------------------------------
+try:
+    for _secret_key in ["OPENAI_API_KEY"]:
+        if _secret_key not in os.environ:
+            try:
+                _val = st.secrets[_secret_key]
+                if _val:
+                    os.environ[_secret_key] = str(_val)
+            except (KeyError, FileNotFoundError):
+                pass
+except Exception:
+    pass  # st.secrets may not be available outside Streamlit
+
+# ---------------------------------------------------------------------------
 # Project imports  (wrapped so Streamlit Cloud shows the real error)
 # ---------------------------------------------------------------------------
 
