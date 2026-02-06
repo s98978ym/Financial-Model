@@ -1,0 +1,51 @@
+# PL Generator Configuration
+# Copy this to your project and customize
+
+# Phase A settings
+industry: "SaaS"
+business_model: "B2B"
+strictness: "normal"  # "strict" or "normal"
+cases:
+  - base
+  - worst
+simulation: false
+
+# Color configuration
+colors:
+  input_color: "FFFFF2CC"      # Light yellow - identifies writable input cells
+  formula_color: "FF0000FF"    # Blue - for formula cell text (optional)
+  total_color: "FFD9D9D9"      # Light grey - for total/subtotal rows (optional)
+  apply_formula_color: false   # Whether to style formula cells
+  apply_total_color: false     # Whether to style total cells
+
+# Template paths
+template_path: "templates/base.xlsx"
+# Per-case templates (optional, falls back to template_path)
+# case_templates:
+#   best: "templates/best.xlsx"
+#   base: "templates/base.xlsx"
+#   worst: "templates/worst.xlsx"
+
+# LLM settings
+llm:
+  model: "gpt-4o"
+  temperature: 0.1
+  # base_url: "https://api.openai.com/v1"  # Override for compatible APIs
+
+# Simulation settings (when simulation: true)
+simulation_config:
+  method: "fallback"  # "xlwings" or "fallback"
+  iterations: 500
+  kpi_targets:
+    - revenue
+    - gross_profit
+    - operating_profit
+    - ebitda
+
+# Output settings
+output:
+  dir: "output"
+  include_analysis_report: true
+  include_extraction_log: true
+  include_needs_review: true
+  include_case_diff: true

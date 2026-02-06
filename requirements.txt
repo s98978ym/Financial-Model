@@ -1,0 +1,24 @@
+# Core dependencies
+openpyxl>=3.1.0
+pydantic>=2.0.0
+
+# Document ingestion
+PyPDF2>=3.0.0
+pdfplumber>=0.9.0
+python-docx>=0.8.11
+python-pptx>=0.6.21
+
+# LLM client
+openai>=1.0.0
+
+# Web UI
+streamlit>=1.28.0
+
+# CLI
+typer>=0.9.0
+
+# Simulation (optional)
+# xlwings>=0.30.0  # Requires Excel installation
+
+# Utilities
+pyyaml>=6.0
