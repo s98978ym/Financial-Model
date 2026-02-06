@@ -177,7 +177,15 @@ class FMDesigner:
         document_text : str
             Original document text for evidence extraction.
         """
-        analysis_json = json.dumps(analysis.raw_json, ensure_ascii=False, indent=2)
+        # If analysis is empty/default, provide minimal context instead of empty {}
+        _raw = analysis.raw_json if analysis.raw_json else {}
+        if not _raw or not _raw.get("segments"):
+            _raw = {
+                "note": "Agent 1の分析結果が利用できません。文書から直接抽出してください。",
+                "segments": [],
+                "industry": analysis.industry or "不明",
+            }
+        analysis_json = json.dumps(_raw, ensure_ascii=False, indent=2)
         catalog_json = json.dumps(catalog_items, ensure_ascii=False, indent=2)
 
         # Truncate document if needed
@@ -203,10 +211,21 @@ class FMDesigner:
             len(analysis.segments),
         )
         result = self.llm.extract(messages)
+
+        # Auto-unwrap: LLM sometimes wraps response in a container key
+        if result and not result.get("extractions") and not result.get("sheet_mappings"):
+            for _wrap_key in ("result", "response", "data", "output", "design"):
+                _inner = result.get(_wrap_key)
+                if isinstance(_inner, dict) and (_inner.get("extractions") or _inner.get("sheet_mappings")):
+                    logger.info("FMDesigner: unwrapped response from '%s' key", _wrap_key)
+                    result = _inner
+                    break
+
         logger.info(
-            "FMDesigner: received %d extractions, %d unmapped",
+            "FMDesigner: received %d extractions, %d unmapped, keys=%s",
             len(result.get("extractions", [])),
             len(result.get("unmapped_cells", [])),
+            list(result.keys()),
         )
 
         return self._parse_result(result)

@@ -799,27 +799,38 @@ def _run_phase_a_analysis(
                 # POST-PIPELINE VALIDATION (in streamlit_app.py, not in agents)
                 # ============================================================
                 for step in orch_result.steps:
-                    # Check 1: Fast empty response = LLM not functioning
-                    if step.status == "success" and step.elapsed_seconds < 2.0:
-                        if step.agent_name == "Business Model Analyzer":
-                            if not orch_result.analysis or not orch_result.analysis.segments:
+                    if step.agent_name == "Business Model Analyzer":
+                        # Check: Agent 1 must produce at least 1 segment
+                        if step.status == "success":
+                            a = orch_result.analysis
+                            if not a or not a.segments:
                                 step.status = "error"
+                                _raw = {}
+                                if a and hasattr(a, "raw_json"):
+                                    _raw = a.raw_json
+                                _raw_segs = _raw.get("segments", "(key missing)")
                                 step.error_message = (
-                                    f"応答が {step.elapsed_seconds:.1f}秒で完了しましたが"
-                                    f"セグメント0件 — LLM APIが正常に機能していない可能性があります"
+                                    f"LLMが有効なセグメントを返しませんでした "
+                                    f"(時間={step.elapsed_seconds:.1f}秒)。"
+                                    f"raw segments={type(_raw_segs).__name__}: "
+                                    f"{str(_raw_segs)[:200]}"
                                 )
-
-                    # Check 2: Agent 1 "succeeded" but returned nothing
-                    if (step.agent_name == "Business Model Analyzer"
-                            and step.status == "success"
-                            and orch_result.analysis):
-                        a = orch_result.analysis
-                        if not a.segments and not a.industry and not a.executive_summary:
-                            step.status = "error"
-                            step.error_message = (
-                                "LLMが空の分析結果を返しました。"
-                                "OPENAI_API_KEY の設定を確認してください。"
-                            )
+                    elif step.agent_name == "FM Designer":
+                        # Check: Agent 2 must produce at least 1 extraction
+                        if step.status == "success":
+                            d = orch_result.design
+                            if not d or not d.extractions:
+                                step.status = "error"
+                                _raw = {}
+                                if d and hasattr(d, "raw_json"):
+                                    _raw = d.raw_json
+                                _raw_ext = _raw.get("extractions", "(key missing)")
+                                step.error_message = (
+                                    f"LLMが抽出結果を返しませんでした "
+                                    f"(時間={step.elapsed_seconds:.1f}秒)。"
+                                    f"raw extractions={type(_raw_ext).__name__}: "
+                                    f"{str(_raw_ext)[:200]}"
+                                )
 
                 st.session_state["agent_result"] = orch_result
 
@@ -1110,6 +1121,29 @@ def _render_agent_analysis() -> None:
             st.markdown("**:warning: 警告:**")
             for w in design.warnings:
                 st.warning(w)
+
+        # Debug: Raw LLM response (always visible when errors present)
+        any_error = any(s.status == "error" for s in orch_result.steps)
+        if any_error:
+            st.divider()
+            with st.expander("Debug: LLM Raw Response", expanded=False):
+                if bm and hasattr(bm, "raw_json") and bm.raw_json:
+                    st.markdown("**Agent 1 (BM Analyzer) raw JSON:**")
+                    try:
+                        st.json(bm.raw_json)
+                    except Exception:
+                        st.code(str(bm.raw_json)[:2000])
+                else:
+                    st.markdown("*Agent 1: レスポンスなし*")
+
+                if design and hasattr(design, "raw_json") and design.raw_json:
+                    st.markdown("**Agent 2 (FM Designer) raw JSON:**")
+                    try:
+                        st.json(design.raw_json)
+                    except Exception:
+                        st.code(str(design.raw_json)[:2000])
+                else:
+                    st.markdown("*Agent 2: レスポンスなし*")
 
 
 def _render_blueprint_summary(

@@ -216,16 +216,33 @@ class BusinessModelAnalyzer:
         result = self.llm.extract(messages)
         logger.info("BusinessModelAnalyzer: received response keys=%s", list(result.keys()))
 
+        # Auto-unwrap: LLM sometimes wraps response in a container key
+        if result and not result.get("segments"):
+            for _wrap_key in ("result", "analysis", "response", "data", "output"):
+                _inner = result.get(_wrap_key)
+                if isinstance(_inner, dict) and _inner.get("segments"):
+                    logger.info("BusinessModelAnalyzer: unwrapped response from '%s' key", _wrap_key)
+                    result = _inner
+                    break
+
         # Validate: if the LLM returned nothing useful, raise an error
-        # (Old llm_client.py silently returns {} on API errors)
-        if not result or not result.get("segments"):
+        segments_raw = result.get("segments") if result else None
+        if not result or not segments_raw:
             raw_keys = list(result.keys()) if result else []
             raise RuntimeError(
                 f"LLMがビジネスモデル分析を返しませんでした。"
-                f"レスポンス内容: {raw_keys}。"
-                f"考えられる原因: OPENAI_API_KEY未設定、APIエラー、"
-                f"またはドキュメントの内容が不十分。"
+                f"レスポンスkeys: {raw_keys}, "
+                f"segments type: {type(segments_raw).__name__}, "
+                f"segments value: {str(segments_raw)[:200]}。"
                 f"ドキュメント先頭100文字: {document_text[:100]!r}"
+            )
+
+        # Ensure segments is a list
+        if not isinstance(segments_raw, list):
+            raise RuntimeError(
+                f"LLMが不正な形式のsegmentsを返しました: "
+                f"type={type(segments_raw).__name__}, "
+                f"value={str(segments_raw)[:200]}"
             )
 
         return self._parse_result(result)
