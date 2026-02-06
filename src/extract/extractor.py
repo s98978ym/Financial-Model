@@ -19,9 +19,15 @@ logger = logging.getLogger(__name__)
 class ParameterExtractor:
     """Orchestrates LLM-based parameter extraction from documents."""
 
-    def __init__(self, config: PhaseAConfig, llm_client: Optional[LLMClient] = None):
+    def __init__(
+        self,
+        config: PhaseAConfig,
+        llm_client: Optional[LLMClient] = None,
+        prompt_overrides: Optional[Dict[str, str]] = None,
+    ):
         self.config = config
         self.llm = llm_client or LLMClient()
+        self.prompt_overrides = prompt_overrides or {}
 
     def extract_parameters(
         self,
@@ -61,6 +67,7 @@ class ParameterExtractor:
                     business_model=self.config.business_model,
                     strictness=self.config.strictness,
                     cases=self.config.cases,
+                    overrides=self.prompt_overrides,
                 )
 
                 result = self.llm.extract(messages)

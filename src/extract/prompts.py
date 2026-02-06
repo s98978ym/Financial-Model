@@ -1,6 +1,16 @@
-"""Prompt templates for LLM parameter extraction."""
+"""Prompt templates for LLM parameter extraction.
 
-SYSTEM_PROMPT_BASE = """You are a financial analyst AI that extracts business parameters from planning documents.
+All prompt constants are exposed so the Streamlit UI can display them
+in an editable "プロンプト設定" section.  Custom overrides are accepted
+via the ``overrides`` dict parameter on :func:`build_extraction_prompt`.
+"""
+
+# ------------------------------------------------------------------
+# System prompts
+# ------------------------------------------------------------------
+
+SYSTEM_PROMPT_BASE = """\
+You are a financial analyst AI that extracts business parameters from planning documents.
 You extract numerical values, growth rates, costs, and other business metrics that can be mapped to a P&L model.
 
 IMPORTANT RULES:
@@ -28,7 +38,10 @@ NORMAL MODE:
 - For inferred values, always explain the reasoning in assumptions
 """
 
-# Industry-specific extraction guidance
+# ------------------------------------------------------------------
+# Industry / business-model guidance
+# ------------------------------------------------------------------
+
 INDUSTRY_PROMPTS = {
     "SaaS": "Focus on: MRR/ARR, ARPU, churn rate, CAC, LTV, number of customers, conversion rate, monthly growth rate.",
     "教育": "Focus on: 受講者数, 単価, 稼働率, 講師数, 講座数, completion rate, repeat rate.",
@@ -47,29 +60,15 @@ BUSINESS_MODEL_PROMPTS = {
     "MIX": "Identify and separate B2B and B2C revenue streams. Extract metrics for each stream separately.",
 }
 
-def build_extraction_prompt(
-    document_chunk: str,
-    catalog_block: str,  # JSON of catalog items for this block
-    industry: str = "",
-    business_model: str = "",
-    strictness: str = "normal",
-    cases: list = None,
-) -> list:
-    """Build the messages list for LLM extraction."""
-    # Combine system prompt based on strictness
-    system = SYSTEM_PROMPT_STRICT if strictness == "strict" else SYSTEM_PROMPT_NORMAL
+# ------------------------------------------------------------------
+# User message template  (the {variables} are filled at runtime)
+# ------------------------------------------------------------------
 
-    if industry in INDUSTRY_PROMPTS:
-        system += f"\n\nIndustry context ({industry}):\n{INDUSTRY_PROMPTS[industry]}"
-    if business_model in BUSINESS_MODEL_PROMPTS:
-        system += f"\n\nBusiness model ({business_model}):\n{BUSINESS_MODEL_PROMPTS[business_model]}"
-
-    cases_str = ", ".join(cases or ["base"])
-
-    user_msg = f"""Extract business parameters from the following document section.
+USER_PROMPT_TEMPLATE = """\
+Extract business parameters from the following document section.
 Map them to the template input cells listed below.
 
-TARGET CASES: {cases_str}
+TARGET CASES: {cases}
 
 TEMPLATE INPUT CELLS (catalog):
 {catalog_block}
@@ -89,13 +88,81 @@ Return a JSON object with this exact structure:
 IMPORTANT: parameter_key should match or relate to the catalog cell labels. Normalize Japanese numbers (億/万/千).
 """
 
+
+# ------------------------------------------------------------------
+# Public builder
+# ------------------------------------------------------------------
+
+def build_extraction_prompt(
+    document_chunk: str,
+    catalog_block: str,
+    industry: str = "",
+    business_model: str = "",
+    strictness: str = "normal",
+    cases: list = None,
+    *,
+    overrides: dict | None = None,
+) -> list:
+    """Build the ``messages`` list for LLM extraction.
+
+    Parameters
+    ----------
+    overrides : dict, optional
+        Keys accepted:
+
+        * ``"system_prompt"``  – full replacement for the system message.
+        * ``"industry_hint"``  – replacement for the industry guidance line.
+        * ``"biz_model_hint"`` – replacement for the business-model guidance.
+        * ``"user_template"``  – replacement for the user-message template
+          (must contain ``{cases}``, ``{catalog_block}``, ``{document_chunk}``).
+    """
+    overrides = overrides or {}
+
+    # ---- system message ------------------------------------------------
+    if "system_prompt" in overrides and overrides["system_prompt"].strip():
+        system = overrides["system_prompt"]
+    else:
+        system = (
+            SYSTEM_PROMPT_STRICT if strictness == "strict"
+            else SYSTEM_PROMPT_NORMAL
+        )
+
+    industry_hint = overrides.get("industry_hint", "").strip()
+    if not industry_hint and industry in INDUSTRY_PROMPTS:
+        industry_hint = INDUSTRY_PROMPTS[industry]
+    if industry_hint:
+        system += f"\n\nIndustry context ({industry}):\n{industry_hint}"
+
+    biz_hint = overrides.get("biz_model_hint", "").strip()
+    if not biz_hint and business_model in BUSINESS_MODEL_PROMPTS:
+        biz_hint = BUSINESS_MODEL_PROMPTS[business_model]
+    if biz_hint:
+        system += f"\n\nBusiness model ({business_model}):\n{biz_hint}"
+
+    # ---- user message --------------------------------------------------
+    cases_str = ", ".join(cases or ["base"])
+    user_template = overrides.get("user_template", "").strip()
+    if not user_template:
+        user_template = USER_PROMPT_TEMPLATE
+
+    user_msg = user_template.format(
+        cases=cases_str,
+        catalog_block=catalog_block,
+        document_chunk=document_chunk,
+    )
+
     return [
         {"role": "system", "content": system},
-        {"role": "user", "content": user_msg}
+        {"role": "user", "content": user_msg},
     ]
 
 
-INSTRUCTION_TO_CHANGES_PROMPT = """You are a financial model assistant. The user has provided a text instruction to customize parameters for a P&L model.
+# ------------------------------------------------------------------
+# Instruction-to-changes prompt  (Phase C — kept for future use)
+# ------------------------------------------------------------------
+
+INSTRUCTION_TO_CHANGES_PROMPT = """\
+You are a financial model assistant. The user has provided a text instruction to customize parameters for a P&L model.
 
 Current parameters (JSON):
 {parameters_json}

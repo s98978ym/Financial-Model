@@ -60,6 +60,13 @@ from src.catalog.scanner import scan_template, export_catalog_json
 from src.modelmap.analyzer import analyze_model, generate_model_report_md
 from src.extract.extractor import ParameterExtractor
 from src.extract.llm_client import LLMClient, LLMError
+from src.extract.prompts import (
+    SYSTEM_PROMPT_NORMAL,
+    SYSTEM_PROMPT_STRICT,
+    INDUSTRY_PROMPTS,
+    BUSINESS_MODEL_PROMPTS,
+    USER_PROMPT_TEMPLATE,
+)
 from src.excel.writer import PLWriter
 from src.excel.validator import PLValidator, generate_needs_review_csv
 from src.excel.case_generator import CaseGenerator
@@ -461,6 +468,108 @@ def _render_phase_a() -> None:
         with tc2:
             st.toggle("合計色を適用", value=False, key="toggle_total_color")
 
+    # --- Prompt settings (separate expander) ---
+    with st.expander("プロンプト設定（AI 抽出に使用される指示文）", expanded=False):
+        _render_prompt_settings()
+
+
+def _get_default_system_prompt(strictness: str = "normal") -> str:
+    """Return the default system prompt based on strictness."""
+    return (
+        SYSTEM_PROMPT_STRICT if strictness == "strict"
+        else SYSTEM_PROMPT_NORMAL
+    )
+
+
+def _get_default_industry_hint(industry: str) -> str:
+    return INDUSTRY_PROMPTS.get(industry, "")
+
+
+def _get_default_biz_model_hint(biz_model: str) -> str:
+    return BUSINESS_MODEL_PROMPTS.get(biz_model, "")
+
+
+def _render_prompt_settings() -> None:
+    """Show editable prompt text areas."""
+    st.caption(
+        "AI がパラメータを抽出する際に使用するプロンプトです。"
+        "内容を確認し、必要に応じて編集できます。"
+        "空欄にするとデフォルトが使用されます。"
+    )
+
+    # Determine defaults based on current settings
+    strictness = st.session_state.get("strictness_select", "ノーマル (normal)")
+    strict_mode = "strict" if "厳密" in strictness else "normal"
+    industry = st.session_state.get("industry_select", "SaaS")
+    biz_model = st.session_state.get("biz_model_select", "B2B")
+
+    # System prompt
+    st.markdown("**システムプロンプト** — AI の役割と抽出ルール")
+    default_sys = _get_default_system_prompt(strict_mode)
+    st.text_area(
+        "システムプロンプト",
+        value=default_sys,
+        height=220,
+        key="prompt_system",
+        label_visibility="collapsed",
+    )
+
+    # Industry hint
+    col_ind, col_biz = st.columns(2)
+    with col_ind:
+        st.markdown("**業種ガイダンス** — 業種固有の抽出指示")
+        default_ind = _get_default_industry_hint(industry)
+        st.text_area(
+            "業種ガイダンス",
+            value=default_ind,
+            height=80,
+            key="prompt_industry",
+            label_visibility="collapsed",
+            placeholder="例: Focus on: MRR, ARPU, churn rate ...",
+        )
+    with col_biz:
+        st.markdown("**ビジネスモデルガイダンス** — モデル固有の抽出指示")
+        default_biz = _get_default_biz_model_hint(biz_model)
+        st.text_area(
+            "ビジネスモデルガイダンス",
+            value=default_biz,
+            height=80,
+            key="prompt_biz_model",
+            label_visibility="collapsed",
+            placeholder="例: Focus on enterprise sales: deal size ...",
+        )
+
+    # User message template
+    st.markdown(
+        "**抽出指示テンプレート** — ドキュメント+カタログと共に送信される指示文  \n"
+        "`{cases}` `{catalog_block}` `{document_chunk}` は実行時に自動置換されます"
+    )
+    st.text_area(
+        "抽出指示テンプレート",
+        value=USER_PROMPT_TEMPLATE,
+        height=280,
+        key="prompt_user_template",
+        label_visibility="collapsed",
+    )
+
+
+def _collect_prompt_overrides() -> dict:
+    """Collect prompt overrides from session state."""
+    overrides: dict = {}
+    sys_prompt = st.session_state.get("prompt_system", "").strip()
+    if sys_prompt:
+        overrides["system_prompt"] = sys_prompt
+    ind_hint = st.session_state.get("prompt_industry", "").strip()
+    if ind_hint:
+        overrides["industry_hint"] = ind_hint
+    biz_hint = st.session_state.get("prompt_biz_model", "").strip()
+    if biz_hint:
+        overrides["biz_model_hint"] = biz_hint
+    user_tpl = st.session_state.get("prompt_user_template", "").strip()
+    if user_tpl:
+        overrides["user_template"] = user_tpl
+    return overrides
+
 
 def _run_phase_a_analysis(
     *, industry: str, business_model: str, strictness: str,
@@ -519,9 +628,13 @@ def _run_phase_a_analysis(
         llm_ok = False
         parameters: List[ExtractedParameter] = []
         llm_error_msg = ""
+        prompt_overrides = _collect_prompt_overrides()
         try:
             llm_client = LLMClient()
-            extractor = ParameterExtractor(config, llm_client=llm_client)
+            extractor = ParameterExtractor(
+                config, llm_client=llm_client,
+                prompt_overrides=prompt_overrides,
+            )
             parameters = extractor.extract_parameters(document, catalog)
             llm_ok = len(parameters) > 0
         except LLMError as llm_exc:
