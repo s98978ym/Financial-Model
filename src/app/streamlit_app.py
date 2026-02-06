@@ -3,7 +3,8 @@ PL Generator -- 3-Phase Wizard (Streamlit UI)
 =============================================
 
 A three-phase wizard for generating P&L Excel models from business-plan
-documents.
+documents.  UX designed following financial-SaaS best practices (Stripe,
+Ramp, Mercury) and Japanese UI conventions.
 
 * **Phase A** -- Pre-Customisation  (事前カスタマイズ)
 * **Phase B** -- Analysis Results    (分析結果)
@@ -88,7 +89,7 @@ INDUSTRY_OPTIONS: List[str] = [
     "飲食",
     "メーカー",
     "ヘルスケア",
-    "その他",
+    "その他 (自由入力)",
 ]
 
 BUSINESS_MODEL_OPTIONS: List[str] = ["B2B", "B2C", "B2B2C", "MIX", "Other"]
@@ -96,10 +97,118 @@ CASE_OPTIONS: List[str] = ["Best", "Base", "Worst"]
 ALLOWED_DOC_EXTENSIONS: List[str] = ["pdf", "docx", "pptx"]
 DEFAULT_TEMPLATE_PATH = "templates/base.xlsx"
 
-# Default colour values (ARGB hex without leading #)
+# Default colour values
 DEFAULT_INPUT_COLOR = "#FFF2CC"
 DEFAULT_FORMULA_COLOR = "#4472C4"
 DEFAULT_TOTAL_COLOR = "#D9E2F3"
+
+# Phase definitions
+PHASES = {
+    "A": {"label": "事前カスタマイズ", "en": "Setup", "icon": "1"},
+    "B": {"label": "分析結果", "en": "Analysis", "icon": "2"},
+    "C": {"label": "カスタマイズ & 生成", "en": "Generate", "icon": "3"},
+}
+
+
+# ---------------------------------------------------------------------------
+# Custom CSS for financial-grade UI
+# ---------------------------------------------------------------------------
+
+def _inject_custom_css() -> None:
+    """Inject custom CSS for professional financial UI."""
+    st.markdown("""
+    <style>
+    /* Step indicator bar */
+    .step-bar {
+        display: flex;
+        justify-content: center;
+        gap: 0;
+        margin: 0 auto 1.5rem auto;
+        max-width: 720px;
+    }
+    .step-item {
+        flex: 1;
+        text-align: center;
+        padding: 0.75rem 0.5rem;
+        font-size: 0.85rem;
+        color: #888;
+        border-bottom: 3px solid #e0e0e0;
+        transition: all 0.2s;
+    }
+    .step-item.active {
+        color: #0f5132;
+        font-weight: 700;
+        border-bottom: 3px solid #198754;
+    }
+    .step-item.completed {
+        color: #198754;
+        border-bottom: 3px solid #198754;
+    }
+    .step-num {
+        display: inline-block;
+        width: 24px; height: 24px; line-height: 24px;
+        border-radius: 50%;
+        background: #e0e0e0; color: #666;
+        font-weight: 700; font-size: 0.8rem;
+        margin-right: 0.4rem;
+    }
+    .step-item.active .step-num,
+    .step-item.completed .step-num {
+        background: #198754; color: white;
+    }
+
+    /* Metric cards */
+    .metric-card {
+        background: linear-gradient(135deg, #f8fffe 0%, #f0faf6 100%);
+        border: 1px solid #d4edda;
+        border-radius: 12px;
+        padding: 1.2rem;
+        text-align: center;
+    }
+    .metric-value {
+        font-size: 2rem; font-weight: 800;
+        color: #0f5132; line-height: 1.2;
+    }
+    .metric-label {
+        font-size: 0.8rem; color: #666; margin-top: 0.25rem;
+    }
+
+    /* Confidence badges */
+    .badge-high {
+        display: inline-block; padding: 2px 10px;
+        border-radius: 12px; font-size: 0.75rem; font-weight: 600;
+        background: #d4edda; color: #0f5132;
+    }
+    .badge-medium {
+        display: inline-block; padding: 2px 10px;
+        border-radius: 12px; font-size: 0.75rem; font-weight: 600;
+        background: #fff3cd; color: #856404;
+    }
+    .badge-low {
+        display: inline-block; padding: 2px 10px;
+        border-radius: 12px; font-size: 0.75rem; font-weight: 600;
+        background: #f8d7da; color: #842029;
+    }
+
+    /* File upload feedback */
+    .file-ok {
+        background: #d4edda; border: 1px solid #c3e6cb;
+        border-radius: 8px; padding: 0.6rem 1rem;
+        color: #155724; font-size: 0.9rem; margin: 0.5rem 0;
+    }
+
+    /* Navigation hint */
+    .nav-hint {
+        text-align: center; color: #999;
+        font-size: 0.8rem; margin-top: 0.5rem;
+    }
+
+    /* Sidebar polish */
+    section[data-testid="stSidebar"] {
+        background: linear-gradient(180deg, #f0faf6 0%, #ffffff 100%);
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
 
 # ---------------------------------------------------------------------------
@@ -109,7 +218,6 @@ DEFAULT_TOTAL_COLOR = "#D9E2F3"
 @dataclass
 class ProposedChange:
     """A single proposed change from custom instruction parsing."""
-
     parameter_key: str = ""
     original_value: Any = None
     proposed_value: Any = None
@@ -119,14 +227,9 @@ class ProposedChange:
     accepted: bool = True
 
 
-# ---------------------------------------------------------------------------
-# Helper: colour config container (simple dict wrapper kept in session_state)
-# ---------------------------------------------------------------------------
-
 @dataclass
 class ColorConfig:
     """Lightweight colour configuration for the template."""
-
     input_color: str = DEFAULT_INPUT_COLOR
     formula_color: str = DEFAULT_FORMULA_COLOR
     total_color: str = DEFAULT_TOTAL_COLOR
@@ -139,10 +242,8 @@ class ColorConfig:
 # ---------------------------------------------------------------------------
 
 def _init_session_state() -> None:
-    """Ensure every required session-state key exists."""
     defaults = {
         "phase": "A",
-        # Phase A outputs
         "config": None,
         "color_config": ColorConfig(),
         "document": None,
@@ -150,13 +251,12 @@ def _init_session_state() -> None:
         "analysis": None,
         "parameters": [],
         "extraction_result": None,
-        # Phase C
         "proposed_changes": [],
         "custom_instruction_text": "",
         "generation_outputs": {},
-        # Misc
         "error_message": "",
         "success_message": "",
+        "reset_confirm": False,
     }
     for key, default in defaults.items():
         if key not in st.session_state:
@@ -164,37 +264,75 @@ def _init_session_state() -> None:
 
 
 # ---------------------------------------------------------------------------
+# UI Components
+# ---------------------------------------------------------------------------
+
+def _render_step_indicator() -> None:
+    """Render horizontal 3-step progress indicator."""
+    current = st.session_state["phase"]
+    phase_order = ["A", "B", "C"]
+    current_idx = phase_order.index(current)
+
+    html_parts = ['<div class="step-bar">']
+    for idx, code in enumerate(phase_order):
+        info = PHASES[code]
+        if idx < current_idx:
+            cls = "completed"
+            check = "&#10003;"
+        elif idx == current_idx:
+            cls = "active"
+            check = info["icon"]
+        else:
+            cls = ""
+            check = info["icon"]
+
+        html_parts.append(
+            f'<div class="step-item {cls}">'
+            f'<span class="step-num">{check}</span>'
+            f'{info["label"]}'
+            f'</div>'
+        )
+    html_parts.append('</div>')
+    st.markdown("".join(html_parts), unsafe_allow_html=True)
+
+
+def _render_metric_card(value: str, label: str) -> str:
+    return (
+        f'<div class="metric-card">'
+        f'<div class="metric-value">{value}</div>'
+        f'<div class="metric-label">{label}</div>'
+        f'</div>'
+    )
+
+
+def _confidence_badge(confidence: float) -> str:
+    if confidence >= 0.7:
+        return f'<span class="badge-high">HIGH {confidence:.0%}</span>'
+    if confidence >= 0.4:
+        return f'<span class="badge-medium">MED {confidence:.0%}</span>'
+    return f'<span class="badge-low">LOW {confidence:.0%}</span>'
+
+
+def _confidence_text(confidence: float) -> str:
+    if confidence >= 0.7:
+        return "HIGH"
+    if confidence >= 0.4:
+        return "MED"
+    return "LOW"
+
+
+# ---------------------------------------------------------------------------
 # Utility helpers
 # ---------------------------------------------------------------------------
 
 def _save_uploaded_file(uploaded_file) -> str:
-    """Persist an uploaded file to a temp directory and return its path."""
     tmp_dir = tempfile.mkdtemp()
     dest = Path(tmp_dir) / uploaded_file.name
     dest.write_bytes(uploaded_file.getvalue())
     return str(dest)
 
 
-def _confidence_color(confidence: float) -> str:
-    """Return a CSS colour string based on confidence level."""
-    if confidence >= 0.7:
-        return "green"
-    if confidence >= 0.4:
-        return "orange"
-    return "red"
-
-
-def _confidence_emoji_text(confidence: float) -> str:
-    """Return a text label for the confidence band."""
-    if confidence >= 0.7:
-        return "HIGH"
-    if confidence >= 0.4:
-        return "MEDIUM"
-    return "LOW"
-
-
 def _render_dependency_tree_text(node, indent: int = 0) -> str:
-    """Recursively render a DependencyNode as indented text."""
     prefix = "  " * indent
     tag = ""
     if getattr(node, "is_input", False):
@@ -209,7 +347,6 @@ def _render_dependency_tree_text(node, indent: int = 0) -> str:
 
 
 def _dep_tree_to_dot(node, seen: set | None = None) -> str:
-    """Convert a DependencyNode tree to Graphviz DOT source."""
     if seen is None:
         seen = set()
     lines: List[str] = []
@@ -223,10 +360,10 @@ def _dep_tree_to_dot(node, seen: set | None = None) -> str:
         colour = "lightgrey"
         if getattr(node, "is_input", False):
             shape = "ellipse"
-            colour = "lightyellow"
+            colour = "#FFF2CC"
         elif getattr(node, "is_kpi", False):
             shape = "doubleoctagon"
-            colour = "lightblue"
+            colour = "#d4edda"
         safe_label = label.replace('"', '\\"')
         lines.append(
             f'  "{node_id}" [label="{safe_label}", shape={shape}, '
@@ -247,172 +384,146 @@ def _dep_tree_to_dot(node, seen: set | None = None) -> str:
 
 
 # ===================================================================
-# Phase A: Pre-Customisation  (事前カスタマイズ)
+# Phase A: Pre-Customisation
 # ===================================================================
 
 def _render_phase_a() -> None:
-    st.header("Phase A: 事前カスタマイズ (Pre-Customisation)")
-    st.markdown(
-        "業種、ビジネスモデル、厳密度、ケースを設定し、事業計画書と"
-        "テンプレートをアップロードしてください。"
-    )
+    st.markdown("業種・ビジネスモデルを設定し、事業計画書をアップロードしてください。")
 
-    # --- Industry selector ------------------------------------------------
-    col_ind, col_free = st.columns([2, 1])
-    with col_ind:
+    # -- Section 1: Business Context --
+    st.markdown("#### 事業情報 (Business Context)")
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
         industry_choice = st.selectbox(
-            "業種 (Industry)",
-            options=INDUSTRY_OPTIONS,
-            index=0,
+            "業種 (Industry)", options=INDUSTRY_OPTIONS, index=0,
             key="industry_select",
         )
-    with col_free:
-        industry_freetext = st.text_input(
-            "業種 (自由入力)",
-            value="",
-            key="industry_freetext",
-            help="ドロップダウンに該当しない場合、自由入力してください。",
+        if "その他" in industry_choice:
+            industry = st.text_input(
+                "業種を入力", value="", key="industry_freetext",
+                placeholder="例: フィンテック",
+            )
+            if not industry.strip():
+                industry = "その他"
+        else:
+            industry = industry_choice
+
+    with col2:
+        business_model = st.selectbox(
+            "ビジネスモデル", options=BUSINESS_MODEL_OPTIONS, index=0,
+            key="biz_model_select",
         )
-    industry = industry_freetext.strip() if industry_freetext.strip() else industry_choice
 
-    # --- Business model ---------------------------------------------------
-    business_model = st.selectbox(
-        "ビジネスモデル (Business Model)",
-        options=BUSINESS_MODEL_OPTIONS,
-        index=0,
-        key="biz_model_select",
-    )
+    with col3:
+        strictness_label = st.selectbox(
+            "モデル厳密度",
+            options=["ノーマル (normal)", "厳密 (strict)"],
+            index=0, key="strictness_select",
+            help="厳密: エビデンス必須。ノーマル: LLM推定で補完。",
+        )
+        strictness = "strict" if "厳密" in strictness_label else "normal"
 
-    # --- Strictness -------------------------------------------------------
-    strictness_label = st.radio(
-        "モデル厳密度 (Model Strictness)",
-        options=["厳密 (strict)", "ノーマル (normal)"],
-        index=1,
-        horizontal=True,
-        key="strictness_radio",
-    )
-    strictness = "strict" if "厳密" in strictness_label else "normal"
+    # -- Section 2: Case & Options --
+    st.markdown("#### ケース設定 (Scenario)")
+    col_case, col_sim = st.columns([3, 1])
+    with col_case:
+        cases = st.multiselect(
+            "生成ケース", options=CASE_OPTIONS, default=["Base"],
+            key="case_multiselect",
+        )
+        if not cases:
+            cases = ["Base"]
+    with col_sim:
+        run_simulation = st.checkbox(
+            "Monte Carlo", value=False, key="sim_checkbox",
+            help="500回のモンテカルロシミュレーションを実行",
+        )
 
-    # --- Cases ------------------------------------------------------------
-    cases = st.multiselect(
-        "ケース (Cases)",
-        options=CASE_OPTIONS,
-        default=["Base"],
-        key="case_multiselect",
-    )
-    if not cases:
-        cases = ["Base"]
+    # -- Section 3: File Uploads --
+    st.markdown("#### ファイル (Files)")
+    col_doc, col_tmpl = st.columns(2)
 
-    # --- Simulation -------------------------------------------------------
-    run_simulation = st.checkbox(
-        "シミュレーションあり (Run Simulation)",
-        value=False,
-        key="sim_checkbox",
-    )
+    with col_doc:
+        doc_file = st.file_uploader(
+            "事業計画書 (Business Plan)", type=ALLOWED_DOC_EXTENSIONS,
+            key="doc_upload", help="PDF / DOCX / PPTX",
+        )
+        if doc_file:
+            ext = doc_file.name.split(".")[-1].upper()
+            size_kb = len(doc_file.getvalue()) / 1024
+            st.markdown(
+                f'<div class="file-ok">&#10003; {doc_file.name} ({ext}, {size_kb:.0f} KB)</div>',
+                unsafe_allow_html=True,
+            )
 
-    # --- Colour settings --------------------------------------------------
-    with st.expander("カラー設定 (Colour Settings)", expanded=False):
+    with col_tmpl:
+        template_file = st.file_uploader(
+            "Excel テンプレート (任意)", type=["xlsx"],
+            key="template_upload", help="未指定ならデフォルト使用",
+        )
+        if template_file:
+            size_kb = len(template_file.getvalue()) / 1024
+            st.markdown(
+                f'<div class="file-ok">&#10003; {template_file.name} ({size_kb:.0f} KB)</div>',
+                unsafe_allow_html=True,
+            )
+        else:
+            st.caption("デフォルト: templates/base.xlsx")
+
+    # -- Advanced Settings --
+    with st.expander("詳細設定 (Advanced)", expanded=False):
         c1, c2, c3 = st.columns(3)
         with c1:
-            input_color = st.color_picker(
-                "入力セル色 (Input colour)",
-                value=DEFAULT_INPUT_COLOR,
-                key="color_input",
-            )
+            input_color = st.color_picker("入力セル色", value=DEFAULT_INPUT_COLOR, key="color_input")
         with c2:
-            formula_color = st.color_picker(
-                "数式フォント色 (Formula colour)",
-                value=DEFAULT_FORMULA_COLOR,
-                key="color_formula",
-            )
+            formula_color = st.color_picker("数式フォント色", value=DEFAULT_FORMULA_COLOR, key="color_formula")
         with c3:
-            total_color = st.color_picker(
-                "合計セル色 (Total colour)",
-                value=DEFAULT_TOTAL_COLOR,
-                key="color_total",
-            )
-
+            total_color = st.color_picker("合計セル色", value=DEFAULT_TOTAL_COLOR, key="color_total")
         tc1, tc2 = st.columns(2)
         with tc1:
-            apply_formula_color = st.toggle(
-                "数式色を適用 (Apply formula colour)",
-                value=False,
-                key="toggle_formula_color",
-            )
+            apply_formula_color = st.toggle("数式色を適用", value=False, key="toggle_formula_color")
         with tc2:
-            apply_total_color = st.toggle(
-                "合計色を適用 (Apply total colour)",
-                value=False,
-                key="toggle_total_color",
+            apply_total_color = st.toggle("合計色を適用", value=False, key="toggle_total_color")
+
+    # -- Start button --
+    st.divider()
+    if doc_file is None:
+        st.info("事業計画書をアップロードすると分析を開始できます。")
+
+    col_s1, col_btn, col_s2 = st.columns([1, 2, 1])
+    with col_btn:
+        if st.button(
+            "分析開始 (Start Analysis)", type="primary",
+            disabled=(doc_file is None), use_container_width=True,
+            key="btn_start_analysis",
+        ):
+            _run_phase_a_analysis(
+                industry=industry, business_model=business_model,
+                strictness=strictness, cases=[c.lower() for c in cases],
+                run_simulation=run_simulation,
+                input_color=st.session_state.get("color_input", DEFAULT_INPUT_COLOR),
+                formula_color=st.session_state.get("color_formula", DEFAULT_FORMULA_COLOR),
+                total_color=st.session_state.get("color_total", DEFAULT_TOTAL_COLOR),
+                apply_formula_color=st.session_state.get("toggle_formula_color", False),
+                apply_total_color=st.session_state.get("toggle_total_color", False),
+                doc_file=doc_file, template_file=template_file,
             )
 
-    # --- File upload: business plan ---------------------------------------
-    st.subheader("事業計画書アップロード (Business Plan Upload)")
-    doc_file = st.file_uploader(
-        "PDF / DOCX / PPTX ファイルを選択",
-        type=ALLOWED_DOC_EXTENSIONS,
-        key="doc_upload",
-    )
-
-    # --- File upload: Excel template (optional) ---------------------------
-    st.subheader("Excel テンプレート (任意)")
-    template_file = st.file_uploader(
-        "Excel テンプレート (.xlsx) -- 未指定の場合はデフォルトを使用",
-        type=["xlsx"],
-        key="template_upload",
-    )
-
-    # --- Start button -----------------------------------------------------
-    st.divider()
-    start_disabled = doc_file is None
-    if start_disabled:
-        st.info("事業計画書をアップロードしてください。")
-
-    if st.button(
-        "分析開始 (Start Analysis)",
-        type="primary",
-        disabled=start_disabled,
-        use_container_width=True,
-        key="btn_start_analysis",
-    ):
-        _run_phase_a_analysis(
-            industry=industry,
-            business_model=business_model,
-            strictness=strictness,
-            cases=[c.lower() for c in cases],
-            run_simulation=run_simulation,
-            input_color=input_color,
-            formula_color=formula_color,
-            total_color=total_color,
-            apply_formula_color=apply_formula_color,
-            apply_total_color=apply_total_color,
-            doc_file=doc_file,
-            template_file=template_file,
-        )
+    if doc_file is not None:
+        st.markdown('<p class="nav-hint">通常 30〜60 秒かかります</p>', unsafe_allow_html=True)
 
 
 def _run_phase_a_analysis(
-    *,
-    industry: str,
-    business_model: str,
-    strictness: str,
-    cases: List[str],
-    run_simulation: bool,
-    input_color: str,
-    formula_color: str,
-    total_color: str,
-    apply_formula_color: bool,
-    apply_total_color: bool,
-    doc_file,
-    template_file,
+    *, industry: str, business_model: str, strictness: str,
+    cases: List[str], run_simulation: bool,
+    input_color: str, formula_color: str, total_color: str,
+    apply_formula_color: bool, apply_total_color: bool,
+    doc_file, template_file,
 ) -> None:
-    """Execute the Phase-A analysis pipeline and transition to Phase B."""
-
     progress = st.progress(0, text="準備中...")
-    status_area = st.empty()
 
     try:
-        # ---- 1. Save uploaded files ---------------------------------
         progress.progress(5, text="ファイルを保存中...")
         doc_path = _save_uploaded_file(doc_file)
 
@@ -421,70 +532,48 @@ def _run_phase_a_analysis(
         else:
             template_path = DEFAULT_TEMPLATE_PATH
             if not Path(template_path).exists():
-                st.error(
-                    f"デフォルトテンプレートが見つかりません: {template_path}\n"
-                    "テンプレートをアップロードしてください。"
-                )
+                st.error("デフォルトテンプレートが見つかりません。テンプレートをアップロードしてください。")
                 progress.empty()
                 return
 
-        # ---- 2. Build PhaseAConfig ----------------------------------
         progress.progress(10, text="設定を構築中...")
         config = PhaseAConfig(
-            industry=industry,
-            business_model=business_model,
-            strictness=strictness,
-            cases=cases,
-            template_path=template_path,
-            document_paths=[doc_path],
+            industry=industry, business_model=business_model,
+            strictness=strictness, cases=cases,
+            template_path=template_path, document_paths=[doc_path],
         )
         st.session_state["config"] = config
         st.session_state["run_simulation"] = run_simulation
 
-        # Store colour config
         cc = ColorConfig(
-            input_color=input_color,
-            formula_color=formula_color,
-            total_color=total_color,
-            apply_formula_color=apply_formula_color,
+            input_color=input_color, formula_color=formula_color,
+            total_color=total_color, apply_formula_color=apply_formula_color,
             apply_total_color=apply_total_color,
         )
         st.session_state["color_config"] = cc
 
-        # ---- 3. Read document ---------------------------------------
         progress.progress(20, text="事業計画書を読み取り中...")
-        with st.spinner("ドキュメントを解析中..."):
-            document = read_document(doc_path)
+        document = read_document(doc_path)
         st.session_state["document"] = document
-        status_area.success(
-            f"ドキュメント読み取り完了: {document.total_pages} ページ"
-        )
 
-        # ---- 4. Scan Excel template ---------------------------------
-        progress.progress(35, text="テンプレートをスキャン中...")
-        # Convert hex colour picker value (#FFF2CC) to openpyxl format
+        progress.progress(40, text="テンプレートをスキャン中...")
         input_color_hex = input_color.lstrip("#")
         if len(input_color_hex) == 6:
             input_color_hex = "FF" + input_color_hex
-        with st.spinner("テンプレートのスキャン中..."):
-            catalog = scan_template(template_path, input_color=input_color_hex)
+        catalog = scan_template(template_path, input_color=input_color_hex)
         st.session_state["catalog"] = catalog
 
-        # ---- 5. Analyse model (formula graph / KPIs) ----------------
-        progress.progress(50, text="モデルを分析中...")
-        with st.spinner("数式構造を解析中..."):
-            analysis = analyze_model(template_path, catalog)
+        progress.progress(55, text="数式構造を分析中...")
+        analysis = analyze_model(template_path, catalog)
         st.session_state["analysis"] = analysis
 
-        # ---- 6. Extract parameters via LLM --------------------------
-        progress.progress(65, text="パラメータを抽出中...")
-        with st.spinner("LLM によるパラメータ抽出中..."):
-            llm_client = LLMClient()
-            extractor = ParameterExtractor(config, llm_client=llm_client)
-            parameters = extractor.extract_parameters(document, catalog)
+        progress.progress(70, text="LLM パラメータ抽出中...")
+        llm_client = LLMClient()
+        extractor = ParameterExtractor(config, llm_client=llm_client)
+        parameters = extractor.extract_parameters(document, catalog)
         st.session_state["parameters"] = parameters
 
-        progress.progress(100, text="分析完了")
+        progress.progress(100, text="分析完了!")
         st.session_state["phase"] = "B"
         st.rerun()
 
@@ -496,18 +585,16 @@ def _run_phase_a_analysis(
         st.error(f"値エラー: {exc}")
     except Exception as exc:  # noqa: BLE001
         progress.empty()
-        st.error(f"分析中にエラーが発生しました:\n\n{exc}")
-        with st.expander("詳細なエラー情報"):
+        st.error("分析中にエラーが発生しました")
+        with st.expander("エラー詳細"):
             st.code(traceback.format_exc())
 
 
 # ===================================================================
-# Phase B: Analysis Results  (分析結果)
+# Phase B: Analysis Results
 # ===================================================================
 
 def _render_phase_b() -> None:
-    st.header("Phase B: 分析結果 (Analysis Results)")
-
     analysis: AnalysisReport | None = st.session_state.get("analysis")
     catalog: InputCatalog | None = st.session_state.get("catalog")
     parameters: list = st.session_state.get("parameters", [])
@@ -519,227 +606,206 @@ def _render_phase_b() -> None:
             st.rerun()
         return
 
-    tab_model, tab_params = st.tabs([
-        "モデル内容 (Model Content)",
-        "抽出パラメーター (Extracted Parameters)",
-    ])
+    # -- Summary Dashboard --
+    _render_analysis_summary(analysis, catalog, parameters)
 
-    # ------------------------------------------------------------------
-    # Tab 1: Model Content
-    # ------------------------------------------------------------------
+    st.divider()
+
+    # -- Tabs --
+    tab_model, tab_params, tab_evidence = st.tabs([
+        "モデル構造",
+        f"抽出パラメータ ({len(parameters)})",
+        "エビデンス",
+    ])
     with tab_model:
         _render_model_content_tab(analysis, catalog)
-
-    # ------------------------------------------------------------------
-    # Tab 2: Extracted Parameters
-    # ------------------------------------------------------------------
     with tab_params:
         _render_extracted_parameters_tab(parameters)
+    with tab_evidence:
+        _render_evidence_tab(parameters)
 
-    # ------------------------------------------------------------------
-    # Navigation
-    # ------------------------------------------------------------------
+    # -- Navigation --
     st.divider()
-    col_back, col_fwd = st.columns(2)
+    col_back, col_spacer, col_fwd = st.columns([1, 2, 1])
     with col_back:
-        if st.button("Phase A に戻る", key="b_back"):
+        if st.button("← Phase A", key="b_back"):
             st.session_state["phase"] = "A"
             st.rerun()
     with col_fwd:
-        if st.button(
-            "カスタマイズへ進む (Proceed to Customise)",
-            type="primary",
-            use_container_width=True,
-            key="b_forward",
-        ):
+        if st.button("カスタマイズへ →", type="primary", use_container_width=True, key="b_forward"):
             st.session_state["phase"] = "C"
             st.rerun()
 
 
-# --- Tab 1 helpers ---
+def _render_analysis_summary(analysis, catalog, parameters) -> None:
+    total_params = len(parameters)
+    total_kpis = len(analysis.kpis) if analysis.kpis else 0
+    total_inputs = len(catalog.items)
+    sheet_count = len({item.sheet for item in catalog.items if item.sheet})
 
-def _render_model_content_tab(
-    analysis: AnalysisReport,
-    catalog: InputCatalog,
-) -> None:
-    """Render the Model Content tab inside Phase B."""
+    high_conf = sum(1 for p in parameters if getattr(p, "confidence", 0) >= 0.7)
+    med_conf = sum(1 for p in parameters if 0.4 <= getattr(p, "confidence", 0) < 0.7)
+    low_conf = sum(1 for p in parameters if getattr(p, "confidence", 0) < 0.4)
 
-    # Model overview
-    st.subheader("モデル概要 (Model Overview)")
-    st.text(analysis.summary)
+    c1, c2, c3, c4 = st.columns(4)
+    with c1:
+        st.markdown(_render_metric_card(str(total_params), "抽出パラメータ"), unsafe_allow_html=True)
+    with c2:
+        st.markdown(_render_metric_card(str(total_kpis), "KPI 検出"), unsafe_allow_html=True)
+    with c3:
+        st.markdown(_render_metric_card(str(total_inputs), "入力セル"), unsafe_allow_html=True)
+    with c4:
+        st.markdown(_render_metric_card(str(sheet_count), "シート数"), unsafe_allow_html=True)
 
-    # Sheets overview
+    if total_params > 0:
+        st.markdown("")
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            st.markdown(f'<span class="badge-high">HIGH: {high_conf}</span> ({high_conf/total_params:.0%})', unsafe_allow_html=True)
+        with c2:
+            st.markdown(f'<span class="badge-medium">MED: {med_conf}</span> ({med_conf/total_params:.0%})', unsafe_allow_html=True)
+        with c3:
+            st.markdown(f'<span class="badge-low">LOW: {low_conf}</span> ({low_conf/total_params:.0%})', unsafe_allow_html=True)
+
+
+def _render_model_content_tab(analysis, catalog) -> None:
+    if analysis.summary:
+        st.markdown(f"**モデル概要:** {analysis.summary}")
+
     sheet_names = sorted({item.sheet for item in catalog.items if item.sheet})
     if sheet_names:
-        st.markdown("**シート一覧:**")
+        st.markdown("**シート構成:**")
+        import pandas as pd
+        sheet_data = []
         for sn in sheet_names:
             items_count = sum(1 for item in catalog.items if item.sheet == sn)
-            formula_kpis = [
-                k for k in (analysis.kpis or []) if getattr(k, "sheet", None) == sn
-            ]
-            st.markdown(
-                f"- **{sn}** -- 入力セル: {items_count}, KPI数: {len(formula_kpis)}"
-            )
+            kpi_count = sum(1 for k in (analysis.kpis or []) if getattr(k, "sheet", None) == sn)
+            sheet_data.append({"シート": sn, "入力セル数": items_count, "KPI数": kpi_count})
+        st.dataframe(pd.DataFrame(sheet_data), use_container_width=True, hide_index=True)
 
-    # KPI definitions
-    st.subheader("KPI 定義 (KPI Definitions)")
+    st.markdown("**KPI 定義:**")
     if analysis.kpis:
         for kpi in analysis.kpis:
-            with st.expander(f"{kpi.name}  ({kpi.sheet}!{kpi.cell})"):
-                if kpi.raw_formula:
-                    st.markdown(f"**Excel数式:** `{kpi.raw_formula}`")
-                if kpi.human_readable_formula:
-                    st.markdown(f"**読みやすい形:** {kpi.human_readable_formula}")
+            formula = kpi.raw_formula or kpi.excel_formula or ""
+            human = kpi.human_readable_formula or kpi.human_formula or ""
+            with st.expander(f"{kpi.name} ({kpi.sheet}!{kpi.cell})"):
+                if formula:
+                    st.code(formula, language=None)
+                if human:
+                    st.caption(human)
                 if kpi.dependencies:
-                    st.markdown("**依存先 (Dependencies):**")
-                    for dep in kpi.dependencies:
-                        st.markdown(f"  - {dep}")
+                    st.markdown("依存先: " + ", ".join(f"`{d}`" for d in kpi.dependencies))
     else:
         st.info("KPI が検出されませんでした。")
 
-    # Dependency tree visualisation
-    st.subheader("依存関係ツリー (Dependency Tree)")
     if analysis.dependency_tree:
-        view_mode = st.radio(
-            "表示形式",
-            options=["テキストツリー", "Graphviz"],
-            horizontal=True,
-            key="dep_tree_mode",
-        )
+        st.markdown("**依存関係ツリー:**")
+        view_mode = st.radio("表示形式", options=["テキスト", "Graphviz"], horizontal=True, key="dep_tree_mode")
         for addr, node in analysis.dependency_tree.items():
             label = getattr(node, "label", "") or addr
             with st.expander(f"Tree: {label}"):
                 if view_mode == "Graphviz":
                     try:
                         dot_body = _dep_tree_to_dot(node)
-                        dot_src = f"digraph {{\n  rankdir=LR;\n{dot_body}\n}}"
-                        st.graphviz_chart(dot_src)
+                        st.graphviz_chart(f"digraph {{\n  rankdir=LR;\n{dot_body}\n}}")
                     except Exception:
                         st.code(_render_dependency_tree_text(node))
                 else:
                     st.code(_render_dependency_tree_text(node))
-    else:
-        st.info("依存関係ツリーがありません。")
 
-    # Case / scenario structure
-    config: PhaseAConfig | None = st.session_state.get("config")
-    if config and len(config.cases) > 1:
-        st.subheader("ケース構成 (Case Structure)")
-        for case_name in config.cases:
-            st.markdown(f"- **{case_name.title()}** ケース")
-
-
-# --- Tab 2 helpers ---
 
 def _render_extracted_parameters_tab(parameters: list) -> None:
-    """Render the Extracted Parameters tab inside Phase B."""
-
     if not parameters:
         st.info("抽出されたパラメータがありません。")
         return
 
-    st.subheader("抽出パラメーター一覧")
-
-    # Build a list-of-dicts for display
     rows: List[Dict[str, Any]] = []
     for p in parameters:
-        mapped_cells = ", ".join(
-            f"{t.sheet}!{t.cell}" for t in getattr(p, "mapped_targets", [])
-        )
-        evidence_quote = ""
-        evidence_page = ""
-        evidence_rationale = ""
-        ev = getattr(p, "evidence", None)
-        if ev:
-            evidence_quote = getattr(ev, "quote", "")
-            evidence_page = getattr(ev, "page_or_slide", "")
-            evidence_rationale = getattr(ev, "rationale", "")
-
+        mapped_cells = ", ".join(f"{t.sheet}!{t.cell}" for t in getattr(p, "mapped_targets", []))
+        conf = getattr(p, "confidence", 0.0)
         rows.append({
             "key": getattr(p, "key", ""),
             "label": getattr(p, "label", ""),
             "value": getattr(p, "value", ""),
             "unit": getattr(p, "unit", "") or "",
-            "confidence": getattr(p, "confidence", 0.0),
+            "confidence": conf,
+            "level": _confidence_text(conf),
             "source": getattr(p, "source", ""),
-            "evidence": evidence_quote[:80] if evidence_quote else "",
             "mapped_cells": mapped_cells,
         })
 
-    # Filters
     col_f1, col_f2 = st.columns(2)
     with col_f1:
         source_filter = st.multiselect(
             "ソースで絞り込み",
             options=sorted({r["source"] for r in rows if r["source"]}),
-            default=[],
-            key="param_source_filter",
+            default=[], key="param_source_filter",
         )
     with col_f2:
-        conf_threshold = st.slider(
-            "最低信頼度",
-            min_value=0.0,
-            max_value=1.0,
-            value=0.0,
-            step=0.1,
-            key="param_conf_filter",
+        conf_filter = st.select_slider(
+            "最低信頼度", options=["ALL", "LOW+", "MED+", "HIGH"],
+            value="ALL", key="param_conf_filter",
         )
 
     filtered = rows
     if source_filter:
         filtered = [r for r in filtered if r["source"] in source_filter]
-    filtered = [r for r in filtered if r["confidence"] >= conf_threshold]
+    conf_thresholds = {"ALL": 0.0, "LOW+": 0.0, "MED+": 0.4, "HIGH": 0.7}
+    threshold = conf_thresholds.get(conf_filter, 0.0)
+    filtered = [r for r in filtered if r["confidence"] >= threshold]
 
-    st.markdown(f"**{len(filtered)}** / {len(rows)} パラメータ表示中")
+    st.caption(f"{len(filtered)} / {len(rows)} パラメータ表示中")
 
-    # Render as a dataframe with colour-coded confidence
     import pandas as pd
-
     df = pd.DataFrame(filtered)
     if not df.empty:
-
-        def _style_confidence(val):
-            """Return a background colour for confidence cells."""
-            try:
-                v = float(val)
-            except (TypeError, ValueError):
-                return ""
-            if v >= 0.7:
-                return "background-color: #c6efce; color: #006100"
-            if v >= 0.4:
-                return "background-color: #ffeb9c; color: #9c6500"
-            return "background-color: #ffc7ce; color: #9c0006"
-
-        styled = df.style.applymap(
-            _style_confidence, subset=["confidence"]
+        display_cols = ["label", "value", "unit", "level", "source", "mapped_cells"]
+        display_df = df[display_cols].rename(columns={
+            "label": "パラメータ", "value": "値", "unit": "単位",
+            "level": "信頼度", "source": "ソース", "mapped_cells": "マッピング先",
+        })
+        styled = display_df.style.applymap(
+            lambda val: (
+                "background-color: #d4edda; color: #0f5132" if val == "HIGH"
+                else "background-color: #fff3cd; color: #856404" if val == "MED"
+                else "background-color: #f8d7da; color: #842029" if val == "LOW"
+                else ""
+            ),
+            subset=["信頼度"],
         )
-        st.dataframe(styled, use_container_width=True, height=500)
+        st.dataframe(styled, use_container_width=True, height=500, hide_index=True)
     else:
         st.info("フィルタ条件に一致するパラメータがありません。")
 
-    # Expandable evidence details
-    st.subheader("エビデンス詳細 (Evidence Details)")
-    for p in parameters:
-        ev = getattr(p, "evidence", None)
-        if ev and getattr(ev, "quote", ""):
-            with st.expander(
-                f"{getattr(p, 'key', '?')} -- 信頼度: "
-                f"{getattr(p, 'confidence', 0):.0%}"
-            ):
-                st.markdown(f"**引用:** {ev.quote}")
+
+def _render_evidence_tab(parameters: list) -> None:
+    has_evidence = [p for p in parameters if getattr(getattr(p, "evidence", None), "quote", "")]
+    if not has_evidence:
+        st.info("エビデンスが記録されたパラメータはありません。")
+        return
+
+    st.caption(f"{len(has_evidence)} 件のパラメータにエビデンスあり")
+    for p in has_evidence:
+        ev = p.evidence
+        conf = getattr(p, "confidence", 0.0)
+        with st.expander(f"{getattr(p, 'label', p.key)}"):
+            st.markdown(f"> {ev.quote}")
+            cols = st.columns(3)
+            with cols[0]:
+                st.markdown(_confidence_badge(conf), unsafe_allow_html=True)
+            with cols[1]:
                 if getattr(ev, "page_or_slide", ""):
-                    st.markdown(f"**ページ/スライド:** {ev.page_or_slide}")
+                    st.caption(f"ページ: {ev.page_or_slide}")
+            with cols[2]:
                 if getattr(ev, "rationale", ""):
-                    st.markdown(f"**根拠:** {ev.rationale}")
+                    st.caption(f"根拠: {ev.rationale}")
 
 
 # ===================================================================
-# Phase C: Pre-Generation Customisation  (生成前カスタマイズ)
+# Phase C: Pre-Generation Customisation
 # ===================================================================
 
 def _render_phase_c() -> None:
-    st.header("Phase C: 生成前カスタマイズ (Pre-Generation Customisation)")
-
     parameters: list = st.session_state.get("parameters", [])
     config: PhaseAConfig | None = st.session_state.get("config")
     catalog: InputCatalog | None = st.session_state.get("catalog")
@@ -751,64 +817,69 @@ def _render_phase_c() -> None:
             st.rerun()
         return
 
-    multiple_cases = config and len(config.cases) > 1
+    # -- Pre-flight summary --
+    _render_preflight_summary(parameters, config)
+    st.divider()
 
-    # If multiple cases, show tabs per case; otherwise single view
+    # -- Case customisation --
+    multiple_cases = config and len(config.cases) > 1
     if multiple_cases:
-        case_tabs = st.tabs([c.title() for c in config.cases])
+        case_tabs = st.tabs([f"{c.title()} ケース" for c in config.cases])
         for idx, case_name in enumerate(config.cases):
             with case_tabs[idx]:
-                _render_case_customisation(
-                    parameters, case_name, catalog, suffix=f"_{case_name}"
-                )
+                _render_case_customisation(parameters, case_name, catalog, suffix=f"_{case_name}")
     else:
         _render_case_customisation(
             parameters, config.cases[0] if config.cases else "base",
             catalog, suffix="_single",
         )
 
-    # --- Section 3: Custom Instructions (global) -------------------------
+    # -- Custom Instructions --
     st.divider()
     _render_custom_instructions_section(parameters)
 
-    # --- Generate button --------------------------------------------------
+    # -- Navigation --
     st.divider()
-    col_back, col_gen = st.columns(2)
+    col_back, col_spacer, col_gen = st.columns([1, 1, 2])
     with col_back:
-        if st.button("Phase B に戻る", key="c_back"):
+        if st.button("← Phase B", key="c_back"):
             st.session_state["phase"] = "B"
             st.rerun()
     with col_gen:
-        if st.button(
-            "生成 (Generate)",
-            type="primary",
-            use_container_width=True,
-            key="btn_generate",
-        ):
+        if st.button("Excel 生成 (Generate)", type="primary", use_container_width=True, key="btn_generate"):
             _run_generation()
 
 
-def _render_case_customisation(
-    parameters: list,
-    case_name: str,
-    catalog: InputCatalog | None,
-    suffix: str = "",
-) -> None:
-    """Render Sections 1 and 2 for a single case."""
+def _render_preflight_summary(parameters, config) -> None:
+    total = len(parameters)
+    mapped = sum(1 for p in parameters if getattr(p, "mapped_targets", []))
+    high_conf = sum(1 for p in parameters if getattr(p, "confidence", 0) >= 0.7)
+    low_conf = sum(1 for p in parameters if getattr(p, "confidence", 0) < 0.4)
 
-    st.subheader(f"パラメーター選択 -- {case_name.title()} ケース")
+    c1, c2, c3, c4 = st.columns(4)
+    with c1:
+        st.metric("パラメータ数", total)
+    with c2:
+        st.metric("マッピング済み", f"{mapped}/{total}")
+    with c3:
+        st.metric("高信頼度", high_conf)
+    with c4:
+        if low_conf > 0:
+            st.metric("要確認", low_conf, delta=f"-{low_conf}", delta_color="inverse")
+        else:
+            st.metric("要確認", 0)
 
-    # Group parameters by block/sheet
+    if low_conf > 0:
+        st.warning(f"{low_conf} 件の低信頼度パラメータがあります。値を確認してから生成してください。")
+
+
+def _render_case_customisation(parameters, case_name, catalog, suffix="") -> None:
     grouped: Dict[str, List] = {}
     for p in parameters:
         targets = getattr(p, "mapped_targets", [])
-        if targets:
-            group_key = targets[0].sheet
-        else:
-            group_key = "未分類"
+        group_key = targets[0].sheet if targets else "未分類"
         grouped.setdefault(group_key, []).append(p)
 
-    # Initialise per-parameter session state
     for p in parameters:
         sel_key = f"sel_{p.key}{suffix}"
         adj_key = f"adj_{p.key}{suffix}"
@@ -820,203 +891,130 @@ def _render_case_customisation(
         if mul_key not in st.session_state:
             st.session_state[mul_key] = 1.0
 
-    # ---- Section 1: Parameter Selection --------------------------------
-    for group_name, group_params in grouped.items():
-        with st.expander(f"[{group_name}] -- {len(group_params)} パラメータ", expanded=True):
-            for p in group_params:
-                sel_key = f"sel_{p.key}{suffix}"
-                st.checkbox(
-                    f"{getattr(p, 'label', p.key)} ({getattr(p, 'key', '')})",
-                    value=st.session_state.get(sel_key, True),
-                    key=sel_key,
-                )
-
-    # ---- Section 2: Parameter Adjustment --------------------------------
-    st.subheader(f"パラメータ調整 -- {case_name.title()} ケース")
-
     diff_rows: List[Dict[str, Any]] = []
 
     for group_name, group_params in grouped.items():
-        with st.expander(f"[{group_name}] 調整", expanded=False):
+        with st.expander(f"{group_name} ({len(group_params)} パラメータ)", expanded=False):
             for p in group_params:
                 sel_key = f"sel_{p.key}{suffix}"
-                if not st.session_state.get(sel_key, True):
-                    continue
-
                 adj_key = f"adj_{p.key}{suffix}"
                 mul_key = f"mul_{p.key}{suffix}"
-
-                st.markdown(f"**{getattr(p, 'label', p.key)}**")
-                c_val, c_mul, c_unit = st.columns([2, 2, 1])
-
                 original_value = p.value if p.value is not None else 0
                 is_numeric = isinstance(original_value, (int, float))
 
-                with c_val:
+                cols = st.columns([0.5, 3, 2, 1.5])
+                with cols[0]:
+                    selected = st.checkbox("on", value=st.session_state.get(sel_key, True), key=sel_key, label_visibility="collapsed")
+                with cols[1]:
+                    label = getattr(p, "label", p.key)
+                    conf = getattr(p, "confidence", 0)
+                    st.markdown(f"**{label}** {_confidence_badge(conf)}", unsafe_allow_html=True)
+                if not selected:
+                    with cols[2]:
+                        st.caption("(除外)")
+                    continue
+                with cols[2]:
                     if is_numeric:
-                        new_val = st.number_input(
-                            "値 (Value)",
-                            value=float(original_value),
-                            key=adj_key,
-                            format="%.4f",
-                        )
+                        new_val = st.number_input("値", value=float(original_value), key=adj_key, format="%.2f", label_visibility="collapsed")
                     else:
-                        new_val = st.text_input(
-                            "値 (Value)",
-                            value=str(original_value),
-                            key=adj_key,
-                        )
-
-                with c_mul:
+                        new_val = st.text_input("値", value=str(original_value), key=adj_key, label_visibility="collapsed")
+                with cols[3]:
                     if is_numeric:
-                        multiplier = st.slider(
-                            "倍率 (Multiplier)",
-                            min_value=0.5,
-                            max_value=2.0,
-                            value=st.session_state.get(mul_key, 1.0),
-                            step=0.05,
-                            key=mul_key,
-                        )
+                        multiplier = st.number_input("倍率", min_value=0.1, max_value=5.0, value=st.session_state.get(mul_key, 1.0), step=0.05, key=mul_key, label_visibility="collapsed")
                     else:
                         multiplier = 1.0
 
-                with c_unit:
-                    unit = getattr(p, "unit", "") or ""
-                    st.text_input("単位", value=unit, disabled=True, key=f"unit_{p.key}{suffix}")
-
-                # Compute effective value
                 if is_numeric:
                     effective = float(new_val) * multiplier
-                else:
-                    effective = new_val
-
-                # Show if changed
-                if is_numeric and effective != float(original_value):
+                    if abs(effective - float(original_value)) > 0.001:
+                        change_pct = ((effective - float(original_value)) / float(original_value) * 100) if float(original_value) != 0 else 0
+                        diff_rows.append({
+                            "パラメータ": getattr(p, "label", p.key),
+                            "旧値": f"{float(original_value):,.2f}",
+                            "新値": f"{effective:,.2f}",
+                            "変化率": f"{change_pct:+.1f}%",
+                        })
+                elif str(new_val) != str(original_value):
                     diff_rows.append({
                         "パラメータ": getattr(p, "label", p.key),
-                        "旧値": original_value,
-                        "新値": round(effective, 4),
-                        "セル": ", ".join(
-                            f"{t.sheet}!{t.cell}"
-                            for t in getattr(p, "mapped_targets", [])
-                        ),
+                        "旧値": str(original_value),
+                        "新値": str(new_val),
+                        "変化率": "-",
                     })
 
-    # Diff Preview
     if diff_rows:
-        st.subheader("Diff プレビュー (変更一覧)")
+        st.markdown(f"**変更プレビュー ({len(diff_rows)} 件):**")
         import pandas as pd
+        st.dataframe(pd.DataFrame(diff_rows), use_container_width=True, hide_index=True)
 
-        st.dataframe(pd.DataFrame(diff_rows), use_container_width=True)
-    else:
-        st.info("変更はありません。")
-
-
-# --- Section 3: Custom Instructions ---
 
 def _render_custom_instructions_section(parameters: list) -> None:
-    """Render the free-form instruction section."""
-    st.subheader("カスタマイズ指示 (Custom Instructions)")
+    st.markdown("#### カスタマイズ指示 (Custom Instructions)")
+    st.caption("自然言語で指示するとLLMがパラメータ変更に変換します。")
 
     instruction = st.text_area(
-        "自由形式の指示を入力してください",
-        value=st.session_state.get("custom_instruction_text", ""),
-        height=150,
-        key="custom_instruction_area",
-        placeholder="例: 売上を20%増加させてください。人件費を月額50万円に設定してください。",
+        "指示", value=st.session_state.get("custom_instruction_text", ""),
+        height=100, key="custom_instruction_area",
+        placeholder="例: 売上を20%増加。人件費を月額50万円に設定。",
+        label_visibility="collapsed",
     )
     st.session_state["custom_instruction_text"] = instruction
 
-    if st.button("指示を解析 (Parse Instructions)", key="btn_parse_instr"):
-        if not instruction.strip():
-            st.warning("指示を入力してください。")
-        else:
-            _parse_custom_instruction(instruction, parameters)
+    if st.button("指示を解析", key="btn_parse_instr", disabled=not instruction.strip()):
+        _parse_custom_instruction(instruction, parameters)
 
-    # Display proposed changes
     proposed: List[ProposedChange] = st.session_state.get("proposed_changes", [])
     if proposed:
-        st.subheader("提案された変更 (Proposed Changes)")
+        st.markdown(f"**提案された変更 ({len(proposed)} 件):**")
         for idx, pc in enumerate(proposed):
-            col_desc, col_toggle = st.columns([4, 1])
+            col_desc, col_toggle = st.columns([5, 1])
             with col_desc:
-                st.markdown(
-                    f"**{pc.parameter_key}**: {pc.original_value} -> "
-                    f"**{pc.proposed_value}**"
-                )
-                st.caption(pc.reason)
-                if pc.evidence_from_instruction:
-                    st.caption(f"根拠: \"{pc.evidence_from_instruction}\"")
+                st.markdown(f"`{pc.parameter_key}`: {pc.original_value} → **{pc.proposed_value}**")
+                if pc.reason:
+                    st.caption(pc.reason)
             with col_toggle:
-                accepted = st.toggle(
-                    "適用",
-                    value=pc.accepted,
-                    key=f"pc_accept_{idx}",
-                )
+                accepted = st.toggle("適用", value=pc.accepted, key=f"pc_accept_{idx}")
                 proposed[idx].accepted = accepted
         st.session_state["proposed_changes"] = proposed
 
 
 def _parse_custom_instruction(instruction: str, parameters: list) -> None:
-    """Use LLM to parse free-form instruction into proposed changes."""
     try:
         with st.spinner("指示を解析中..."):
             llm = LLMClient()
             params_json = json.dumps(
-                [
-                    {
-                        "key": p.key,
-                        "label": getattr(p, "label", ""),
-                        "value": p.value,
-                        "unit": getattr(p, "unit", ""),
-                    }
-                    for p in parameters
-                ],
-                ensure_ascii=False,
-                indent=2,
+                [{"key": p.key, "label": getattr(p, "label", ""), "value": p.value, "unit": getattr(p, "unit", "")} for p in parameters],
+                ensure_ascii=False, indent=2,
             )
             result = llm.process_instruction(instruction, params_json)
 
         changes_raw = result.get("changes", [])
         proposed: List[ProposedChange] = []
         for ch in changes_raw:
-            proposed.append(
-                ProposedChange(
-                    parameter_key=ch.get("parameter_key", ""),
-                    original_value=ch.get("original_value"),
-                    proposed_value=ch.get("proposed_value"),
-                    reason=ch.get("reason", ""),
-                    affected_cases=ch.get("affected_cases", []),
-                    evidence_from_instruction=ch.get(
-                        "evidence_from_instruction", ""
-                    ),
-                    accepted=True,
-                )
-            )
+            proposed.append(ProposedChange(
+                parameter_key=ch.get("parameter_key", ""),
+                original_value=ch.get("original_value"),
+                proposed_value=ch.get("proposed_value"),
+                reason=ch.get("reason", ""),
+                affected_cases=ch.get("affected_cases", []),
+                evidence_from_instruction=ch.get("evidence_from_instruction", ""),
+                accepted=True,
+            ))
         st.session_state["proposed_changes"] = proposed
 
         if proposed:
-            st.success(f"{len(proposed)} 件の変更が提案されました。")
+            st.success(f"{len(proposed)} 件の変更を提案しました")
         else:
             st.info("指示から変更を検出できませんでした。")
     except Exception as exc:  # noqa: BLE001
-        st.error(f"指示の解析中にエラーが発生しました: {exc}")
+        st.error(f"指示の解析中にエラー: {exc}")
 
 
 # ===================================================================
 # Generation
 # ===================================================================
 
-def _apply_adjustments_to_parameters(
-    parameters: list,
-    suffix: str,
-) -> list:
-    """Return a copy of *parameters* with user adjustments applied.
-
-    For each parameter the user has selected, compute the effective value
-    from the direct-edit and multiplier controls.  Parameters the user
-    deselected are marked as not-selected.
-    """
+def _apply_adjustments_to_parameters(parameters: list, suffix: str) -> list:
     adjusted = deepcopy(parameters)
     for p in adjusted:
         sel_key = f"sel_{p.key}{suffix}"
@@ -1024,43 +1022,32 @@ def _apply_adjustments_to_parameters(
         mul_key = f"mul_{p.key}{suffix}"
 
         selected = st.session_state.get(sel_key, True)
-
-        # Attach runtime attributes used by the writer
         try:
             p.selected = selected  # type: ignore[attr-defined]
         except (AttributeError, TypeError):
             pass
-
         if not selected:
             continue
 
         adj_val = st.session_state.get(adj_key, p.value)
         multiplier = st.session_state.get(mul_key, 1.0)
-
-        if isinstance(adj_val, (int, float)) and isinstance(
-            multiplier, (int, float)
-        ):
+        if isinstance(adj_val, (int, float)) and isinstance(multiplier, (int, float)):
             effective = float(adj_val) * float(multiplier)
         else:
             effective = adj_val
-
         try:
             p.adjusted_value = effective  # type: ignore[attr-defined]
         except (AttributeError, TypeError):
             pass
 
-    # Apply accepted proposed changes
-    proposed: List[ProposedChange] = st.session_state.get(
-        "proposed_changes", []
-    )
+    proposed: List[ProposedChange] = st.session_state.get("proposed_changes", [])
     param_map = {p.key: p for p in adjusted}
     for pc in proposed:
         if not pc.accepted:
             continue
         if pc.parameter_key in param_map:
-            target = param_map[pc.parameter_key]
             try:
-                target.adjusted_value = pc.proposed_value  # type: ignore[attr-defined]
+                param_map[pc.parameter_key].adjusted_value = pc.proposed_value  # type: ignore[attr-defined]
             except (AttributeError, TypeError):
                 pass
 
@@ -1068,7 +1055,6 @@ def _apply_adjustments_to_parameters(
 
 
 def _run_generation() -> None:
-    """Execute the Excel generation pipeline."""
     config: PhaseAConfig | None = st.session_state.get("config")
     catalog: InputCatalog | None = st.session_state.get("catalog")
     parameters: list = st.session_state.get("parameters", [])
@@ -1082,24 +1068,17 @@ def _run_generation() -> None:
     output_files: Dict[str, bytes] = {}
 
     try:
-        # Determine case suffixes
         cases = config.cases if config.cases else ["base"]
-        total_steps = len(cases) + 2  # +1 for validation, +1 for simulation
+        total_steps = len(cases) + 2
         step = 0
 
         for case_name in cases:
             step += 1
-            progress.progress(
-                int(step / total_steps * 80),
-                text=f"{case_name.title()} ケースを生成中...",
-            )
+            progress.progress(int(step / total_steps * 80), text=f"{case_name.title()} ケースを生成中...")
 
             suffix = f"_{case_name}" if len(cases) > 1 else "_single"
-            adjusted_params = _apply_adjustments_to_parameters(
-                parameters, suffix
-            )
+            adjusted_params = _apply_adjustments_to_parameters(parameters, suffix)
 
-            # For non-base cases, apply case multipliers
             if case_name != "base" and len(cases) > 1:
                 try:
                     gen = CaseGenerator(config)
@@ -1107,239 +1086,169 @@ def _run_generation() -> None:
                     if case_name in case_sets:
                         adjusted_params = case_sets[case_name]
                 except Exception as exc:
-                    st.warning(
-                        f"{case_name} ケース生成に問題が発生しました: {exc}"
-                    )
+                    st.warning(f"{case_name} ケース生成に問題: {exc}")
 
-            # Generate the Excel
             with tempfile.TemporaryDirectory() as tmp_dir:
-                output_path = str(
-                    Path(tmp_dir) / f"PL_{case_name}.xlsx"
-                )
-
+                output_path = str(Path(tmp_dir) / f"PL_{case_name}.xlsx")
                 try:
-                    # Attach colour config to PhaseAConfig if the writer expects it
                     try:
                         config.colors = cc  # type: ignore[attr-defined]
                     except (AttributeError, TypeError):
                         pass
 
-                    writer = PLWriter(
-                        template_path=config.template_path,
-                        output_path=output_path,
-                        config=config,
-                    )
+                    writer = PLWriter(template_path=config.template_path, output_path=output_path, config=config)
                     writer.generate(adjusted_params)
 
-                    # Validate
                     try:
-                        validator = PLValidator(
-                            config.template_path, output_path
-                        )
+                        validator = PLValidator(config.template_path, output_path)
                         val_result = validator.validate()
                         if not val_result.passed:
-                            st.warning(
-                                f"{case_name.title()}: バリデーション警告あり "
-                                f"(エラー数: {len(val_result.errors_found)})"
-                            )
-                            with st.expander(
-                                f"{case_name.title()} バリデーション詳細"
-                            ):
+                            st.warning(f"{case_name.title()}: バリデーション警告 ({len(val_result.errors_found)} 件)")
+                            with st.expander(f"{case_name.title()} バリデーション詳細"):
                                 for err in val_result.errors_found:
                                     st.error(err)
                                 for warn in val_result.warnings:
                                     st.warning(warn)
                         else:
-                            st.success(
-                                f"{case_name.title()}: バリデーション OK"
-                            )
+                            st.success(f"{case_name.title()}: バリデーション OK")
                     except Exception as ve:
-                        st.warning(f"バリデーション実行失敗: {ve}")
+                        st.warning(f"バリデーション失敗: {ve}")
 
-                    # Read generated file into memory for download
-                    output_files[f"PL_{case_name}.xlsx"] = Path(
-                        output_path
-                    ).read_bytes()
+                    output_files[f"PL_{case_name}.xlsx"] = Path(output_path).read_bytes()
 
                 except Exception as exc:
-                    st.error(
-                        f"{case_name.title()} ケース生成エラー: {exc}"
-                    )
+                    st.error(f"{case_name.title()} ケース生成エラー: {exc}")
                     with st.expander("エラー詳細"):
                         st.code(traceback.format_exc())
 
-        # ---- Optional simulation ----------------------------------------
+        # Simulation
         run_sim = st.session_state.get("run_simulation", False)
-        if run_sim and parameters:
+        if run_sim and parameters and SimulationEngine is not None:
             step += 1
-            progress.progress(
-                int(step / total_steps * 95),
-                text="シミュレーション実行中...",
-            )
+            progress.progress(int(step / total_steps * 95), text="シミュレーション実行中 (500回)...")
             try:
-                with st.spinner("Monte Carlo シミュレーション実行中..."):
-                    sim_engine = SimulationEngine(iterations=500)
-                    sim_params = _apply_adjustments_to_parameters(
-                        parameters, "_single" if len(cases) <= 1 else f"_{cases[0]}"
-                    )
-                    sim_report = sim_engine.run(
-                        sim_params,
-                        template_path=config.template_path,
-                    )
+                sim_engine = SimulationEngine(iterations=500)
+                sim_params = _apply_adjustments_to_parameters(parameters, "_single" if len(cases) <= 1 else f"_{cases[0]}")
+                sim_report = sim_engine.run(sim_params, template_path=config.template_path)
 
-                    with tempfile.TemporaryDirectory() as sim_dir:
-                        sim_path = str(
-                            Path(sim_dir) / "simulation_summary.xlsx"
-                        )
-                        export_simulation_summary(sim_report, sim_path)
-                        output_files["simulation_summary.xlsx"] = Path(
-                            sim_path
-                        ).read_bytes()
+                with tempfile.TemporaryDirectory() as sim_dir:
+                    sim_path = str(Path(sim_dir) / "simulation_summary.xlsx")
+                    export_simulation_summary(sim_report, sim_path)
+                    output_files["simulation_summary.xlsx"] = Path(sim_path).read_bytes()
 
                 st.success("シミュレーション完了")
-
-                # Display summary
                 with st.expander("シミュレーション結果サマリー"):
                     for s in sim_report.summaries:
-                        st.markdown(
-                            f"**{s.kpi_name}**: "
-                            f"平均={s.mean:,.0f}, "
-                            f"P10={s.p10:,.0f}, "
-                            f"P50={s.p50:,.0f}, "
-                            f"P90={s.p90:,.0f}"
-                        )
-                    if sim_report.warnings:
-                        for w in sim_report.warnings:
-                            st.caption(w)
-
+                        st.markdown(f"**{s.kpi_name}**: 平均={s.mean:,.0f}, P10={s.p10:,.0f}, P50={s.p50:,.0f}, P90={s.p90:,.0f}")
             except Exception as exc:
-                st.warning(f"シミュレーション実行失敗: {exc}")
+                st.warning(f"シミュレーション失敗: {exc}")
 
-        # ---- needs_review CSV -------------------------------------------
+        # needs_review CSV
         try:
-            with tempfile.NamedTemporaryFile(
-                suffix=".csv", delete=False, mode="w"
-            ) as tmp_csv:
+            with tempfile.NamedTemporaryFile(suffix=".csv", delete=False, mode="w") as tmp_csv:
                 csv_path = generate_needs_review_csv(parameters, tmp_csv.name)
                 output_files["needs_review.csv"] = Path(csv_path).read_bytes()
         except Exception:
-            pass  # not critical
+            pass
 
         progress.progress(100, text="生成完了!")
-
-        # Store for download
         st.session_state["generation_outputs"] = output_files
 
     except Exception as exc:  # noqa: BLE001
         progress.empty()
-        st.error(f"生成中にエラーが発生しました: {exc}")
+        st.error("生成中にエラーが発生しました")
         with st.expander("エラー詳細"):
             st.code(traceback.format_exc())
         return
 
-    # ---- Download buttons -----------------------------------------------
+    # Download
     st.divider()
-    st.subheader("ダウンロード (Downloads)")
+    st.markdown("#### ダウンロード")
     if output_files:
         cols = st.columns(min(len(output_files), 3))
         for idx, (fname, fbytes) in enumerate(output_files.items()):
             with cols[idx % len(cols)]:
                 st.download_button(
-                    label=f"Download {fname}",
-                    data=fbytes,
-                    file_name=fname,
-                    mime=(
-                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                        if fname.endswith(".xlsx")
-                        else "text/csv"
-                    ),
-                    key=f"dl_{fname}",
+                    label=f"{'📊' if fname.endswith('.xlsx') else '📋'} {fname}",
+                    data=fbytes, file_name=fname,
+                    mime=("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" if fname.endswith(".xlsx") else "text/csv"),
+                    use_container_width=True, key=f"dl_{fname}",
                 )
+        st.markdown('<p class="nav-hint">ファイルが正しく生成されました</p>', unsafe_allow_html=True)
     else:
         st.info("生成ファイルがありません。")
 
 
 # ===================================================================
-# Main application
+# Sidebar
 # ===================================================================
 
-def main() -> None:
-    """Entry point for the Streamlit PL Generator wizard."""
-
-    st.set_page_config(
-        page_title="PL Generator Wizard",
-        page_icon="📊",
-        layout="wide",
-        initial_sidebar_state="expanded",
-    )
-
-    _init_session_state()
-
-    # -- Sidebar -----------------------------------------------------------
+def _render_sidebar() -> None:
     with st.sidebar:
-        st.title("PL Generator")
-        st.caption("3-Phase Wizard")
+        st.markdown("# PL Generator")
+        st.caption("事業計画書 → P&L Excel 自動生成")
 
-        # Show import errors if any
         if _IMPORT_ERRORS:
             with st.expander("Import Warnings", expanded=False):
                 for ie in _IMPORT_ERRORS:
                     st.warning(ie)
 
         st.divider()
-        current_phase = st.session_state["phase"]
-        st.markdown(f"**現在のフェーズ:** Phase {current_phase}")
 
-        phase_labels = {
-            "A": "事前カスタマイズ",
-            "B": "分析結果",
-            "C": "生成前カスタマイズ",
-        }
-        for code, label in phase_labels.items():
-            marker = " <<" if code == current_phase else ""
-            st.markdown(f"- Phase {code}: {label}{marker}")
-
-        st.divider()
-        st.markdown("**セッション情報:**")
         cfg = st.session_state.get("config")
         if cfg:
+            st.markdown("**セッション情報**")
             st.caption(f"業種: {cfg.industry}")
             st.caption(f"モデル: {cfg.business_model}")
             st.caption(f"厳密度: {cfg.strictness}")
-            st.caption(f"ケース: {', '.join(cfg.cases)}")
+            st.caption(f"ケース: {', '.join(c.title() for c in cfg.cases)}")
+            params = st.session_state.get("parameters", [])
+            if params:
+                st.caption(f"パラメータ: {len(params)} 件")
 
-        params = st.session_state.get("parameters", [])
-        if params:
-            st.caption(f"抽出パラメータ数: {len(params)}")
-
-        # Download section (if files are available from Phase C)
         gen_outputs = st.session_state.get("generation_outputs", {})
         if gen_outputs:
             st.divider()
-            st.markdown("**生成済みファイル:**")
+            st.markdown("**生成済みファイル**")
             for fname, fbytes in gen_outputs.items():
                 st.download_button(
-                    label=fname,
-                    data=fbytes,
-                    file_name=fname,
-                    mime=(
-                        "application/vnd.openxmlformats-officedocument"
-                        ".spreadsheetml.sheet"
-                        if fname.endswith(".xlsx")
-                        else "text/csv"
-                    ),
-                    key=f"sidebar_dl_{fname}",
+                    label=fname, data=fbytes, file_name=fname,
+                    mime=("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" if fname.endswith(".xlsx") else "text/csv"),
+                    key=f"sidebar_dl_{fname}", use_container_width=True,
                 )
 
         st.divider()
-        if st.button("リセット (Reset)", key="btn_reset"):
-            for k in list(st.session_state.keys()):
-                del st.session_state[k]
-            st.rerun()
+        if not st.session_state.get("reset_confirm", False):
+            if st.button("リセット (Reset)", key="btn_reset", use_container_width=True):
+                st.session_state["reset_confirm"] = True
+                st.rerun()
+        else:
+            st.warning("本当にリセットしますか？")
+            col_yes, col_no = st.columns(2)
+            with col_yes:
+                if st.button("はい", key="btn_reset_yes", type="primary"):
+                    for k in list(st.session_state.keys()):
+                        del st.session_state[k]
+                    st.rerun()
+            with col_no:
+                if st.button("キャンセル", key="btn_reset_no"):
+                    st.session_state["reset_confirm"] = False
+                    st.rerun()
 
-    # -- Main area ---------------------------------------------------------
+
+# ===================================================================
+# Main
+# ===================================================================
+
+def main() -> None:
+    st.set_page_config(page_title="PL Generator", page_icon="📊", layout="wide", initial_sidebar_state="expanded")
+
+    _init_session_state()
+    _inject_custom_css()
+    _render_sidebar()
+    _render_step_indicator()
+
     phase = st.session_state["phase"]
-
     if phase == "A":
         _render_phase_a()
     elif phase == "B":
@@ -1347,14 +1256,9 @@ def main() -> None:
     elif phase == "C":
         _render_phase_c()
     else:
-        st.error(f"不明なフェーズ: {phase}")
         st.session_state["phase"] = "A"
         st.rerun()
 
-
-# ---------------------------------------------------------------------------
-# Entrypoint
-# ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
     main()
