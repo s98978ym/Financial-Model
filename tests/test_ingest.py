@@ -2,6 +2,7 @@
 
 Tests the read_document dispatcher for supported/unsupported file types,
 FileNotFoundError, and the DocumentContent data model.
+Also tests garbled-text detection for NotebookLM/Chrome-generated PDFs.
 """
 
 import os
@@ -12,6 +13,7 @@ import pytest
 
 from src.ingest.reader import read_document, _EXTENSION_MAP
 from src.ingest.base import DocumentContent, PageContent
+from src.ingest.pdf_reader import _is_garbled
 
 
 # ===================================================================
@@ -188,3 +190,88 @@ class TestPageContent:
         page = PageContent(page_number=1, text="Hello", tables=[table])
         assert len(page.tables) == 1
         assert page.tables[0][0] == ["A", "B"]
+
+
+# ===================================================================
+# Garbled-text detection (for NotebookLM/Chrome PDFs)
+# ===================================================================
+
+class TestGarbledTextDetection:
+    """Test _is_garbled() for detecting broken PDF text extraction."""
+
+    def test_normal_japanese_not_garbled(self):
+        text = "事業計画書に基づくPL自動生成システム"
+        assert _is_garbled(text) is False
+
+    def test_normal_english_not_garbled(self):
+        text = "This is a normal English text with numbers 123."
+        assert _is_garbled(text) is False
+
+    def test_mixed_japanese_english_not_garbled(self):
+        text = "売上高は年間1,000万円を見込んでいます。Revenue forecast is 10M JPY."
+        assert _is_garbled(text) is False
+
+    def test_replacement_chars_garbled(self):
+        """U+FFFD replacement characters indicate failed glyph mapping."""
+        text = "\ufffd" * 20 + "abc"
+        assert _is_garbled(text) is True
+
+    def test_cid_placeholders_garbled(self):
+        """(cid:XXXX) placeholders from pdfminer for unmapped CIDs."""
+        text = "(cid:1234)(cid:5678)(cid:9012)(cid:3456)"
+        assert _is_garbled(text) is True
+
+    def test_kangxi_radicals_garbled(self):
+        """Kangxi radical chars from broken ToUnicode CMap."""
+        # U+2F00 to U+2FDF range
+        text = "\u2f00\u2f01\u2f02\u2f03\u2f04\u2f05\u2f06\u2f07"
+        assert _is_garbled(text) is True
+
+    def test_empty_not_garbled(self):
+        assert _is_garbled("") is False
+        assert _is_garbled("   ") is False
+
+    def test_none_not_garbled(self):
+        # Should handle None-like edge cases
+        assert _is_garbled("") is False
+
+    def test_few_replacement_chars_not_garbled(self):
+        """A small number of replacement chars in mostly good text is OK."""
+        text = "正常なテキスト" * 10 + "\ufffd"
+        assert _is_garbled(text) is False
+
+    def test_mixed_garbled_triggers(self):
+        """Mixed garbled indicators above threshold."""
+        text = "\ufffd\ufffd\ufffd(cid:123)\u2f00\u2f01normal"
+        assert _is_garbled(text) is True
+
+
+# ===================================================================
+# PDF backend availability
+# ===================================================================
+
+class TestPdfBackendFlags:
+    """Verify that backend availability flags are properly set."""
+
+    def test_has_pdfplumber(self):
+        from src.ingest.pdf_reader import _HAS_PDFPLUMBER
+        # Should be True if pdfplumber is installed
+        assert isinstance(_HAS_PDFPLUMBER, bool)
+
+    def test_has_pymupdf(self):
+        from src.ingest.pdf_reader import _HAS_PYMUPDF
+        assert isinstance(_HAS_PYMUPDF, bool)
+
+    def test_has_pypdfium2(self):
+        from src.ingest.pdf_reader import _HAS_PYPDFIUM2
+        assert isinstance(_HAS_PYPDFIUM2, bool)
+
+    def test_has_pypdf2(self):
+        from src.ingest.pdf_reader import _HAS_PYPDF2
+        assert isinstance(_HAS_PYPDF2, bool)
+
+    def test_at_least_one_backend(self):
+        from src.ingest.pdf_reader import (
+            _HAS_PDFPLUMBER, _HAS_PYMUPDF, _HAS_PYPDFIUM2, _HAS_PYPDF2,
+        )
+        assert any([_HAS_PDFPLUMBER, _HAS_PYMUPDF, _HAS_PYPDFIUM2, _HAS_PYPDF2])
