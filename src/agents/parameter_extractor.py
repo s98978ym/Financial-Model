@@ -118,8 +118,15 @@ PE_USER_PROMPT = """\
 class ParameterExtractorAgent:
     """Agent 4 (Phase 5): Extracts actual values from document."""
 
-    def __init__(self, llm_client: Any) -> None:
+    def __init__(
+        self,
+        llm_client: Any,
+        system_prompt: Optional[str] = None,
+        user_prompt: Optional[str] = None,
+    ) -> None:
         self.llm = llm_client
+        self._system_prompt = system_prompt or PE_SYSTEM_PROMPT
+        self._user_prompt = user_prompt or PE_USER_PROMPT
 
     def extract_values(
         self,
@@ -157,8 +164,8 @@ class ParameterExtractorAgent:
             )
 
         messages = [
-            {"role": "system", "content": PE_SYSTEM_PROMPT},
-            {"role": "user", "content": PE_USER_PROMPT.format(
+            {"role": "system", "content": self._system_prompt},
+            {"role": "user", "content": self._user_prompt.format(
                 model_design_json=design_str,
                 document_text=doc_chunk,
                 feedback_section=feedback_section,

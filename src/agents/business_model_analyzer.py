@@ -58,6 +58,7 @@ class BusinessModelProposal(BaseModel):
     industry: str = Field(default="")
     business_model_type: str = Field(default="", description="B2B / B2C / B2B2C / marketplace / etc.")
     executive_summary: str = Field(default="", description="1-3 sentence summary for this interpretation")
+    diagram: str = Field(default="", description="Text-based business model diagram")
     segments: List[BusinessSegment] = Field(default_factory=list)
     shared_costs: List[CostItem] = Field(default_factory=list)
     growth_trajectory: str = Field(default="")
@@ -201,6 +202,7 @@ BM_ANALYZER_USER_PROMPT = """\
       "industry": "業種",
       "business_model_type": "B2B / B2C / B2B2C / marketplace / etc.",
       "executive_summary": "この解釈の要約（1-3文）",
+      "diagram": "テキストベースのビジネスモデル図解。収益の流れ・価値の流れを視覚的に示す。\\n例:\\n[顧客企業] --月額課金--> [SaaSプラットフォーム] --サブスク収益--> [売上]\\n                              |\\n                        [導入支援] --プロジェクト収益-->\\n\\n矢印(-->)、ボックス([])、パイプ(|)を使ってフローを表現する。",
       "segments": [
         {{
           "name": "セグメント名",
@@ -266,8 +268,15 @@ class BusinessModelAnalyzer:
     3. Lets the user select/refine the best interpretation
     """
 
-    def __init__(self, llm_client: Any) -> None:
+    def __init__(
+        self,
+        llm_client: Any,
+        system_prompt: Optional[str] = None,
+        user_prompt: Optional[str] = None,
+    ) -> None:
         self.llm = llm_client
+        self._system_prompt = system_prompt or BM_ANALYZER_SYSTEM_PROMPT
+        self._user_prompt = user_prompt or BM_ANALYZER_USER_PROMPT
 
     def analyze(self, document_text: str, feedback: str = "") -> BusinessModelAnalysis:
         """Analyze a business plan document and return narrative + proposals.
@@ -300,7 +309,7 @@ class BusinessModelAnalyzer:
         else:
             truncated = document_text
 
-        user_content = BM_ANALYZER_USER_PROMPT.format(document_text=truncated)
+        user_content = self._user_prompt.format(document_text=truncated)
 
         if feedback:
             user_content += (
@@ -311,7 +320,7 @@ class BusinessModelAnalyzer:
             )
 
         messages = [
-            {"role": "system", "content": BM_ANALYZER_SYSTEM_PROMPT},
+            {"role": "system", "content": self._system_prompt},
             {"role": "user", "content": user_content},
         ]
 
@@ -382,6 +391,7 @@ class BusinessModelAnalyzer:
                 industry=p_data.get("industry", ""),
                 business_model_type=p_data.get("business_model_type", ""),
                 executive_summary=p_data.get("executive_summary", ""),
+                diagram=p_data.get("diagram", ""),
                 segments=segments,
                 shared_costs=costs,
                 growth_trajectory=p_data.get("growth_trajectory", ""),

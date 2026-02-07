@@ -48,6 +48,8 @@ KNOWN_FALLBACKS = {
         "USER_PROMPT_TEMPLATE",
     },
     "src.simulation.engine": {"SimulationEngine", "export_simulation_summary"},
+    # Prompt registry -- wrapped in try/except in _get_prompt_registry()
+    "src.agents.prompt_registry": {"PromptRegistry"},
 }
 
 

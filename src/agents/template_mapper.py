@@ -113,8 +113,15 @@ TS_USER_PROMPT = """\
 class TemplateMapper:
     """Agent 2 (Phase 3): Maps template sheets to business segments."""
 
-    def __init__(self, llm_client: Any) -> None:
+    def __init__(
+        self,
+        llm_client: Any,
+        system_prompt: Optional[str] = None,
+        user_prompt: Optional[str] = None,
+    ) -> None:
         self.llm = llm_client
+        self._system_prompt = system_prompt or TS_SYSTEM_PROMPT
+        self._user_prompt = user_prompt or TS_USER_PROMPT
 
     def map_structure(
         self,
@@ -158,8 +165,8 @@ class TemplateMapper:
             )
 
         messages = [
-            {"role": "system", "content": TS_SYSTEM_PROMPT},
-            {"role": "user", "content": TS_USER_PROMPT.format(
+            {"role": "system", "content": self._system_prompt},
+            {"role": "user", "content": self._user_prompt.format(
                 business_analysis_json=analysis_str,
                 template_summary_json=summary_str,
                 feedback_section=feedback_section,
