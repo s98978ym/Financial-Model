@@ -317,6 +317,200 @@ def _inject_custom_css() -> None:
         text-transform: uppercase; letter-spacing: 0.08em;
         margin-bottom: 0.4rem;
     }
+
+    /* ─── Phase 3: Template Structure Mapping (redesign) ─── */
+    .p3-header {
+        background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+        border-radius: 16px;
+        padding: 2rem;
+        margin-bottom: 1.5rem;
+    }
+    .p3-header h2 {
+        font-size: 1.4rem;
+        font-weight: 700;
+        color: #fff;
+        margin: 0 0 0.4rem 0;
+    }
+    .p3-header p {
+        font-size: 0.85rem;
+        color: rgba(255,255,255,0.78);
+        margin: 0;
+        line-height: 1.5;
+    }
+
+    .p3-stats {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 12px;
+        margin-bottom: 1.5rem;
+    }
+    .p3-stat {
+        background: var(--secondary-background-color);
+        border-radius: 12px;
+        padding: 1.1rem 1rem;
+        text-align: center;
+    }
+    .p3-stat-val {
+        font-size: 1.8rem;
+        font-weight: 800;
+        line-height: 1.2;
+    }
+    .p3-stat-val.clr-indigo { color: #6366f1; }
+    .p3-stat-val.clr-emerald { color: #10b981; }
+    .p3-stat-val.clr-amber { color: #f59e0b; }
+    .p3-stat-lbl {
+        font-size: 0.72rem;
+        opacity: 0.5;
+        margin-top: 0.3rem;
+    }
+
+    .p3-section-title {
+        font-size: 0.72rem;
+        font-weight: 700;
+        opacity: 0.4;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        margin: 1.5rem 0 0.8rem 0;
+    }
+
+    .p3-overview {
+        background: rgba(16,185,129,0.07);
+        border: 1px solid rgba(16,185,129,0.18);
+        border-radius: 12px;
+        padding: 1rem 1.2rem;
+        margin-bottom: 1rem;
+        font-size: 0.85rem;
+        line-height: 1.8;
+    }
+
+    .p3-card {
+        background: var(--secondary-background-color);
+        border-radius: 12px;
+        padding: 1.2rem 1.4rem;
+        margin-bottom: 10px;
+        transition: all 0.2s ease;
+        border: 1px solid transparent;
+    }
+    .p3-card:hover {
+        border-color: rgba(99,102,241,0.3);
+        box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+    }
+    .p3-card-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.5rem;
+    }
+    .p3-sheet {
+        font-size: 1.05rem;
+        font-weight: 700;
+    }
+    .p3-tag {
+        display: inline-flex;
+        padding: 3px 12px;
+        border-radius: 9999px;
+        font-size: 0.7rem;
+        font-weight: 600;
+    }
+    .p3-tag.revenue { background: rgba(99,102,241,0.12); color: #818cf8; }
+    .p3-tag.cost { background: rgba(236,72,153,0.12); color: #ec4899; }
+    .p3-tag.assumptions { background: rgba(139,92,246,0.12); color: #a78bfa; }
+    .p3-tag.summary { background: rgba(6,182,212,0.12); color: #06b6d4; }
+    .p3-tag.other { background: rgba(156,163,175,0.12); color: #9ca3af; }
+
+    .p3-seg {
+        font-size: 0.88rem;
+        margin-bottom: 0.8rem;
+        opacity: 0.85;
+    }
+    .p3-seg .arr { opacity: 0.4; margin-right: 6px; }
+
+    .p3-conf {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 0.6rem;
+    }
+    .p3-conf-bg {
+        flex: 1;
+        height: 5px;
+        background: rgba(128,128,128,0.15);
+        border-radius: 3px;
+        overflow: hidden;
+    }
+    .p3-conf-fill {
+        height: 100%;
+        border-radius: 3px;
+    }
+    .p3-conf-fill.high { background: linear-gradient(90deg, #10b981, #34d399); }
+    .p3-conf-fill.med  { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
+    .p3-conf-fill.low  { background: linear-gradient(90deg, #ef4444, #f87171); }
+    .p3-pct {
+        font-size: 0.8rem;
+        font-weight: 700;
+        min-width: 38px;
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+    }
+    .p3-pct.high { color: #10b981; }
+    .p3-pct.med  { color: #f59e0b; }
+    .p3-pct.low  { color: #ef4444; }
+
+    .p3-reason {
+        font-size: 0.78rem;
+        opacity: 0.55;
+        line-height: 1.6;
+        border-top: 1px solid rgba(128,128,128,0.1);
+        padding-top: 0.6rem;
+        margin-top: 0.2rem;
+    }
+
+    .p3-suggest {
+        background: rgba(59,130,246,0.06);
+        border-left: 3px solid #3b82f6;
+        border-radius: 0 10px 10px 0;
+        padding: 0.8rem 1.2rem;
+        margin-bottom: 8px;
+        font-size: 0.85rem;
+        line-height: 1.6;
+    }
+
+    .p3-start {
+        border: 2px dashed rgba(99,102,241,0.25);
+        border-radius: 16px;
+        padding: 3rem 2rem;
+        text-align: center;
+        margin-bottom: 1rem;
+    }
+    .p3-start-title {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: #818cf8;
+        margin-bottom: 0.5rem;
+    }
+    .p3-start-desc {
+        font-size: 0.85rem;
+        opacity: 0.55;
+        line-height: 1.6;
+        max-width: 480px;
+        margin: 0 auto;
+    }
+
+    .p3-divider {
+        margin-top: 2rem;
+        padding-top: 1.5rem;
+        border-top: 1px solid rgba(128,128,128,0.1);
+    }
+    .p3-fb-label {
+        font-size: 0.85rem;
+        font-weight: 600;
+        margin-bottom: 0.15rem;
+    }
+    .p3-fb-hint {
+        font-size: 0.72rem;
+        opacity: 0.4;
+        margin-bottom: 0.6rem;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -1041,19 +1235,58 @@ def _render_bm_results(bm: Any) -> None:
         st.json(bm.raw_json)
 
 
+# --- Phase 3 UI helpers ---------------------------------------------------
+
+_PURPOSE_MAP: Dict[str, Tuple[str, str]] = {
+    "revenue_model": ("収益モデル", "revenue"),
+    "cost_detail": ("費用明細", "cost"),
+    "assumptions": ("前提条件", "assumptions"),
+    "pl_summary": ("PL集計", "summary"),
+    "headcount": ("人員計画", "other"),
+    "capex": ("設備投資", "other"),
+}
+
+
+def _conf_cls(confidence: float) -> str:
+    """Return CSS class suffix for a confidence value."""
+    if confidence >= 0.85:
+        return "high"
+    if confidence >= 0.6:
+        return "med"
+    return "low"
+
+
 # ===================================================================
 # Phase 3: Template Structure
 # ===================================================================
 
 def _render_phase_3() -> None:
-    st.markdown("### Phase 3: テンプレート構造マッピング")
-    st.caption("テンプレートの各シートがどのビジネスセグメントに対応するかを決定します。")
+    # --- Phase header (gradient banner) ---
+    st.markdown(
+        '<div class="p3-header">'
+        '<h2>テンプレート構造マッピング</h2>'
+        '<p>テンプレートの各シートをビジネスセグメントに自動マッピングし、'
+        'PLモデルの構造を決定します</p>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
 
     ts = st.session_state.get("ts_result")
     ts_error = st.session_state.get("ts_error", "")
 
+    # --- Initial state: no results yet ---
     if ts is None and not ts_error:
-        if st.button("テンプレ構造を検討", type="primary", use_container_width=True, key="btn_ts_run"):
+        st.markdown(
+            '<div class="p3-start">'
+            '<div class="p3-start-title">マッピング準備完了</div>'
+            '<div class="p3-start-desc">'
+            'BM分析の結果をもとに、テンプレートの各シートが'
+            'どのビジネスセグメントに対応するかをAIが自動判定します'
+            '</div>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+        if st.button("マッピングを開始", type="primary", use_container_width=True, key="btn_ts_run"):
             _run_template_mapping()
             st.rerun()
         return
@@ -1064,21 +1297,28 @@ def _render_phase_3() -> None:
     if ts is not None:
         _render_ts_results(ts)
 
-    st.divider()
-
-    st.markdown("**フィードバック**")
-    st.caption("シートとセグメントの対応に修正が必要な場合、指示を入力してください。")
+    # --- Feedback section ---
+    st.markdown(
+        '<div class="p3-divider">'
+        '<div class="p3-fb-label">フィードバック</div>'
+        '<div class="p3-fb-hint">'
+        'マッピングの修正指示があれば入力してください'
+        '</div>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
     feedback = st.text_area(
         "フィードバック",
         value="",
-        placeholder="例: 「費用リスト」シートは人件費専用です。",
+        placeholder="例: 「費用リスト」シートは人件費専用にしてください",
         key="ts_feedback",
         label_visibility="collapsed",
     )
 
+    # --- Action buttons ---
     col1, col2, col3 = st.columns([2, 2, 1])
     with col1:
-        if st.button("再検討 (フィードバック反映)", use_container_width=True, key="btn_ts_rerun"):
+        if st.button("再検討", use_container_width=True, key="btn_ts_rerun"):
             _run_template_mapping(feedback=feedback)
             st.rerun()
     with col2:
@@ -1088,7 +1328,7 @@ def _render_phase_3() -> None:
             st.session_state["wizard_phase"] = 4
             st.rerun()
     with col3:
-        if st.button("← 戻る", use_container_width=True, key="btn_ts_back"):
+        if st.button("戻る", use_container_width=True, key="btn_ts_back"):
             st.session_state["wizard_phase"] = 2
             st.rerun()
 
@@ -1112,31 +1352,92 @@ def _run_template_mapping(feedback: str = "") -> None:
 
 
 def _render_ts_results(ts: Any) -> None:
-    st.success(f"構造検討完了: {len(ts.sheet_mappings)}シート")
+    mappings = ts.sheet_mappings
+    n_sheets = len(mappings)
 
+    # --- Compute summary stats ---
+    avg_conf = sum(sm.confidence for sm in mappings) / max(n_sheets, 1)
+    unique_segments = {
+        sm.mapped_segment for sm in mappings
+        if sm.mapped_segment and "未使用" not in sm.mapped_segment and "予備" not in sm.mapped_segment
+    }
+    n_active = len(unique_segments) or 1
+
+    # --- Stats row ---
+    st.markdown(
+        f'<div class="p3-stats">'
+        f'<div class="p3-stat">'
+        f'<div class="p3-stat-val clr-indigo">{n_sheets}</div>'
+        f'<div class="p3-stat-lbl">シート検出</div></div>'
+        f'<div class="p3-stat">'
+        f'<div class="p3-stat-val clr-emerald">{avg_conf:.0%}</div>'
+        f'<div class="p3-stat-lbl">平均信頼度</div></div>'
+        f'<div class="p3-stat">'
+        f'<div class="p3-stat-val clr-amber">{n_active}</div>'
+        f'<div class="p3-stat-lbl">セグメント</div></div>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+
+    # --- Overall structure overview ---
     if ts.overall_structure:
-        st.markdown(f"**全体構造:** {ts.overall_structure}")
+        st.markdown(
+            '<div class="p3-section-title">全体構成</div>'
+            f'<div class="p3-overview">{_esc(ts.overall_structure)}</div>',
+            unsafe_allow_html=True,
+        )
 
-    st.markdown("---")
-    st.markdown("**シート → セグメント マッピング:**")
-    import pandas as pd
-    mapping_data = []
-    for sm in ts.sheet_mappings:
-        mapping_data.append({
-            "シート": sm.sheet_name,
-            "セグメント": sm.mapped_segment,
-            "役割": sm.sheet_purpose,
-            "信頼度": f"{sm.confidence:.0%}",
-            "理由": sm.reasoning[:80] if sm.reasoning else "-",
-        })
-    st.dataframe(pd.DataFrame(mapping_data), use_container_width=True, hide_index=True)
+    # --- Sheet mapping cards ---
+    st.markdown(
+        '<div class="p3-section-title">シートマッピング</div>',
+        unsafe_allow_html=True,
+    )
 
+    for sm in mappings:
+        purpose_info = _PURPOSE_MAP.get(
+            sm.sheet_purpose, (sm.sheet_purpose or "その他", "other"),
+        )
+        purpose_label, purpose_cls = purpose_info
+        cls = _conf_cls(sm.confidence)
+        pct_str = f"{sm.confidence:.0%}"
+        width = f"{sm.confidence * 100:.0f}"
+
+        card_html = (
+            f'<div class="p3-card">'
+            f'<div class="p3-card-top">'
+            f'<span class="p3-sheet">{_esc(sm.sheet_name)}</span>'
+            f'<span class="p3-tag {purpose_cls}">{_esc(purpose_label)}</span>'
+            f'</div>'
+            f'<div class="p3-seg">'
+            f'<span class="arr">&rarr;</span> {_esc(sm.mapped_segment)}'
+            f'</div>'
+            f'<div class="p3-conf">'
+            f'<div class="p3-conf-bg">'
+            f'<div class="p3-conf-fill {cls}" style="width:{width}%"></div>'
+            f'</div>'
+            f'<span class="p3-pct {cls}">{pct_str}</span>'
+            f'</div>'
+        )
+        if sm.reasoning:
+            card_html += f'<div class="p3-reason">{_esc(sm.reasoning)}</div>'
+        card_html += '</div>'
+
+        st.markdown(card_html, unsafe_allow_html=True)
+
+    # --- Suggestions ---
     if ts.suggestions:
-        st.markdown("**提案:**")
+        st.markdown(
+            '<div class="p3-section-title">提案</div>',
+            unsafe_allow_html=True,
+        )
         for s in ts.suggestions:
-            st.info(s)
+            st.markdown(
+                f'<div class="p3-suggest">{_esc(s)}</div>',
+                unsafe_allow_html=True,
+            )
 
-    with st.expander("Raw JSON", expanded=False):
+    # --- Raw JSON (debug) ---
+    with st.expander("詳細データ (JSON)", expanded=False):
         st.json(ts.raw_json)
 
 
