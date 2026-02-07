@@ -608,7 +608,40 @@ def _run_phase_1_scan(doc_file) -> None:
 
         progress.progress(40, text="事業計画書を読み取り中...")
         document = read_document(doc_path)
+        # Store source filename for sidebar display
+        if not getattr(document, "source_filename", ""):
+            document.source_filename = doc_file.name
         st.session_state["document"] = document
+
+        # --- Extraction diagnostics ---
+        char_count = getattr(document, "text_char_count", 0)
+        pages_with = getattr(document, "pages_with_content", 0)
+        is_image = getattr(document, "is_likely_image_pdf", False)
+
+        if char_count == 0 or pages_with == 0:
+            progress.empty()
+            st.error(
+                f"⚠ PDFからテキストを抽出できませんでした（{document.total_pages}ページ中 {pages_with}ページで抽出成功）。\n\n"
+                "**考えられる原因:**\n"
+                "- 画像ベースのPDF（スキャンされた文書）→ テキストが埋め込まれていない\n"
+                "- パスワード保護されたPDF\n"
+                "- 特殊なフォントやエンコーディング\n\n"
+                "**対処法:**\n"
+                "- PDFを開いてテキストを選択・コピーできるか確認してください\n"
+                "- できない場合は、OCR処理済みのPDFを再アップロードしてください\n"
+                "- または DOCX/PPTX 形式に変換してアップロードしてください"
+            )
+            with st.expander("抽出結果の詳細"):
+                summary = getattr(document, "extraction_summary", lambda: "N/A")
+                st.code(summary() if callable(summary) else str(summary))
+                st.text(f"抽出テキスト先頭500文字:\n{document.full_text[:500]}")
+            return
+
+        if is_image:
+            st.warning(
+                f"⚠ テキスト抽出率が低いです（{pages_with}/{document.total_pages}ページ、{char_count:,}文字）。"
+                "画像ベースのPDFの可能性があります。分析精度が低下する場合があります。"
+            )
 
         progress.progress(60, text="テンプレートをスキャン中...")
         input_color_hex = cc.input_color.lstrip("#")
@@ -2050,19 +2083,11 @@ def _render_prompt_management() -> None:
         st.caption("各フェーズのLLMプロンプトを確認・編集。編集はセッション中のみ有効。")
     with col_actions:
         st.markdown("")  # spacing
-        c1, c2 = st.columns(2)
-        with c1:
-            if st.button("← ウィザードに戻る", key="btn_prompt_back", use_container_width=True):
-                st.session_state["show_prompt_mgmt"] = False
-                st.rerun()
-        with c2:
-            registry = _get_prompt_registry()
-            if registry:
-                if st.button("全てリセット", key="btn_prompt_reset_all", use_container_width=True):
-                    registry.reset_all()
-                    st.success("全プロンプトをデフォルトに戻しました。")
-                    st.rerun()
+        if st.button("← ウィザードに戻る", key="btn_prompt_back", use_container_width=True):
+            st.session_state["show_prompt_mgmt"] = False
+            st.rerun()
 
+    registry = _get_prompt_registry()
     if not registry:
         st.error("プロンプトレジストリを初期化できませんでした。")
         return
@@ -2105,8 +2130,8 @@ def _render_prompt_management() -> None:
                         label_visibility="collapsed",
                     )
 
-                    # Action buttons
-                    c_save, c_reset, c_diff = st.columns([1, 1, 2])
+                    # Action buttons — each prompt has its own save + reset
+                    c_save, c_reset, c_info = st.columns([1, 1, 2])
                     with c_save:
                         if st.button("💾 保存", key=f"btn_save_{entry.key}", use_container_width=True):
                             if new_content != entry.content:
@@ -2116,20 +2141,26 @@ def _render_prompt_management() -> None:
                             else:
                                 st.info("変更なし")
                     with c_reset:
-                        if entry.is_customized:
-                            if st.button("↩ デフォルトに戻す", key=f"btn_reset_{entry.key}", use_container_width=True):
-                                registry.reset(entry.key)
-                                st.success("デフォルトに戻しました。")
-                                st.rerun()
-                    with c_diff:
+                        if st.button(
+                            "↩ デフォルトに戻す",
+                            key=f"btn_reset_{entry.key}",
+                            use_container_width=True,
+                            disabled=not entry.is_customized,
+                        ):
+                            registry.reset(entry.key)
+                            st.success(f"「{entry.display_name}」をデフォルトに戻しました。")
+                            st.rerun()
+                    with c_info:
                         if entry.is_customized:
                             orig_len = len(entry.default_content)
                             curr_len = len(entry.content)
                             diff = curr_len - orig_len
                             sign = "+" if diff > 0 else ""
                             st.caption(
-                                f"デフォルト: {orig_len:,}文字 → 現在: {curr_len:,}文字 ({sign}{diff:,})"
+                                f"🟢 カスタマイズ済 | {orig_len:,}→{curr_len:,}文字 ({sign}{diff:,})"
                             )
+                        else:
+                            st.caption(f"デフォルト | {len(entry.content):,}文字")
 
 
 # ===================================================================
