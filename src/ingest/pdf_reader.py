@@ -4,7 +4,8 @@ Extraction priority:
   1. pdfplumber  — best for Japanese text + tables
   2. PyMuPDF (fitz) — good fallback, handles more PDF types
   3. pypdfium2 — Chrome's own PDF engine (best for NotebookLM/Chrome PDFs)
-  4. PyPDF2 — basic fallback
+  4. poppler pdftotext — C++ command-line tool, different implementation
+  5. PyPDF2 — basic fallback
 
 If primary extraction yields very little text, we automatically retry
 with the next backend.  This handles cases where a PDF uses fonts or
@@ -15,11 +16,14 @@ Special handling for NotebookLM / Chrome "Print to PDF":
   the /ToUnicode CMap, making text extraction impossible for most
   libraries.  pypdfium2 (PDFium bindings) uses the same engine as
   Chrome and can often extract text that others cannot.
+  As a last resort, poppler's pdftotext (C++ implementation) is tried.
 """
 from __future__ import annotations
 
 import logging
 import re
+import shutil
+import subprocess
 from pathlib import Path
 from typing import List, Optional
 
@@ -34,6 +38,7 @@ _HAS_PDFPLUMBER = False
 _HAS_PYMUPDF = False
 _HAS_PYPDFIUM2 = False
 _HAS_PYPDF2 = False
+_HAS_POPPLER = bool(shutil.which("pdftotext"))
 
 try:
     import pdfplumber  # type: ignore
@@ -547,6 +552,95 @@ def _extract_with_pypdfium2(file_path: str) -> DocumentContent:
 
 
 # ---------------------------------------------------------------------------
+# poppler pdftotext extraction (command-line tool)
+# ---------------------------------------------------------------------------
+
+def _extract_with_poppler(file_path: str) -> DocumentContent:
+    """Extract text from a PDF using poppler's pdftotext command-line tool.
+
+    poppler is a completely different C++ PDF implementation and sometimes
+    succeeds where Python libraries fail.  It handles some CIDFont and
+    ToUnicode edge cases differently.
+    """
+    pages: List[PageContent] = []
+    metadata: dict = {}
+
+    try:
+        # First get total pages via pdfinfo
+        total_pages = 0
+        try:
+            info_out = subprocess.run(
+                ["pdfinfo", file_path],
+                capture_output=True, text=True, timeout=30,
+            )
+            for line in info_out.stdout.splitlines():
+                if line.startswith("Pages:"):
+                    total_pages = int(line.split(":", 1)[1].strip())
+                elif line.startswith("Title:"):
+                    metadata["Title"] = line.split(":", 1)[1].strip()
+                elif line.startswith("Author:"):
+                    metadata["Author"] = line.split(":", 1)[1].strip()
+        except Exception:
+            pass
+
+        # Extract text page by page for proper page splitting
+        if total_pages > 0:
+            for page_num in range(1, total_pages + 1):
+                try:
+                    result = subprocess.run(
+                        ["pdftotext", "-f", str(page_num), "-l", str(page_num),
+                         "-layout", file_path, "-"],
+                        capture_output=True, text=True, timeout=30,
+                    )
+                    text = result.stdout or ""
+                    if _is_garbled(text):
+                        text = ""
+                except Exception as exc:
+                    logger.debug("poppler: page %d extraction failed: %s", page_num, exc)
+                    text = ""
+
+                pages.append(
+                    PageContent(
+                        page_number=page_num,
+                        text=text.strip(),
+                        tables=[],
+                        source_type="pdf",
+                    )
+                )
+        else:
+            # Fallback: extract all pages at once
+            result = subprocess.run(
+                ["pdftotext", "-layout", file_path, "-"],
+                capture_output=True, text=True, timeout=60,
+            )
+            text = (result.stdout or "").strip()
+            if text and not _is_garbled(text):
+                pages.append(
+                    PageContent(
+                        page_number=1,
+                        text=text,
+                        tables=[],
+                        source_type="pdf",
+                    )
+                )
+                total_pages = 1
+
+    except Exception as exc:
+        raise RuntimeError(
+            f"Failed to read PDF with poppler pdftotext: {file_path} — {exc}"
+        ) from exc
+
+    return DocumentContent(
+        file_path=str(file_path),
+        file_type="pdf",
+        pages=pages,
+        total_pages=total_pages if pages else 0,
+        metadata=metadata,
+        source_filename=Path(file_path).name,
+    )
+
+
+# ---------------------------------------------------------------------------
 # PyPDF2 extraction (fallback)
 # ---------------------------------------------------------------------------
 
@@ -650,6 +744,8 @@ def extract_pdf(file_path: str) -> DocumentContent:
         backends.append(("PyMuPDF", _extract_with_pymupdf))
     if _HAS_PYPDFIUM2:
         backends.append(("pypdfium2", _extract_with_pypdfium2))
+    if _HAS_POPPLER:
+        backends.append(("poppler", _extract_with_poppler))
     if _HAS_PYPDF2:
         backends.append(("PyPDF2", _extract_with_pypdf2))
 
