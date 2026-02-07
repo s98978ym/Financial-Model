@@ -87,7 +87,9 @@ class LLMClient:
             if system_text:
                 kwargs["system"] = system_text
 
-            response = self.client.messages.create(**kwargs)
+            # Use streaming to avoid timeout for large max_tokens
+            with self.client.messages.stream(**kwargs) as stream:
+                response = stream.get_final_message()
             content = response.content[0].text
             stop_reason = getattr(response, "stop_reason", "unknown")
 
