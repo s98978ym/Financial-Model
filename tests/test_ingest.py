@@ -270,8 +270,30 @@ class TestPdfBackendFlags:
         from src.ingest.pdf_reader import _HAS_PYPDF2
         assert isinstance(_HAS_PYPDF2, bool)
 
+    def test_has_poppler(self):
+        from src.ingest.pdf_reader import _HAS_POPPLER
+        assert isinstance(_HAS_POPPLER, bool)
+
     def test_at_least_one_backend(self):
         from src.ingest.pdf_reader import (
-            _HAS_PDFPLUMBER, _HAS_PYMUPDF, _HAS_PYPDFIUM2, _HAS_PYPDF2,
+            _HAS_PDFPLUMBER, _HAS_PYMUPDF, _HAS_PYPDFIUM2, _HAS_PYPDF2, _HAS_POPPLER,
         )
-        assert any([_HAS_PDFPLUMBER, _HAS_PYMUPDF, _HAS_PYPDFIUM2, _HAS_PYPDF2])
+        assert any([_HAS_PDFPLUMBER, _HAS_PYMUPDF, _HAS_PYPDFIUM2, _HAS_PYPDF2, _HAS_POPPLER])
+
+
+# ===================================================================
+# OCR fallback availability
+# ===================================================================
+
+class TestOcrFallback:
+    """Test OCR fallback detection."""
+
+    def test_can_ocr_returns_bool(self):
+        from src.ingest.pdf_reader import _can_ocr
+        assert isinstance(_can_ocr(), bool)
+
+    def test_can_ocr_is_true_when_deps_available(self):
+        """In this test environment, OCR deps should be installed."""
+        from src.ingest.pdf_reader import _can_ocr
+        # pytesseract, Pillow, PyMuPDF should all be available
+        assert _can_ocr() is True

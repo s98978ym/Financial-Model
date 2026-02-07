@@ -4,7 +4,8 @@ Extraction priority:
   1. pdfplumber  — best for Japanese text + tables
   2. PyMuPDF (fitz) — good fallback, handles more PDF types
   3. pypdfium2 — Chrome's own PDF engine (best for NotebookLM/Chrome PDFs)
-  4. PyPDF2 — basic fallback
+  4. poppler pdftotext — C++ command-line tool, different implementation
+  5. PyPDF2 — basic fallback
 
 If primary extraction yields very little text, we automatically retry
 with the next backend.  This handles cases where a PDF uses fonts or
@@ -15,11 +16,14 @@ Special handling for NotebookLM / Chrome "Print to PDF":
   the /ToUnicode CMap, making text extraction impossible for most
   libraries.  pypdfium2 (PDFium bindings) uses the same engine as
   Chrome and can often extract text that others cannot.
+  As a last resort, poppler's pdftotext (C++ implementation) is tried.
 """
 from __future__ import annotations
 
 import logging
 import re
+import shutil
+import subprocess
 from pathlib import Path
 from typing import List, Optional
 
@@ -34,6 +38,7 @@ _HAS_PDFPLUMBER = False
 _HAS_PYMUPDF = False
 _HAS_PYPDFIUM2 = False
 _HAS_PYPDF2 = False
+_HAS_POPPLER = bool(shutil.which("pdftotext"))
 
 try:
     import pdfplumber  # type: ignore
@@ -547,6 +552,95 @@ def _extract_with_pypdfium2(file_path: str) -> DocumentContent:
 
 
 # ---------------------------------------------------------------------------
+# poppler pdftotext extraction (command-line tool)
+# ---------------------------------------------------------------------------
+
+def _extract_with_poppler(file_path: str) -> DocumentContent:
+    """Extract text from a PDF using poppler's pdftotext command-line tool.
+
+    poppler is a completely different C++ PDF implementation and sometimes
+    succeeds where Python libraries fail.  It handles some CIDFont and
+    ToUnicode edge cases differently.
+    """
+    pages: List[PageContent] = []
+    metadata: dict = {}
+
+    try:
+        # First get total pages via pdfinfo
+        total_pages = 0
+        try:
+            info_out = subprocess.run(
+                ["pdfinfo", file_path],
+                capture_output=True, text=True, timeout=30,
+            )
+            for line in info_out.stdout.splitlines():
+                if line.startswith("Pages:"):
+                    total_pages = int(line.split(":", 1)[1].strip())
+                elif line.startswith("Title:"):
+                    metadata["Title"] = line.split(":", 1)[1].strip()
+                elif line.startswith("Author:"):
+                    metadata["Author"] = line.split(":", 1)[1].strip()
+        except Exception:
+            pass
+
+        # Extract text page by page for proper page splitting
+        if total_pages > 0:
+            for page_num in range(1, total_pages + 1):
+                try:
+                    result = subprocess.run(
+                        ["pdftotext", "-f", str(page_num), "-l", str(page_num),
+                         "-layout", file_path, "-"],
+                        capture_output=True, text=True, timeout=30,
+                    )
+                    text = result.stdout or ""
+                    if _is_garbled(text):
+                        text = ""
+                except Exception as exc:
+                    logger.debug("poppler: page %d extraction failed: %s", page_num, exc)
+                    text = ""
+
+                pages.append(
+                    PageContent(
+                        page_number=page_num,
+                        text=text.strip(),
+                        tables=[],
+                        source_type="pdf",
+                    )
+                )
+        else:
+            # Fallback: extract all pages at once
+            result = subprocess.run(
+                ["pdftotext", "-layout", file_path, "-"],
+                capture_output=True, text=True, timeout=60,
+            )
+            text = (result.stdout or "").strip()
+            if text and not _is_garbled(text):
+                pages.append(
+                    PageContent(
+                        page_number=1,
+                        text=text,
+                        tables=[],
+                        source_type="pdf",
+                    )
+                )
+                total_pages = 1
+
+    except Exception as exc:
+        raise RuntimeError(
+            f"Failed to read PDF with poppler pdftotext: {file_path} — {exc}"
+        ) from exc
+
+    return DocumentContent(
+        file_path=str(file_path),
+        file_type="pdf",
+        pages=pages,
+        total_pages=total_pages if pages else 0,
+        metadata=metadata,
+        source_filename=Path(file_path).name,
+    )
+
+
+# ---------------------------------------------------------------------------
 # PyPDF2 extraction (fallback)
 # ---------------------------------------------------------------------------
 
@@ -607,6 +701,106 @@ def _extract_with_pypdf2(file_path: str) -> DocumentContent:
 
 
 # ---------------------------------------------------------------------------
+# OCR fallback (last resort for NotebookLM / Type3 font PDFs)
+# ---------------------------------------------------------------------------
+
+def _extract_with_ocr(file_path: str) -> DocumentContent:
+    """Extract text from a PDF by rendering pages as images and running OCR.
+
+    This is the last-resort fallback for PDFs where ALL text extraction
+    backends fail (e.g. NotebookLM / Chrome PDFs with Type3 fonts and
+    missing /ToUnicode CMap).
+
+    Requires: PyMuPDF (for rendering), pytesseract, Pillow, tesseract-ocr.
+    """
+    import io
+
+    import fitz  # PyMuPDF — for page rendering
+    import pytesseract
+    from PIL import Image
+
+    pages: List[PageContent] = []
+    metadata: dict = {}
+
+    try:
+        doc = fitz.open(file_path)
+
+        raw_meta = doc.metadata or {}
+        for key in ("title", "author", "subject", "creator", "producer"):
+            val = raw_meta.get(key)
+            if val:
+                metadata[key.capitalize()] = str(val)
+
+        total_pages = doc.page_count
+        logger.info(
+            "OCR fallback: rendering %d pages at 300 DPI for %s",
+            total_pages, Path(file_path).name,
+        )
+
+        for idx in range(total_pages):
+            page_number = idx + 1
+            page = doc[idx]
+
+            try:
+                # Render page at 300 DPI
+                mat = fitz.Matrix(300 / 72, 300 / 72)
+                pix = page.get_pixmap(matrix=mat)
+                img_bytes = pix.tobytes("png")
+                img = Image.open(io.BytesIO(img_bytes))
+
+                # Run Tesseract OCR (Japanese + English)
+                text = pytesseract.image_to_string(img, lang="jpn+eng")
+                text = (text or "").strip()
+
+                if text:
+                    logger.info(
+                        "OCR: page %d → %d chars extracted",
+                        page_number, len(text),
+                    )
+            except Exception as exc:
+                logger.warning("OCR failed on page %d: %s", page_number, exc)
+                text = ""
+
+            pages.append(
+                PageContent(
+                    page_number=page_number,
+                    text=text,
+                    tables=[],
+                    source_type="pdf",
+                )
+            )
+
+        doc.close()
+
+    except Exception as exc:
+        raise RuntimeError(
+            f"OCR extraction failed for {file_path} — {exc}"
+        ) from exc
+
+    return DocumentContent(
+        file_path=str(file_path),
+        file_type="pdf",
+        pages=pages,
+        total_pages=total_pages if pages else 0,
+        metadata=metadata,
+        source_filename=Path(file_path).name,
+    )
+
+
+def _can_ocr() -> bool:
+    """Check if OCR dependencies are available."""
+    try:
+        import fitz  # noqa: F811
+        import pytesseract  # noqa: F811
+        from PIL import Image  # noqa: F401
+        # Verify tesseract binary exists
+        pytesseract.get_tesseract_version()
+        return True
+    except Exception:
+        return False
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
@@ -618,6 +812,8 @@ def extract_pdf(file_path: str) -> DocumentContent:
 
     Tries backends in priority order.  If the primary backend yields
     very little text, automatically retries with the next one.
+    If ALL backends fail, falls back to OCR (renders pages as images
+    and runs Tesseract OCR for Japanese + English).
 
     Parameters
     ----------
@@ -650,6 +846,8 @@ def extract_pdf(file_path: str) -> DocumentContent:
         backends.append(("PyMuPDF", _extract_with_pymupdf))
     if _HAS_PYPDFIUM2:
         backends.append(("pypdfium2", _extract_with_pypdfium2))
+    if _HAS_POPPLER:
+        backends.append(("poppler", _extract_with_poppler))
     if _HAS_PYPDF2:
         backends.append(("PyPDF2", _extract_with_pypdf2))
 
@@ -690,11 +888,28 @@ def extract_pdf(file_path: str) -> DocumentContent:
             logger.warning("PDF extraction with %s failed: %s", name, exc)
             continue
 
-    # If no backend produced good results, return the best we have
+    # --- OCR fallback: all text backends failed or produced very little ---
+    if best_chars < _MIN_USEFUL_CHARS_PER_PAGE and _can_ocr():
+        logger.info(
+            "All text extraction backends failed (best: %d chars). "
+            "Falling back to OCR for %s",
+            best_chars, path.name,
+        )
+        try:
+            ocr_result = _extract_with_ocr(file_path)
+            ocr_chars = ocr_result.text_char_count
+            logger.info("OCR extracted %d chars from %d pages",
+                        ocr_chars, ocr_result.total_pages)
+            if ocr_chars > best_chars:
+                return ocr_result
+        except Exception as exc:
+            logger.warning("OCR fallback failed: %s", exc)
+
+    # Return the best text-extraction result we have (even if low quality)
     if best_result is not None:
         logger.warning(
             "All PDF backends produced low text yield. Best: %d chars. "
-            "The PDF may be image-based (scanned).",
+            "The PDF may use fonts that prevent text extraction.",
             best_chars,
         )
         return best_result

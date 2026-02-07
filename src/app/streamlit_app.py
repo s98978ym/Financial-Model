@@ -87,7 +87,7 @@ try:
         CellTarget,
     )
     from src.ingest.reader import read_document
-    from src.ingest.base import DocumentContent
+    from src.ingest.base import DocumentContent, PageContent
     from src.catalog.scanner import scan_template, export_catalog_json
     from src.modelmap.analyzer import analyze_model, generate_model_report_md
     from src.extract.extractor import ParameterExtractor
@@ -523,18 +523,41 @@ def _render_phase_1() -> None:
     st.markdown("### Phase 1: アップロード & スキャン")
     st.caption("事業計画書とExcelテンプレートをアップロードしてください。")
 
-    doc_file = st.file_uploader(
-        "事業計画書 (PDF / DOCX / PPTX)", type=ALLOWED_DOC_EXTENSIONS,
-        key="doc_upload", label_visibility="collapsed",
-    )
+    # --- Input method tabs: file upload or text paste ---
+    input_tab1, input_tab2 = st.tabs(["ファイルアップロード", "テキスト貼り付け"])
 
-    if doc_file:
-        ext = doc_file.name.split(".")[-1].upper()
-        size_kb = len(doc_file.getvalue()) / 1024
-        st.markdown(
-            f'<div class="file-ok">&#10003; {doc_file.name} ({ext}, {size_kb:.0f} KB)</div>',
-            unsafe_allow_html=True,
+    doc_file = None
+    pasted_text = ""
+
+    with input_tab1:
+        doc_file = st.file_uploader(
+            "事業計画書 (PDF / DOCX / PPTX)", type=ALLOWED_DOC_EXTENSIONS,
+            key="doc_upload", label_visibility="collapsed",
         )
+
+        if doc_file:
+            ext = doc_file.name.split(".")[-1].upper()
+            size_kb = len(doc_file.getvalue()) / 1024
+            st.markdown(
+                f'<div class="file-ok">&#10003; {doc_file.name} ({ext}, {size_kb:.0f} KB)</div>',
+                unsafe_allow_html=True,
+            )
+
+    with input_tab2:
+        st.caption(
+            "NotebookLMやPDFからテキストを抽出できない場合、"
+            "事業計画書の内容を直接貼り付けてください。"
+        )
+        pasted_text = st.text_area(
+            "事業計画書テキスト",
+            height=300,
+            key="doc_text_paste",
+            placeholder="ここに事業計画書のテキストを貼り付けてください...\n\n"
+                        "例: NotebookLMのノート画面からテキストをコピー (Ctrl+A → Ctrl+C)",
+        )
+        if pasted_text and pasted_text.strip():
+            char_count = len(pasted_text.strip())
+            st.success(f"{char_count:,} 文字のテキストが入力されました。")
 
     with st.expander("設定（任意）", expanded=False):
         col1, col2 = st.columns(2)
@@ -557,14 +580,19 @@ def _render_phase_1() -> None:
         with c3:
             st.color_picker("合計セル色", value=DEFAULT_TOTAL_COLOR, key="color_total")
 
-    if doc_file:
+    has_input = doc_file or (pasted_text and pasted_text.strip())
+    if has_input:
         if st.button("スキャン開始 →", type="primary", use_container_width=True, key="btn_scan"):
-            _run_phase_1_scan(doc_file)
+            if pasted_text and pasted_text.strip():
+                _run_phase_1_scan_from_text(pasted_text.strip())
+            else:
+                _run_phase_1_scan(doc_file)
     else:
         st.markdown(
             '<div style="text-align:center; padding:3rem 1rem; '
             'color:#999; border:2px dashed #ddd; border-radius:12px;">'
             '<p style="font-size:1.2rem;">PDF / DOCX / PPTX をドラッグ＆ドロップ</p>'
+            '<p style="font-size:0.9rem;">またはテキスト貼り付けタブからテキストを直接入力</p>'
             '</div>',
             unsafe_allow_html=True,
         )
@@ -606,7 +634,7 @@ def _run_phase_1_scan(doc_file) -> None:
         )
         st.session_state["color_config"] = cc
 
-        progress.progress(40, text="事業計画書を読み取り中...")
+        progress.progress(40, text="事業計画書を読み取り中（OCR自動フォールバック付き）...")
         document = read_document(doc_path)
         # Store source filename for sidebar display
         if not getattr(document, "source_filename", ""):
@@ -622,25 +650,15 @@ def _run_phase_1_scan(doc_file) -> None:
             progress.empty()
             st.error(
                 f"⚠ PDFからテキストを抽出できませんでした（{document.total_pages}ページ中 {pages_with}ページで抽出成功）。\n\n"
-                "**考えられる原因:**\n"
-                "- NotebookLMやChrome「PDF印刷」で生成されたPDF（フォントのUnicodeマッピングが欠落）\n"
-                "- PDFの内部構造が特殊（フォント埋込方式・エンコーディング等）\n"
-                "- パスワード保護されたPDF\n\n"
+                "テキスト抽出（5ライブラリ）＋OCR（画像認識）を含む全手法で抽出に失敗しました。\n\n"
                 "**対処法:**\n"
-                "- **NotebookLMの場合**: ノートのテキストをコピーしてWord(.docx)に貼り付けてアップロード\n"
-                "- PDFをブラウザで開き Ctrl+A → Ctrl+C でテキストコピー → Word(.docx)に貼り付け\n"
-                "- PowerPoint(.pptx)やWord(.docx)の元ファイルがあればそちらをアップロード\n"
-                "- Google DocsやNotionなどからDOCX形式でエクスポート"
+                '- **「テキスト貼り付け」タブ** を使って事業計画書のテキストを直接貼り付けてください\n'
+                "- NotebookLMの場合: ノート画面でテキストをコピー → 「テキスト貼り付け」タブに貼り付け\n"
+                "- PowerPoint(.pptx)やWord(.docx)の元ファイルがあればそちらをアップロード"
             )
-            with st.expander("抽出結果の詳細", expanded=True):
+            with st.expander("抽出結果の詳細"):
                 summary = getattr(document, "extraction_summary", lambda: "N/A")
                 st.code(summary() if callable(summary) else str(summary))
-                # Show what each backend extracted
-                full = document.full_text
-                if full and full.strip():
-                    st.text(f"抽出テキスト先頭500文字:\n{full[:500]}")
-                else:
-                    st.info("全バックエンド（pdfplumber, PyMuPDF, pypdfium2, PyPDF2）で抽出失敗")
             return
 
         if is_image:
@@ -648,6 +666,101 @@ def _run_phase_1_scan(doc_file) -> None:
                 f"⚠ テキスト抽出率が低いです（{pages_with}/{document.total_pages}ページ、{char_count:,}文字）。"
                 "画像ベースのPDFの可能性があります。分析精度が低下する場合があります。"
             )
+
+        progress.progress(60, text="テンプレートをスキャン中...")
+        input_color_hex = cc.input_color.lstrip("#")
+        if len(input_color_hex) == 6:
+            input_color_hex = "FF" + input_color_hex
+        catalog = scan_template(template_path, input_color=input_color_hex)
+        st.session_state["catalog"] = catalog
+
+        progress.progress(80, text="数式構造を分析中...")
+        analysis = analyze_model(template_path, catalog)
+        st.session_state["analysis"] = analysis
+
+        # Pre-compute writable items
+        writable_items = [
+            {
+                "sheet": item.sheet,
+                "cell": item.cell,
+                "labels": item.label_candidates,
+                "units": item.unit_candidates,
+                "period": item.year_or_period,
+                "block": item.block,
+                "current_value": item.current_value,
+            }
+            for item in catalog.items
+            if not item.has_formula
+        ]
+        st.session_state["writable_items"] = writable_items
+
+        progress.progress(100, text="スキャン完了!")
+        st.session_state["wizard_phase"] = 2
+        st.rerun()
+
+    except Exception as exc:
+        progress.empty()
+        st.error(f"スキャン中にエラーが発生しました: {exc}")
+        with st.expander("エラー詳細"):
+            st.code(traceback.format_exc())
+
+
+def _run_phase_1_scan_from_text(pasted_text: str) -> None:
+    """Run Phase 1 scan using directly pasted text (bypasses PDF extraction)."""
+    progress = st.progress(0, text="準備中...")
+    try:
+        template_file = st.session_state.get("template_upload_file", None)
+        if template_file is not None:
+            template_path = _save_uploaded_file(template_file)
+        else:
+            template_path = DEFAULT_TEMPLATE_PATH
+            if not Path(template_path).exists():
+                st.error("デフォルトテンプレートが見つかりません。テンプレートをアップロードしてください。")
+                progress.empty()
+                return
+
+        cases_raw = st.session_state.get("case_multiselect", ["Base"])
+        if not cases_raw:
+            cases_raw = ["Base"]
+
+        progress.progress(20, text="設定を構築中...")
+        config = PhaseAConfig(
+            industry="auto", business_model="Other",
+            strictness="normal", cases=[c.lower() for c in cases_raw],
+            template_path=template_path, document_paths=["(テキスト貼り付け)"],
+        )
+        st.session_state["config"] = config
+        st.session_state["run_simulation"] = st.session_state.get("sim_checkbox", False)
+
+        cc = ColorConfig(
+            input_color=st.session_state.get("color_input", DEFAULT_INPUT_COLOR),
+            formula_color=st.session_state.get("color_formula", DEFAULT_FORMULA_COLOR),
+            total_color=st.session_state.get("color_total", DEFAULT_TOTAL_COLOR),
+        )
+        st.session_state["color_config"] = cc
+
+        progress.progress(40, text="テキストを処理中...")
+
+        # Build DocumentContent directly from pasted text
+        pages = [
+            PageContent(
+                page_number=1,
+                text=pasted_text,
+                tables=[],
+                source_type="text_paste",
+            )
+        ]
+        document = DocumentContent(
+            file_path="(テキスト貼り付け)",
+            file_type="text_paste",
+            pages=pages,
+            total_pages=1,
+            metadata={},
+            source_filename="テキスト貼り付け",
+        )
+        st.session_state["document"] = document
+
+        st.success(f"テキスト入力: {len(pasted_text):,} 文字を受け付けました。")
 
         progress.progress(60, text="テンプレートをスキャン中...")
         input_color_hex = cc.input_color.lstrip("#")
