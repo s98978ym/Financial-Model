@@ -623,13 +623,14 @@ def _run_phase_1_scan(doc_file) -> None:
             st.error(
                 f"⚠ PDFからテキストを抽出できませんでした（{document.total_pages}ページ中 {pages_with}ページで抽出成功）。\n\n"
                 "**考えられる原因:**\n"
-                "- 画像ベースのPDF（スキャンされた文書）→ テキストが埋め込まれていない\n"
-                "- パスワード保護されたPDF\n"
-                "- 特殊なフォントやエンコーディング\n\n"
+                "- PDFの内部構造が特殊（フォント埋込方式・エンコーディング等）\n"
+                "- 画像ベースのPDF（スキャンされた文書）\n"
+                "- パスワード保護されたPDF\n\n"
                 "**対処法:**\n"
-                "- PDFを開いてテキストを選択・コピーできるか確認してください\n"
-                "- できない場合は、OCR処理済みのPDFを再アップロードしてください\n"
-                "- または DOCX/PPTX 形式に変換してアップロードしてください"
+                "- PDFをブラウザや別のビューアで開き、Ctrl+A → Ctrl+C でテキストをコピーしてみてください\n"
+                "- テキストがコピーできる場合: DOCX/PPTX形式に変換して再アップロード\n"
+                "- テキストがコピーできない場合: Adobe Acrobat等でOCR処理してから再アップロード\n"
+                "- PowerPoint(.pptx)やWord(.docx)の元ファイルがあればそちらをアップロード"
             )
             with st.expander("抽出結果の詳細"):
                 summary = getattr(document, "extraction_summary", lambda: "N/A")

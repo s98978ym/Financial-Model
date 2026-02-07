@@ -124,6 +124,80 @@ def _extract_with_pdfplumber(file_path: str) -> DocumentContent:
 # PyMuPDF (fitz) extraction
 # ---------------------------------------------------------------------------
 
+def _extract_text_pymupdf_page(page) -> str:
+    """Try multiple PyMuPDF text extraction methods for a single page.
+
+    Falls back through progressively more aggressive methods:
+    1. get_text("text") — standard plain text
+    2. get_text("blocks") — text blocks (sometimes works when "text" fails)
+    3. get_text("rawdict") — raw character-level extraction
+    4. OCR via page image → pytesseract (if available)
+    """
+    # Method 1: standard text extraction
+    try:
+        text = page.get_text("text") or ""
+        if text.strip():
+            return text
+    except Exception:
+        pass
+
+    # Method 2: blocks-based extraction
+    try:
+        blocks = page.get_text("blocks") or []
+        block_texts = []
+        for b in blocks:
+            # blocks are tuples: (x0, y0, x1, y1, text, block_no, block_type)
+            if len(b) >= 5 and b[6] == 0:  # type 0 = text block
+                t = str(b[4]).strip()
+                if t:
+                    block_texts.append(t)
+        if block_texts:
+            return "\n".join(block_texts)
+    except Exception:
+        pass
+
+    # Method 3: rawdict character-level extraction
+    try:
+        raw = page.get_text("rawdict")
+        if raw and "blocks" in raw:
+            chars = []
+            for block in raw["blocks"]:
+                if block.get("type") == 0:  # text block
+                    for line in block.get("lines", []):
+                        line_text = ""
+                        for span in line.get("spans", []):
+                            line_text += span.get("text", "")
+                        if line_text.strip():
+                            chars.append(line_text.strip())
+            if chars:
+                return "\n".join(chars)
+    except Exception:
+        pass
+
+    # Method 4: OCR fallback — render page as image, run pytesseract
+    try:
+        import pytesseract
+        from PIL import Image
+        import io
+
+        # Render page at 300 DPI for OCR quality
+        import fitz as _fitz
+        mat = _fitz.Matrix(300 / 72, 300 / 72)
+        pix = page.get_pixmap(matrix=mat)
+        img_bytes = pix.tobytes("png")
+        img = Image.open(io.BytesIO(img_bytes))
+        text = pytesseract.image_to_string(img, lang="jpn+eng")
+        if text and text.strip():
+            logger.info("PyMuPDF OCR fallback succeeded on page %d (%d chars)", page.number + 1, len(text))
+            return text
+    except ImportError:
+        logger.debug("pytesseract not available for OCR fallback")
+    except Exception as exc:
+        logger.debug("OCR fallback failed on page %d: %s", page.number + 1, exc)
+
+    return ""
+
+
 def _extract_with_pymupdf(file_path: str) -> DocumentContent:
     """Extract text from a PDF using PyMuPDF (fitz).
 
@@ -131,6 +205,8 @@ def _extract_with_pymupdf(file_path: str) -> DocumentContent:
     - PDFs using CIDFont or Type3 fonts
     - PDFs with complex encoding mappings
     - PDFs generated from certain Asian-language tools
+
+    Uses multiple extraction methods per page, falling back to OCR.
     """
     import fitz  # PyMuPDF
 
@@ -153,15 +229,7 @@ def _extract_with_pymupdf(file_path: str) -> DocumentContent:
             page_number = idx + 1
             page = doc[idx]
 
-            try:
-                # "text" mode extracts plain text preserving reading order
-                text = page.get_text("text") or ""
-            except Exception as exc:
-                logger.warning(
-                    "PyMuPDF: failed to extract text from page %d: %s",
-                    page_number, exc,
-                )
-                text = ""
+            text = _extract_text_pymupdf_page(page)
 
             # PyMuPDF can also extract tables (fitz 1.23+)
             tables: List[List[List[str]]] = []
