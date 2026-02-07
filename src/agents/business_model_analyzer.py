@@ -181,13 +181,15 @@ class BusinessModelAnalyzer:
     def __init__(self, llm_client: Any) -> None:
         self.llm = llm_client
 
-    def analyze(self, document_text: str) -> BusinessModelAnalysis:
+    def analyze(self, document_text: str, feedback: str = "") -> BusinessModelAnalysis:
         """Analyze a business plan document and return structured analysis.
 
         Parameters
         ----------
         document_text : str
             Full text of the business plan document.
+        feedback : str
+            Optional user feedback to incorporate into re-analysis.
 
         Returns
         -------
@@ -210,11 +212,18 @@ class BusinessModelAnalyzer:
         else:
             truncated = document_text
 
+        user_content = BM_ANALYZER_USER_PROMPT.format(document_text=truncated)
+
+        if feedback:
+            user_content += (
+                f"\n\n━━━ ユーザーフィードバック ━━━\n"
+                f"{feedback}\n\n"
+                f"上記のフィードバックを考慮して、分析を修正してください。"
+            )
+
         messages = [
             {"role": "system", "content": BM_ANALYZER_SYSTEM_PROMPT},
-            {"role": "user", "content": BM_ANALYZER_USER_PROMPT.format(
-                document_text=truncated,
-            )},
+            {"role": "user", "content": user_content},
         ]
 
         logger.info("BusinessModelAnalyzer: sending document (%d chars) to LLM", len(truncated))
