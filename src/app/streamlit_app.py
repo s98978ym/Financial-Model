@@ -557,7 +557,7 @@ def _run_phase_1_scan(doc_file) -> None:
 
         progress.progress(20, text="設定を構築中...")
         config = PhaseAConfig(
-            industry="auto", business_model="auto",
+            industry="auto", business_model="Other",
             strictness="normal", cases=[c.lower() for c in cases_raw],
             template_path=template_path, document_paths=[doc_path],
         )
