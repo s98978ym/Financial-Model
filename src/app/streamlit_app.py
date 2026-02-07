@@ -623,19 +623,24 @@ def _run_phase_1_scan(doc_file) -> None:
             st.error(
                 f"⚠ PDFからテキストを抽出できませんでした（{document.total_pages}ページ中 {pages_with}ページで抽出成功）。\n\n"
                 "**考えられる原因:**\n"
+                "- NotebookLMやChrome「PDF印刷」で生成されたPDF（フォントのUnicodeマッピングが欠落）\n"
                 "- PDFの内部構造が特殊（フォント埋込方式・エンコーディング等）\n"
-                "- 画像ベースのPDF（スキャンされた文書）\n"
                 "- パスワード保護されたPDF\n\n"
                 "**対処法:**\n"
-                "- PDFをブラウザや別のビューアで開き、Ctrl+A → Ctrl+C でテキストをコピーしてみてください\n"
-                "- テキストがコピーできる場合: DOCX/PPTX形式に変換して再アップロード\n"
-                "- テキストがコピーできない場合: Adobe Acrobat等でOCR処理してから再アップロード\n"
-                "- PowerPoint(.pptx)やWord(.docx)の元ファイルがあればそちらをアップロード"
+                "- **NotebookLMの場合**: ノートのテキストをコピーしてWord(.docx)に貼り付けてアップロード\n"
+                "- PDFをブラウザで開き Ctrl+A → Ctrl+C でテキストコピー → Word(.docx)に貼り付け\n"
+                "- PowerPoint(.pptx)やWord(.docx)の元ファイルがあればそちらをアップロード\n"
+                "- Google DocsやNotionなどからDOCX形式でエクスポート"
             )
-            with st.expander("抽出結果の詳細"):
+            with st.expander("抽出結果の詳細", expanded=True):
                 summary = getattr(document, "extraction_summary", lambda: "N/A")
                 st.code(summary() if callable(summary) else str(summary))
-                st.text(f"抽出テキスト先頭500文字:\n{document.full_text[:500]}")
+                # Show what each backend extracted
+                full = document.full_text
+                if full and full.strip():
+                    st.text(f"抽出テキスト先頭500文字:\n{full[:500]}")
+                else:
+                    st.info("全バックエンド（pdfplumber, PyMuPDF, pypdfium2, PyPDF2）で抽出失敗")
             return
 
         if is_image:
