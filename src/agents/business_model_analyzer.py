@@ -45,7 +45,7 @@ class CostItem(BaseModel):
 
 class BusinessSegment(BaseModel):
     """A distinct business line / revenue stream."""
-    name: str = Field(description="e.g. 'ミール配送事業', 'SaaSサブスクリプション'")
+    name: str = Field(description="e.g. 'SaaSサブスクリプション', 'EC販売', '広告事業'")
     model_type: str = Field(description="e.g. 'subscription', 'transaction', 'project', 'marketplace'")
     revenue_formula: str = Field(description="e.g. '顧客数 × 単価 × 月数'")
     revenue_drivers: List[RevenueDriver] = Field(default_factory=list)

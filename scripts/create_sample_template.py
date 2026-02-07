@@ -1,13 +1,18 @@
 #!/usr/bin/env python3
 """
-Generate sample Excel templates for the Financial Model.
+Generate generic Excel templates for the Financial Model.
+
+IMPORTANT: Templates must be BUSINESS-AGNOSTIC.
+Sheet names, labels, and structure must use generic terms like
+"セグメント1", "セグメント2" etc. -- NEVER use specific business names
+(e.g. ミール, アカデミー, コンサル).  The LLM agents dynamically map
+the user's actual business segments to these generic slots.
 
 Creates:
   - templates/base.xlsx   (base-case financial model)
   - templates/worst.xlsx  (worst-case / conservative scenario)
 """
 
-import copy
 import os
 from pathlib import Path
 
@@ -30,6 +35,9 @@ TEMPLATES_DIR = ROOT_DIR / "templates"
 
 FISCAL_YEARS = ["FY25", "FY26", "FY27", "FY28", "FY29"]
 FY_COLS = list(range(2, 7))  # columns B-F  (index 2..6 in openpyxl)
+
+# Number of generic revenue segments in the template
+NUM_SEGMENTS = 3
 
 YELLOW_FILL = PatternFill(
     patternType="solid",
@@ -147,12 +155,24 @@ def _apply_border_row(ws, row, border, max_col=6):
         ws.cell(row=row, column=col).border = border
 
 
+def _seg_sheet_name(idx: int) -> str:
+    """Generate a generic segment sheet name.
+
+    Returns names like '収益モデル1', '収益モデル2', '収益モデル3'.
+    These are intentionally business-agnostic.
+    """
+    return f"収益モデル{idx}"
+
+
 # ---------------------------------------------------------------------------
 # Sheet builders
 # ---------------------------------------------------------------------------
 
 def build_pl_sheet(wb):
-    """Sheet 1: PL設計 (P&L Design)"""
+    """Sheet 1: PL設計 (P&L Design)
+
+    Revenue line sums across generic segment sheets.
+    """
     ws = wb.active
     ws.title = "PL設計"
     _set_col_widths(ws, {1: 22, 2: 16, 3: 16, 4: 16, 5: 16, 6: 16})
@@ -169,13 +189,12 @@ def build_pl_sheet(wb):
     # Row 3: blank separator
     ws.row_dimensions[3].height = 6
 
-    # Row 4: 売上高 = sum of three models
+    # Row 4: 売上高 = sum of all generic segment sheets row 10
     formulas = []
     for col in FY_COLS:
         cl = _col(col)
-        formulas.append(
-            f"='ミールモデル'!{cl}10+'アカデミーモデル'!{cl}10+'コンサルモデル'!{cl}10"
-        )
+        refs = [f"'{_seg_sheet_name(i)}'!{cl}10" for i in range(1, NUM_SEGMENTS + 1)]
+        formulas.append("=" + "+".join(refs))
     _write_formula_row(ws, 4, "売上高", formulas, bold=True)
     _apply_border_row(ws, 4, THIN_BORDER)
 
@@ -222,39 +241,62 @@ def build_pl_sheet(wb):
     return ws
 
 
-def build_meal_model(wb, scenario="base"):
-    """Sheet 2: ミールモデル (Meal Model / Unit Economics)"""
-    ws = wb.create_sheet("ミールモデル")
+def build_segment_model(wb, seg_idx: int, scenario="base"):
+    """Build a generic revenue segment sheet.
+
+    Parameters
+    ----------
+    seg_idx : int
+        1-based segment index (1, 2, 3, ...).
+    scenario : str
+        'base' or 'worst'.
+
+    Each segment sheet has the SAME generic structure:
+      Row 3: 顧客数/取引先数 (volume driver)
+      Row 4: 単価 (price driver)
+      Row 5: 頻度/回数 (frequency driver)
+      Row 6: 成長率/解約率 (rate driver)
+      Row 7: 月次売上 (formula)
+      Row 8: 年間売上 (formula)
+      Row 9: (blank)
+      Row 10: 売上高 (reference for PL)
+
+    Labels are intentionally generic so the LLM can map ANY business
+    segment to them.
+    """
+    sheet_name = _seg_sheet_name(seg_idx)
+    ws = wb.create_sheet(sheet_name)
     _set_col_widths(ws, {1: 24, 2: 16, 3: 16, 4: 16, 5: 16, 6: 16})
 
-    _write_title(ws, 1, "ミールモデル（ユニットエコノミクス）")
+    _write_title(ws, 1, f"収益モデル{seg_idx}（セグメント{seg_idx}）")
     _write_fy_headers(ws, 2)
 
+    # Generic sample data that varies by segment index and scenario
     if scenario == "base":
-        customers = [100, 200, 350, 500, 700]
-        arpu = [5000, 5000, 5000, 5000, 5000]
-        usage = [4, 4, 4, 4, 4]
-        churn = [0.03, 0.03, 0.025, 0.025, 0.02]
+        volume = [v * (4 - seg_idx + 1) // 2 for v in [50, 100, 180, 280, 400]]
+        price = [p + (seg_idx - 1) * 5000 for p in [5000, 5000, 5500, 5500, 6000]]
+        frequency = [3, 3, 4, 4, 4]
+        rate = [0.03, 0.03, 0.025, 0.025, 0.02]
     else:  # worst
-        customers = [60, 120, 200, 300, 400]
-        arpu = [4500, 4500, 4500, 4500, 4500]
-        usage = [3, 3, 3, 4, 4]
-        churn = [0.05, 0.05, 0.04, 0.04, 0.035]
+        volume = [v * (4 - seg_idx + 1) // 3 for v in [30, 60, 100, 160, 240]]
+        price = [p + (seg_idx - 1) * 3000 for p in [4000, 4000, 4500, 4500, 5000]]
+        frequency = [2, 2, 3, 3, 3]
+        rate = [0.05, 0.05, 0.04, 0.04, 0.035]
 
-    # Row 3: 顧客数
-    _write_input_row(ws, 3, "顧客数", customers, fmt=NUMBER_FMT)
+    # Row 3: 顧客数/取引数 (volume driver)
+    _write_input_row(ws, 3, "顧客数/取引数", volume, fmt=NUMBER_FMT)
 
-    # Row 4: 客単価（円/月）
-    _write_input_row(ws, 4, "客単価（円/月）", arpu, fmt=CURRENCY_FMT)
+    # Row 4: 単価 (price per unit)
+    _write_input_row(ws, 4, "単価（円）", price, fmt=CURRENCY_FMT)
 
-    # Row 5: 月間利用回数
-    _write_input_row(ws, 5, "月間利用回数", usage, fmt='#,##0')
+    # Row 5: 頻度/回数 (frequency)
+    _write_input_row(ws, 5, "頻度/回数（月間）", frequency, fmt='#,##0')
 
-    # Row 6: 解約率（月次）
-    _write_input_row(ws, 6, "解約率（月次）", churn, fmt=PERCENT_FMT)
+    # Row 6: 成長率/解約率 (rate)
+    _write_input_row(ws, 6, "成長率/解約率", rate, fmt=PERCENT_FMT)
 
     # --- Formula rows ---
-    # Row 7: 月次売上 = 顧客数 × 客単価
+    # Row 7: 月次売上 = 顧客数 × 単価
     monthly_rev = [f"={_col(c)}3*{_col(c)}4" for c in FY_COLS]
     _write_formula_row(ws, 7, "月次売上", monthly_rev)
 
@@ -263,9 +305,8 @@ def build_meal_model(wb, scenario="base"):
     _write_formula_row(ws, 8, "年間売上", annual_rev, bold=True)
     _apply_border_row(ws, 8, BOTTOM_DOUBLE)
 
-    # Row 9: LTV = ARPU / churn
-    ltv = [f"=IF({_col(c)}6=0,0,{_col(c)}4/{_col(c)}6)" for c in FY_COLS]
-    _write_formula_row(ws, 9, "LTV", ltv)
+    # Row 9: blank
+    ws.row_dimensions[9].height = 6
 
     # Row 10: 売上高 (= Row 8, used as reference from PL)
     rev_ref = [f"={_col(c)}8" for c in FY_COLS]
@@ -274,113 +315,14 @@ def build_meal_model(wb, scenario="base"):
     return ws
 
 
-def build_academy_model(wb, scenario="base"):
-    """Sheet 3: アカデミーモデル (Academy Model)"""
-    ws = wb.create_sheet("アカデミーモデル")
-    _set_col_widths(ws, {1: 24, 2: 16, 3: 16, 4: 16, 5: 16, 6: 16})
-
-    _write_title(ws, 1, "アカデミーモデル（教育事業）")
-    _write_fy_headers(ws, 2)
-
-    if scenario == "base":
-        students = [30, 60, 100, 160, 250]
-        price = [30000, 30000, 32000, 32000, 35000]
-        sessions = [2, 2, 3, 3, 4]
-        contents = [5, 10, 18, 25, 35]
-    else:
-        students = [15, 35, 60, 90, 140]
-        price = [25000, 25000, 28000, 28000, 30000]
-        sessions = [1, 2, 2, 3, 3]
-        contents = [3, 6, 10, 15, 22]
-
-    # Row 3: 受講者数
-    _write_input_row(ws, 3, "受講者数", students)
-
-    # Row 4: 講座単価
-    _write_input_row(ws, 4, "講座単価", price, fmt=CURRENCY_FMT)
-
-    # Row 5: 開催回数/月
-    _write_input_row(ws, 5, "開催回数/月", sessions, fmt='#,##0')
-
-    # Row 6: コンテンツ数
-    _write_input_row(ws, 6, "コンテンツ数", contents, fmt='#,##0')
-
-    # Row 7: 月次売上 = 受講者数 × 講座単価
-    monthly = [f"={_col(c)}3*{_col(c)}4" for c in FY_COLS]
-    _write_formula_row(ws, 7, "月次売上", monthly)
-
-    # Row 8: 年間売上 = 月次売上 × 12
-    annual = [f"={_col(c)}7*12" for c in FY_COLS]
-    _write_formula_row(ws, 8, "年間売上", annual, bold=True)
-    _apply_border_row(ws, 8, BOTTOM_DOUBLE)
-
-    # Row 9: blank
-    # Row 10: 売上高 (reference row for PL)
-    rev_ref = [f"={_col(c)}8" for c in FY_COLS]
-    _write_formula_row(ws, 10, "売上高", rev_ref, bold=True)
-
-    return ws
-
-
-def build_consulting_model(wb, scenario="base"):
-    """Sheet 4: コンサルモデル (Consulting / Flywheel Model)"""
-    ws = wb.create_sheet("コンサルモデル")
-    _set_col_widths(ws, {1: 26, 2: 16, 3: 16, 4: 16, 5: 16, 6: 16})
-
-    _write_title(ws, 1, "コンサルモデル（フライホイール）")
-    _write_fy_headers(ws, 2)
-
-    if scenario == "base":
-        consultants = [3, 5, 8, 12, 18]
-        deals_per = [2, 2, 3, 3, 3]
-        deal_price = [500000, 500000, 600000, 600000, 700000]
-        utilization = [0.7, 0.75, 0.8, 0.85, 0.85]
-    else:
-        consultants = [2, 3, 5, 7, 10]
-        deals_per = [1, 2, 2, 2, 3]
-        deal_price = [400000, 400000, 450000, 500000, 500000]
-        utilization = [0.5, 0.55, 0.6, 0.65, 0.7]
-
-    # Row 3: コンサルタント数
-    _write_input_row(ws, 3, "コンサルタント数", consultants, fmt='#,##0')
-
-    # Row 4: 月間案件数/人
-    _write_input_row(ws, 4, "月間案件数/人", deals_per, fmt='#,##0')
-
-    # Row 5: 案件単価
-    _write_input_row(ws, 5, "案件単価", deal_price, fmt=CURRENCY_FMT)
-
-    # Row 6: 稼働率
-    _write_input_row(ws, 6, "稼働率", utilization, fmt=PERCENT_FMT)
-
-    # Row 7: 月次売上 = コンサルタント数 × 月間案件数 × 案件単価 × 稼働率
-    monthly = [
-        f"={_col(c)}3*{_col(c)}4*{_col(c)}5*{_col(c)}6" for c in FY_COLS
-    ]
-    _write_formula_row(ws, 7, "月次売上", monthly)
-
-    # Row 8: 年間売上 = 月次売上 × 12
-    annual = [f"={_col(c)}7*12" for c in FY_COLS]
-    _write_formula_row(ws, 8, "年間売上", annual, bold=True)
-    _apply_border_row(ws, 8, BOTTOM_DOUBLE)
-
-    # Row 10: 売上高
-    rev_ref = [f"={_col(c)}8" for c in FY_COLS]
-    _write_formula_row(ws, 10, "売上高", rev_ref, bold=True)
-
-    return ws
-
-
 def build_cost_summary(wb):
-    """Sheet 5: 費用まとめ (Cost Summary)"""
+    """Sheet: 費用まとめ (Cost Summary)"""
     ws = wb.create_sheet("費用まとめ")
     _set_col_widths(ws, {1: 24, 2: 16, 3: 16, 4: 16, 5: 16, 6: 16})
 
     _write_title(ws, 1, "費用まとめ（SGA）")
     _write_fy_headers(ws, 2)
 
-    # The 費用リスト sheet has subtotals at specific rows.
-    # We reference those here.
     cost_list = "費用リスト"
 
     # Row 3: blank separator
@@ -431,7 +373,7 @@ def build_cost_summary(wb):
 
 
 def build_cost_list(wb, scenario="base"):
-    """Sheet 6: 費用リスト (Cost List - detailed)"""
+    """Sheet: 費用リスト (Cost List - detailed)"""
     ws = wb.create_sheet("費用リスト")
     _set_col_widths(ws, {1: 28, 2: 16, 3: 16, 4: 16, 5: 16, 6: 16})
 
@@ -449,11 +391,11 @@ def build_cost_list(wb, scenario="base"):
     exec_comp = [int(v * multiplier) for v in [6000000, 7200000, 8400000, 9600000, 12000000]]
     _write_input_row(ws, 4, "役員報酬", exec_comp, indent=1)
 
-    # Row 5: エンジニア (人数×単価)
+    # Row 5: エンジニア人件費
     eng = [int(v * multiplier) for v in [4800000, 9600000, 16800000, 24000000, 33600000]]
     _write_input_row(ws, 5, "エンジニア人件費", eng, indent=1)
 
-    # Row 6: 営業
+    # Row 6: 営業人件費
     sales = [int(v * multiplier) for v in [3600000, 7200000, 10800000, 14400000, 21600000]]
     _write_input_row(ws, 6, "営業人件費", sales, indent=1)
 
@@ -554,7 +496,7 @@ def build_cost_list(wb, scenario="base"):
 
 
 def build_cost_tags(wb):
-    """Sheet 7: 費用タグ (Cost Tags)"""
+    """Sheet: 費用タグ (Cost Tags)"""
     ws = wb.create_sheet("費用タグ")
     _set_col_widths(ws, {1: 28, 2: 20, 3: 20})
 
@@ -599,7 +541,10 @@ def build_cost_tags(wb):
 
 
 def build_assumptions(wb, scenario="base"):
-    """Sheet 8: （全Ver）前提条件 (All Versions - Assumptions)"""
+    """Sheet: （全Ver）前提条件 (All Versions - Assumptions)
+
+    Assumptions are generic -- no references to any specific industry.
+    """
     ws = wb.create_sheet("（全Ver）前提条件")
     _set_col_widths(ws, {1: 30, 2: 18, 3: 40})
 
@@ -614,12 +559,12 @@ def build_assumptions(wb, scenario="base"):
 
     if scenario == "base":
         assumptions = [
-            ("市場規模（TAM）",        "500億円",  "ヘルスケア×教育市場"),
+            ("市場規模（TAM）",        "500億円",  "対象市場全体"),
             ("市場成長率（年率）",       "15%",     "業界レポート参照"),
             ("ターゲットシェア（5年後）", "0.5%",    "保守的見積もり"),
             ("顧客獲得コスト（CAC）",    "15,000円", "広告・営業含む"),
             ("平均契約期間",           "18ヶ月",   "過去実績ベース"),
-            ("売上原価率",            "30%",      "食材・講師・外注費"),
+            ("売上原価率",            "30%",      "変動費ベース"),
             ("人件費成長率",           "20%/年",   "採用計画連動"),
             ("為替前提",              "150円/$",  "経営計画ベース"),
             ("消費税率",              "10%",      "現行税制"),
@@ -667,14 +612,9 @@ def create_workbook(scenario="base"):
     # Sheet 1: PL設計
     build_pl_sheet(wb)
 
-    # Sheet 2: ミールモデル
-    build_meal_model(wb, scenario)
-
-    # Sheet 3: アカデミーモデル
-    build_academy_model(wb, scenario)
-
-    # Sheet 4: コンサルモデル
-    build_consulting_model(wb, scenario)
+    # Sheets 2-4: Generic revenue segment models
+    for seg_idx in range(1, NUM_SEGMENTS + 1):
+        build_segment_model(wb, seg_idx, scenario)
 
     # Sheet 5: 費用まとめ
     build_cost_summary(wb)
