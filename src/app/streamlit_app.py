@@ -303,6 +303,20 @@ def _inject_custom_css() -> None:
     section[data-testid="stSidebar"] {
         background: linear-gradient(180deg, #f0faf6 0%, #ffffff 100%);
     }
+
+    /* Sidebar completed-phase buttons — subtle, clickable */
+    section[data-testid="stSidebar"] button {
+        font-size: 0.8rem !important;
+        padding: 0.3rem 0.6rem !important;
+        border-radius: 6px !important;
+    }
+
+    /* Section labels in sidebar */
+    .sidebar-section-label {
+        font-size: 0.72rem; font-weight: 600; color: #999;
+        text-transform: uppercase; letter-spacing: 0.08em;
+        margin-bottom: 0.4rem;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -1820,8 +1834,15 @@ def _run_generation_from_blueprint() -> None:
 
 def _render_sidebar() -> None:
     with st.sidebar:
-        st.markdown("# PL Generator")
-        st.caption("事業計画書 → P&L Excel 自動生成")
+        # --- App branding ---
+        st.markdown(
+            '<div style="text-align:center;padding:0.5rem 0 0.2rem 0;">'
+            '<span style="font-size:2rem;">📊</span><br>'
+            '<span style="font-size:1.1rem;font-weight:700;color:#0f5132;">PL Generator</span><br>'
+            '<span style="font-size:0.72rem;color:#888;">事業計画書 → P&L Excel 自動生成</span>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
 
         if _IMPORT_ERRORS:
             with st.expander("Import Warnings", expanded=False):
@@ -1830,70 +1851,186 @@ def _render_sidebar() -> None:
 
         st.divider()
 
-        # Phase navigation
+        # --- Phase navigation (clickable) ---
         current_phase = st.session_state.get("wizard_phase", 1)
-        st.markdown("**現在のフェーズ**")
+        st.markdown(
+            '<p style="font-size:0.72rem;font-weight:600;color:#999;'
+            'text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.4rem;">'
+            'ワークフロー</p>',
+            unsafe_allow_html=True,
+        )
         for p in PHASES:
-            if p["key"] == current_phase:
-                st.markdown(f"**→ {p['key']}. {p['label']}**")
-            elif p["key"] < current_phase:
-                st.caption(f"✓ {p['key']}. {p['label']}")
+            pk = p["key"]
+            label = p["label"]
+            if pk == current_phase:
+                # Active phase — highlighted
+                st.markdown(
+                    f'<div style="background:#e8f5e9;border-left:3px solid #198754;'
+                    f'padding:0.35rem 0.6rem;margin:2px 0;border-radius:0 6px 6px 0;'
+                    f'font-size:0.82rem;font-weight:600;color:#0f5132;">'
+                    f'{pk}. {label}</div>',
+                    unsafe_allow_html=True,
+                )
+            elif pk < current_phase:
+                # Completed — clickable to go back
+                if st.button(
+                    f"✓ {pk}. {label}",
+                    key=f"nav_phase_{pk}",
+                    use_container_width=True,
+                ):
+                    st.session_state["wizard_phase"] = pk
+                    st.rerun()
             else:
-                st.caption(f"  {p['key']}. {p['label']}")
+                # Future phase — disabled appearance
+                st.markdown(
+                    f'<div style="padding:0.3rem 0.6rem;margin:2px 0;'
+                    f'font-size:0.78rem;color:#bbb;">'
+                    f'{pk}. {label}</div>',
+                    unsafe_allow_html=True,
+                )
 
         st.divider()
 
+        # --- Session context ---
         cfg = st.session_state.get("config")
-        if cfg:
-            st.markdown("**セッション情報**")
-            st.caption(f"ケース: {', '.join(c.title() for c in cfg.cases)}")
-            params = st.session_state.get("parameters", [])
-            if params:
-                st.caption(f"パラメータ: {len(params)} 件")
+        bm = st.session_state.get("bm_result")
+        ts = st.session_state.get("ts_result")
+        pe = st.session_state.get("pe_result")
 
+        st.markdown(
+            '<p style="font-size:0.72rem;font-weight:600;color:#999;'
+            'text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.4rem;">'
+            'セッション情報</p>',
+            unsafe_allow_html=True,
+        )
+
+        # Upload status
+        doc = st.session_state.get("document")
+        if doc:
+            st.markdown(
+                f'<div style="font-size:0.8rem;padding:0.2rem 0;">'
+                f'📄 文書: <b>{getattr(doc, "source_filename", "uploaded")}</b></div>',
+                unsafe_allow_html=True,
+            )
+        else:
+            st.caption("📄 文書: 未アップロード")
+
+        # Company name
+        if bm:
+            company = getattr(bm, "company_name", "")
+            if company and company != "記載なし":
+                st.markdown(
+                    f'<div style="font-size:0.8rem;padding:0.2rem 0;">'
+                    f'🏢 {company}</div>',
+                    unsafe_allow_html=True,
+                )
+            industry = getattr(bm, "industry", "")
+            if industry:
+                st.markdown(
+                    f'<div style="font-size:0.8rem;padding:0.2rem 0;">'
+                    f'🏭 業種: {industry}</div>',
+                    unsafe_allow_html=True,
+                )
+            n_seg = len(getattr(bm, "segments", []))
+            if n_seg:
+                st.markdown(
+                    f'<div style="font-size:0.8rem;padding:0.2rem 0;">'
+                    f'📊 セグメント: {n_seg}件</div>',
+                    unsafe_allow_html=True,
+                )
+
+        if cfg:
+            st.markdown(
+                f'<div style="font-size:0.8rem;padding:0.2rem 0;">'
+                f'📋 ケース: {", ".join(c.title() for c in cfg.cases)}</div>',
+                unsafe_allow_html=True,
+            )
+
+        params = st.session_state.get("parameters", [])
+        if params:
+            st.markdown(
+                f'<div style="font-size:0.8rem;padding:0.2rem 0;">'
+                f'🔢 パラメータ: {len(params)}件</div>',
+                unsafe_allow_html=True,
+            )
+
+        # --- Generated files ---
         gen_outputs = st.session_state.get("generation_outputs", {})
         if gen_outputs:
             st.divider()
-            st.markdown("**生成済みファイル**")
+            st.markdown(
+                '<p style="font-size:0.72rem;font-weight:600;color:#999;'
+                'text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.4rem;">'
+                '生成済みファイル</p>',
+                unsafe_allow_html=True,
+            )
             for fname, fbytes in gen_outputs.items():
                 mime = (
                     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                     if fname.endswith(".xlsx") else "text/csv"
                 )
                 st.download_button(
-                    label=fname, data=fbytes, file_name=fname,
+                    label=f"📥 {fname}", data=fbytes, file_name=fname,
                     mime=mime, key=f"sidebar_dl_{fname}", use_container_width=True,
                 )
 
-        # Prompt management toggle
+        # --- Tools section ---
         st.divider()
-        if st.button("プロンプト管理", key="btn_prompt_mgmt", use_container_width=True):
+        st.markdown(
+            '<p style="font-size:0.72rem;font-weight:600;color:#999;'
+            'text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.4rem;">'
+            'ツール</p>',
+            unsafe_allow_html=True,
+        )
+
+        if st.button("⚙ プロンプト管理", key="btn_prompt_mgmt", use_container_width=True):
             st.session_state["show_prompt_mgmt"] = not st.session_state.get("show_prompt_mgmt", False)
             st.rerun()
 
+        # Quick help toggle
+        if st.button("❓ ヘルプ", key="btn_help", use_container_width=True):
+            st.session_state["show_help"] = not st.session_state.get("show_help", False)
+            st.rerun()
+
+        if st.session_state.get("show_help", False):
+            st.info(
+                "**使い方:**\n"
+                "1. PDFをアップロード\n"
+                "2. BM分析でパターンを選択\n"
+                "3. 各フェーズで確認→次へ\n"
+                "4. 最終フェーズでExcel生成\n\n"
+                "**完了したフェーズ**はクリックで戻れます。\n"
+                "**プロンプト管理**でLLMへの指示を編集できます。"
+            )
+
+        # --- Footer ---
+        st.divider()
         try:
             from src.app.version import version_label
-            st.caption(f"Version: {version_label()}")
+            ver = version_label()
         except Exception:
-            st.caption("Version: unknown")
+            ver = "dev"
 
-        st.divider()
-        if not st.session_state.get("reset_confirm", False):
-            if st.button("リセット (Reset)", key="btn_reset", use_container_width=True):
-                st.session_state["reset_confirm"] = True
-                st.rerun()
-        else:
-            st.warning("本当にリセットしますか？")
-            col_yes, col_no = st.columns(2)
-            with col_yes:
-                if st.button("はい", key="btn_reset_yes", type="primary"):
-                    for k in list(st.session_state.keys()):
-                        del st.session_state[k]
+        col_ver, col_reset = st.columns([2, 1])
+        with col_ver:
+            st.caption(f"v{ver}")
+        with col_reset:
+            if not st.session_state.get("reset_confirm", False):
+                if st.button("🔄", key="btn_reset", help="セッションをリセット"):
+                    st.session_state["reset_confirm"] = True
                     st.rerun()
-            with col_no:
-                if st.button("キャンセル", key="btn_reset_no"):
-                    st.session_state["reset_confirm"] = False
-                    st.rerun()
+            else:
+                st.warning("リセット?")
+                c1, c2 = st.columns(2)
+                with c1:
+                    if st.button("Yes", key="btn_reset_yes", type="primary"):
+                        for k in list(st.session_state.keys()):
+                            del st.session_state[k]
+                        st.rerun()
+                with c2:
+                    if st.button("No", key="btn_reset_no"):
+                        st.session_state["reset_confirm"] = False
+                        st.rerun()
 
 
 # ===================================================================
@@ -1904,82 +2041,95 @@ _PHASE_LABELS = {2: "Phase 2: BM分析", 3: "Phase 3: テンプレ構造", 4: "P
 
 
 def _render_prompt_management() -> None:
-    """Render the prompt management page."""
-    st.markdown("## プロンプト管理")
-    st.caption("各フェーズで使用されるLLMプロンプトの確認・編集ができます。編集はセッション中のみ有効です。")
+    """Render the prompt management page with tabbed interface."""
 
-    registry = _get_prompt_registry()
+    # Header row
+    col_title, col_actions = st.columns([3, 2])
+    with col_title:
+        st.markdown("## ⚙ プロンプト管理")
+        st.caption("各フェーズのLLMプロンプトを確認・編集。編集はセッション中のみ有効。")
+    with col_actions:
+        st.markdown("")  # spacing
+        c1, c2 = st.columns(2)
+        with c1:
+            if st.button("← ウィザードに戻る", key="btn_prompt_back", use_container_width=True):
+                st.session_state["show_prompt_mgmt"] = False
+                st.rerun()
+        with c2:
+            registry = _get_prompt_registry()
+            if registry:
+                if st.button("全てリセット", key="btn_prompt_reset_all", use_container_width=True):
+                    registry.reset_all()
+                    st.success("全プロンプトをデフォルトに戻しました。")
+                    st.rerun()
+
     if not registry:
         st.error("プロンプトレジストリを初期化できませんでした。")
-        if st.button("← ウィザードに戻る", key="btn_prompt_back_err"):
-            st.session_state["show_prompt_mgmt"] = False
-            st.rerun()
         return
-
-    # Back button
-    col_back, col_reset_all = st.columns([3, 1])
-    with col_back:
-        if st.button("← ウィザードに戻る", key="btn_prompt_back", use_container_width=True):
-            st.session_state["show_prompt_mgmt"] = False
-            st.rerun()
-    with col_reset_all:
-        if st.button("全てデフォルトに戻す", key="btn_prompt_reset_all", use_container_width=True):
-            registry.reset_all()
-            st.success("全プロンプトをデフォルトに戻しました。")
-            st.rerun()
 
     # Show customized count
     customized = registry.get_customized_keys()
     if customized:
-        st.info(f"カスタマイズ中: {len(customized)}件")
+        st.info(f"カスタマイズ中: {len(customized)}件  ({', '.join(customized)})")
 
-    st.divider()
+    # Tabbed interface by phase (instead of long scrolling list)
+    phase_keys = [2, 3, 4, 5, 0]
+    tab_labels = [_PHASE_LABELS.get(pk, f"Phase {pk}") for pk in phase_keys]
+    tabs = st.tabs(tab_labels)
 
-    # Group entries by phase
-    entries = registry.list_entries()
-    current_phase = None
-    for entry in entries:
-        if entry.phase != current_phase:
-            current_phase = entry.phase
-            phase_label = _PHASE_LABELS.get(current_phase, f"Phase {current_phase}")
-            st.markdown(f"### {phase_label}")
+    for tab, pk in zip(tabs, phase_keys):
+        with tab:
+            entries = registry.list_entries(phase=pk)
+            if not entries:
+                st.caption("このフェーズにはプロンプトがありません。")
+                continue
 
-        # Customized indicator
-        status = " (カスタマイズ済)" if entry.is_customized else ""
-        prompt_type_label = "システム" if entry.prompt_type == "system" else "ユーザー"
+            for entry in entries:
+                prompt_type_icon = "🔧" if entry.prompt_type == "system" else "💬"
+                prompt_type_label = "システム" if entry.prompt_type == "system" else "ユーザー"
+                custom_badge = " 🟢" if entry.is_customized else ""
 
-        with st.expander(
-            f"{prompt_type_label}: {entry.display_name}{status}",
-            expanded=False,
-        ):
-            st.caption(entry.description)
+                with st.expander(
+                    f"{prompt_type_icon} {prompt_type_label}: {entry.display_name}{custom_badge}",
+                    expanded=False,
+                ):
+                    # Description + char count in header
+                    st.caption(f"{entry.description}  |  文字数: {len(entry.content):,}")
 
-            # Text area for editing
-            new_content = st.text_area(
-                f"プロンプト内容",
-                value=entry.content,
-                height=300,
-                key=f"prompt_edit_{entry.key}",
-                label_visibility="collapsed",
-            )
+                    # Two-column layout: editor + preview
+                    new_content = st.text_area(
+                        "プロンプト内容",
+                        value=entry.content,
+                        height=350,
+                        key=f"prompt_edit_{entry.key}",
+                        label_visibility="collapsed",
+                    )
 
-            col_save, col_reset, col_info = st.columns([1, 1, 2])
-            with col_save:
-                if st.button("保存", key=f"btn_save_{entry.key}", use_container_width=True):
-                    if new_content != entry.content:
-                        registry.set(entry.key, new_content)
-                        st.success("保存しました。")
-                        st.rerun()
-                    else:
-                        st.info("変更なし")
-            with col_reset:
-                if entry.is_customized:
-                    if st.button("デフォルトに戻す", key=f"btn_reset_{entry.key}", use_container_width=True):
-                        registry.reset(entry.key)
-                        st.success("デフォルトに戻しました。")
-                        st.rerun()
-            with col_info:
-                st.caption(f"文字数: {len(entry.content):,}")
+                    # Action buttons
+                    c_save, c_reset, c_diff = st.columns([1, 1, 2])
+                    with c_save:
+                        if st.button("💾 保存", key=f"btn_save_{entry.key}", use_container_width=True):
+                            if new_content != entry.content:
+                                registry.set(entry.key, new_content)
+                                st.success("保存しました。")
+                                st.rerun()
+                            else:
+                                st.info("変更なし")
+                    with c_reset:
+                        if entry.is_customized:
+                            if st.button("↩ デフォルトに戻す", key=f"btn_reset_{entry.key}", use_container_width=True):
+                                registry.reset(entry.key)
+                                st.success("デフォルトに戻しました。")
+                                st.rerun()
+                    with c_diff:
+                        if entry.is_customized:
+                            orig_len = len(entry.default_content)
+                            curr_len = len(entry.content)
+                            diff = curr_len - orig_len
+                            sign = "+" if diff > 0 else ""
+                            st.caption(
+                                f"デフォルト: {orig_len:,}文字 → 現在: {curr_len:,}文字 ({sign}{diff:,})"
+                            )
 
 
 # ===================================================================
