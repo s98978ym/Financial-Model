@@ -1,11 +1,14 @@
 """Business Model Analyzer Agent.
 
-Reads a business plan document and produces a structured analysis of the
-business model -- segments, revenue drivers, cost structure, key
-assumptions -- BEFORE any cell-level extraction begins.
+Reads a business plan document and produces a deep narrative understanding
+of the business, then proposes 3-5 structural interpretations (patterns)
+for the user to choose from.
 
-This agent answers the question: "What kind of business is this and
-how does it make money?"
+Approach:
+  1. Read ALL the document — understand the big picture, create a story
+  2. Categorize by industry & business model type
+  3. Propose 3-5 reasonable structural patterns
+  4. User selects/refines → confirmed model feeds downstream phases
 """
 from __future__ import annotations
 
@@ -49,11 +52,32 @@ class BusinessSegment(BaseModel):
     key_assumptions: List[str] = Field(default_factory=list)
 
 
+class BusinessModelProposal(BaseModel):
+    """One possible structural interpretation of the business model."""
+    label: str = Field(description="e.g. 'パターンA: SaaS型サブスクリプションモデル'")
+    industry: str = Field(default="")
+    business_model_type: str = Field(default="", description="B2B / B2C / B2B2C / marketplace / etc.")
+    executive_summary: str = Field(default="", description="1-3 sentence summary for this interpretation")
+    segments: List[BusinessSegment] = Field(default_factory=list)
+    shared_costs: List[CostItem] = Field(default_factory=list)
+    growth_trajectory: str = Field(default="")
+    risk_factors: List[str] = Field(default_factory=list)
+    time_horizon: str = Field(default="")
+    confidence: float = Field(default=0.5, ge=0.0, le=1.0, description="How confident in this interpretation")
+    reasoning: str = Field(default="", description="Why this interpretation is plausible")
+
+
 class BusinessModelAnalysis(BaseModel):
-    """Complete analysis of a business model from a business plan."""
+    """Complete analysis: narrative understanding + multiple proposals.
+
+    The main fields (industry, segments, etc.) are populated from the
+    currently selected proposal for backward compatibility with downstream
+    phases that rely on ``bm.raw_json``.
+    """
+    # --- core fields (populated from selected proposal) ---
     company_name: str = Field(default="")
     industry: str = Field(default="", description="Auto-detected industry")
-    business_model_type: str = Field(default="", description="B2B / B2C / B2B2C / marketplace / platform / etc.")
+    business_model_type: str = Field(default="", description="B2B / B2C / B2B2C / marketplace / etc.")
     executive_summary: str = Field(default="", description="1-3 sentence summary of the business")
     segments: List[BusinessSegment] = Field(default_factory=list)
     shared_costs: List[CostItem] = Field(default_factory=list)
@@ -63,6 +87,53 @@ class BusinessModelAnalysis(BaseModel):
     currency: str = Field(default="JPY")
     raw_json: Dict[str, Any] = Field(default_factory=dict, description="Full LLM response")
 
+    # --- NEW: deep analysis fields ---
+    document_narrative: str = Field(default="", description="Deep narrative understanding of the business")
+    key_facts: List[str] = Field(default_factory=list, description="Key facts/figures extracted from document")
+    proposals: List[BusinessModelProposal] = Field(default_factory=list, description="3-5 structural interpretations")
+    selected_index: int = Field(default=0, description="Which proposal is selected")
+
+    def select_proposal(self, index: int) -> "BusinessModelAnalysis":
+        """Select a proposal and populate main fields from it.
+
+        Returns a new instance with the main fields updated.
+        """
+        if not self.proposals or index < 0 or index >= len(self.proposals):
+            return self
+        p = self.proposals[index]
+        # Build a raw_json that matches the old format for downstream compat
+        compat_raw = {
+            "company_name": self.company_name,
+            "industry": p.industry,
+            "business_model_type": p.business_model_type,
+            "executive_summary": p.executive_summary,
+            "segments": [seg.model_dump() for seg in p.segments],
+            "shared_costs": [c.model_dump() for c in p.shared_costs],
+            "growth_trajectory": p.growth_trajectory,
+            "risk_factors": p.risk_factors,
+            "time_horizon": p.time_horizon,
+            "currency": self.currency,
+            "document_narrative": self.document_narrative,
+            "key_facts": self.key_facts,
+        }
+        return BusinessModelAnalysis(
+            company_name=self.company_name,
+            industry=p.industry,
+            business_model_type=p.business_model_type,
+            executive_summary=p.executive_summary,
+            segments=p.segments,
+            shared_costs=p.shared_costs,
+            growth_trajectory=p.growth_trajectory,
+            risk_factors=p.risk_factors,
+            time_horizon=p.time_horizon,
+            currency=self.currency,
+            raw_json=compat_raw,
+            document_narrative=self.document_narrative,
+            key_facts=self.key_facts,
+            proposals=self.proposals,
+            selected_index=index,
+        )
+
 
 # ---------------------------------------------------------------------------
 # Prompt
@@ -70,99 +141,115 @@ class BusinessModelAnalysis(BaseModel):
 
 BM_ANALYZER_SYSTEM_PROMPT = """\
 あなたは投資銀行のシニアバンカー兼管理会計のエキスパートです。
-事業計画書を読み、ビジネスモデルの構造分析を行います。
-
-あなたの仕事は「この会社はどのようなビジネスで、どうやって収益を上げているか」を
-完全に理解し、構造化されたJSON形式で出力することです。
+事業計画書を深く読み込み、ビジネスモデルの本質を理解する専門家です。
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-【分析の観点】
+【あなたの思考プロセス（この順番で分析せよ）】
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-1. **事業セグメントの特定**
-   - 単一事業か複数事業か
-   - 各セグメントの収益モデル（サブスクリプション/トランザクション/プロジェクト/マーケットプレイス/ライセンス/広告/フリーミアム等）
-   - セグメント間のシナジーや相互依存
+■ STEP 1: 資料を徹底的に読み込む
+  - 全ページを丁寧に読み、会社が何をしているか全体像を把握する
+  - 数字、固有名詞、製品名、サービス名、ターゲット顧客の記述を全て拾う
+  - 図表やグラフの説明文からも情報を読み取る
+  - 行間を読む：明示されていなくても文脈から推測できることを考える
 
-2. **収益ドライバーの分解**
-   - 各セグメントの売上を数式で表現: 例「売上 = 顧客数 × ARPU × 12ヶ月」
-   - 各ドライバーの具体値（文書に記載があれば）
-   - ドライバー間の関係性
+■ STEP 2: ストーリーを組み立てる
+  - 「この会社は何者で、誰に、何を、どうやって提供し、どう稼いでいるか」
+    を自分の言葉で語れるレベルまで理解する
+  - 創業の背景、解決している課題、市場でのポジション、競合優位性を把握する
+  - 資料に明記されていなくても、断片情報から合理的に推論する
 
-3. **コスト構造の理解**
-   - 固定費 vs 変動費の区分
-   - セグメント固有のコスト vs 共通コスト（配賦が必要）
-   - 主要コスト項目とその性質
+■ STEP 3: 複数のビジネスモデル解釈を検討する
+  - 同じ事業でも見方によって異なるモデルとして解釈できる
+  - 例：飲食チェーンは「直営型」「FC型」「プラットフォーム型」等の解釈がありうる
+  - 例：SaaSでも「ホリゾンタルSaaS」「バーティカルSaaS」「SaaS+コンサル複合」等
+  - 3〜5つの合理的な解釈パターンを提案する
 
-4. **成長シナリオ**
-   - 成長の前提（市場規模、獲得戦略、季節性）
-   - 計画期間（何年分の予測か）
-   - リスク要因
-
-5. **業種の自動判定**
-   - SaaS / EC / 教育 / 飲食 / 小売 / メーカー / ヘルスケア / 人材
-   - 不動産 / 金融 / 広告・メディア / 物流 / エネルギー / 農業
-   - プラットフォーム / マーケットプレイス / D2C / フランチャイズ
-   - 上記に当てはまらない場合は最も近いものを選択
+■ STEP 4: 各パターンを構造化する
+  - 各解釈パターンごとに、セグメント分割・収益モデル・コスト構造を具体的に定義する
+  - 各パターンの確信度（confidence）と「なぜこの解釈が合理的か」を明記する
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 【重要ルール】
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-- **segmentsは必ず1件以上返すこと（最重要ルール）**
-  - 情報が限定的でも、文書全体を1つのセグメントとして分析する
-  - 「情報不足」「分析不可」等の理由でsegments: []にしてはいけない
-  - 文書からわかる範囲で最善の分析を行う
-- 推定値には根拠を示す
-- 文書に明確な記載がない場合は、文脈から合理的に推定し、evidenceに「推定」と記載する
+- 「不明」「情報不足」で済ませることは禁止。断片情報からでも最善の推論を行え
+- proposals（パターン案）は必ず3件以上返すこと
+- 各proposalのsegmentsは必ず1件以上
+- 情報が限定的な場合でも、業種の一般的な知識を動員して合理的に推定せよ
+- 推定した場合はreasoningに「推定根拠」を明記する
 - 日本語の数値表記を正規化: 億=×100,000,000、万=×10,000
-- 複数セグメントがある場合は必ず全セグメントを列挙する
 - 有効なJSONのみを返す
-- segmentsを空配列[]にすることは禁止
 """
 
 BM_ANALYZER_USER_PROMPT = """\
-以下の事業計画書を分析し、ビジネスモデルの構造をJSON形式で出力してください。
+以下の事業計画書を深く読み込み、ビジネスモデルを分析してください。
 
 ■ 事業計画書:
 {document_text}
 
 ■ 出力形式（JSON）:
 {{
-  "company_name": "会社名",
-  "industry": "自動判定した業種",
-  "business_model_type": "B2B / B2C / B2B2C / marketplace / etc.",
-  "executive_summary": "事業の要約（1-3文）",
-  "segments": [
+  "company_name": "会社名（推定でもよい）",
+  "document_narrative": "この会社のビジネスについて、投資銀行のバンカーとして深く理解した内容を日本語で詳細に記述する。会社が何をしているか、誰に価値を提供しているか、どうやって収益を得ているか、成長の仮説は何か、を自分の言葉でストーリーとして語る。最低300文字以上。",
+  "key_facts": [
+    "資料から読み取れた重要な事実や数値（例: '月間アクティブユーザー5万人'）",
+    "推定した場合は【推定】と明記（例: '【推定】従業員数50-100名規模'）"
+  ],
+  "proposals": [
     {{
-      "name": "セグメント名",
-      "model_type": "subscription / transaction / project / etc.",
-      "revenue_formula": "売上 = ドライバー1 × ドライバー2 × ...",
-      "revenue_drivers": [
+      "label": "パターンA: [簡潔なモデル名]",
+      "industry": "業種",
+      "business_model_type": "B2B / B2C / B2B2C / marketplace / etc.",
+      "executive_summary": "この解釈の要約（1-3文）",
+      "segments": [
         {{
-          "name": "ドライバー名",
-          "description": "説明",
-          "unit": "単位",
-          "estimated_value": "文書から読み取った値",
-          "evidence": "文書からの引用"
+          "name": "セグメント名",
+          "model_type": "subscription / transaction / project / marketplace / license / advertising / freemium / etc.",
+          "revenue_formula": "売上 = ドライバー1 × ドライバー2 × ...",
+          "revenue_drivers": [
+            {{
+              "name": "ドライバー名",
+              "description": "説明",
+              "unit": "単位",
+              "estimated_value": "文書から読み取った値（推定の場合は【推定】と付記）",
+              "evidence": "文書からの引用 or 推定根拠"
+            }}
+          ],
+          "key_assumptions": ["前提1", "前提2"]
         }}
       ],
-      "key_assumptions": ["前提1", "前提2"]
-    }}
-  ],
-  "shared_costs": [
+      "shared_costs": [
+        {{
+          "name": "コスト名",
+          "category": "fixed / variable",
+          "description": "説明",
+          "estimated_value": "値",
+          "evidence": "引用 or 推定根拠"
+        }}
+      ],
+      "growth_trajectory": "成長シナリオの説明",
+      "risk_factors": ["リスク1", "リスク2"],
+      "time_horizon": "計画期間（推定でもよい）",
+      "confidence": 0.8,
+      "reasoning": "なぜこの解釈が合理的と考えるか"
+    }},
     {{
-      "name": "コスト名",
-      "category": "fixed / variable",
-      "description": "説明",
-      "estimated_value": "値",
-      "evidence": "引用"
+      "label": "パターンB: [別の解釈]",
+      "...": "（同じ構造で別の解釈を提案）"
+    }},
+    {{
+      "label": "パターンC: [さらに別の解釈]",
+      "...": "（同じ構造で別の解釈を提案）"
     }}
   ],
-  "growth_trajectory": "成長シナリオの説明",
-  "risk_factors": ["リスク1", "リスク2"],
-  "time_horizon": "計画期間",
   "currency": "JPY"
 }}
+
+【注意】
+- proposalsは必ず3〜5件。少なすぎても多すぎてもいけない。
+- 各proposalは完全に独立した1つの解釈（セグメント構成もコスト構造も異なりうる）。
+- confidenceの高い順に並べる。
+- document_narrativeは資料全体を深く理解した上でのストーリー。テンプレ的な回答は禁止。
 """
 
 
@@ -171,18 +258,19 @@ BM_ANALYZER_USER_PROMPT = """\
 # ---------------------------------------------------------------------------
 
 class BusinessModelAnalyzer:
-    """Agent 1: Analyzes a business plan to understand the business model.
+    """Agent 1: Deeply analyzes a business plan to understand the business model.
 
-    This runs BEFORE any cell-level extraction.  It gives the system
-    a semantic understanding of what the business does, enabling
-    intelligent parameter mapping later.
+    Instead of shallow template matching, this agent:
+    1. Reads the entire document to build a narrative understanding
+    2. Proposes 3-5 structural interpretations (patterns)
+    3. Lets the user select/refine the best interpretation
     """
 
     def __init__(self, llm_client: Any) -> None:
         self.llm = llm_client
 
     def analyze(self, document_text: str, feedback: str = "") -> BusinessModelAnalysis:
-        """Analyze a business plan document and return structured analysis.
+        """Analyze a business plan document and return narrative + proposals.
 
         Parameters
         ----------
@@ -194,7 +282,7 @@ class BusinessModelAnalyzer:
         Returns
         -------
         BusinessModelAnalysis
-            Structured analysis of the business model.
+            Deep analysis with narrative and 3-5 proposals.
 
         Raises
         ------
@@ -204,8 +292,8 @@ class BusinessModelAnalyzer:
         if not document_text or not document_text.strip():
             raise RuntimeError("事業計画書のテキストが空です。PDFが正しく読み取れているか確認してください。")
 
-        # Truncate if too long for a single call (keep first 12K chars)
-        max_chars = 12000
+        # Truncate if too long for a single call (keep first 15K chars)
+        max_chars = 15000
         if len(document_text) > max_chars:
             truncated = document_text[:max_chars]
             truncated += f"\n\n[... 文書は {len(document_text):,} 文字中、先頭 {max_chars:,} 文字を分析しています ...]"
@@ -219,6 +307,7 @@ class BusinessModelAnalyzer:
                 f"\n\n━━━ ユーザーフィードバック ━━━\n"
                 f"{feedback}\n\n"
                 f"上記のフィードバックを考慮して、分析を修正してください。"
+                f"document_narrativeも更新し、proposalsも再検討してください。"
             )
 
         messages = [
@@ -230,41 +319,103 @@ class BusinessModelAnalyzer:
         result = self.llm.extract(messages)
         logger.info("BusinessModelAnalyzer: received response keys=%s", list(result.keys()))
 
-        # Auto-unwrap: LLM sometimes wraps response in a container key
-        if result and not result.get("segments"):
+        # Auto-unwrap: LLM sometimes wraps in a container key
+        if result and not result.get("proposals"):
             for _wrap_key in ("result", "analysis", "response", "data", "output"):
                 _inner = result.get(_wrap_key)
-                if isinstance(_inner, dict) and _inner.get("segments"):
-                    logger.info("BusinessModelAnalyzer: unwrapped response from '%s' key", _wrap_key)
+                if isinstance(_inner, dict) and _inner.get("proposals"):
+                    logger.info("BusinessModelAnalyzer: unwrapped from '%s' key", _wrap_key)
                     result = _inner
                     break
 
-        # Validate: if the LLM returned nothing useful, raise an error
-        segments_raw = result.get("segments") if result else None
-        if not result or not segments_raw:
+        # Backward compat: if LLM returned old format (segments at top level),
+        # wrap it as a single proposal
+        if result and result.get("segments") and not result.get("proposals"):
+            logger.info("BusinessModelAnalyzer: old format detected, wrapping as single proposal")
+            result = self._wrap_legacy_format(result)
+
+        # Validate proposals exist
+        proposals_raw = result.get("proposals") if result else None
+        if not result or not proposals_raw or not isinstance(proposals_raw, list):
             raw_keys = list(result.keys()) if result else []
             raise RuntimeError(
                 f"LLMがビジネスモデル分析を返しませんでした。"
                 f"レスポンスkeys: {raw_keys}, "
-                f"segments type: {type(segments_raw).__name__}, "
-                f"segments value: {str(segments_raw)[:200]}。"
+                f"proposals type: {type(proposals_raw).__name__ if proposals_raw else 'None'}。"
                 f"ドキュメント先頭100文字: {document_text[:100]!r}"
-            )
-
-        # Ensure segments is a list
-        if not isinstance(segments_raw, list):
-            raise RuntimeError(
-                f"LLMが不正な形式のsegmentsを返しました: "
-                f"type={type(segments_raw).__name__}, "
-                f"value={str(segments_raw)[:200]}"
             )
 
         return self._parse_result(result)
 
+    @staticmethod
+    def _wrap_legacy_format(raw: Dict[str, Any]) -> Dict[str, Any]:
+        """Convert old single-result format into new proposals format."""
+        proposal = {
+            "label": f"パターンA: {raw.get('industry', '不明')}",
+            "industry": raw.get("industry", ""),
+            "business_model_type": raw.get("business_model_type", ""),
+            "executive_summary": raw.get("executive_summary", ""),
+            "segments": raw.get("segments", []),
+            "shared_costs": raw.get("shared_costs", []),
+            "growth_trajectory": raw.get("growth_trajectory", ""),
+            "risk_factors": raw.get("risk_factors", []),
+            "time_horizon": raw.get("time_horizon", ""),
+            "confidence": 0.7,
+            "reasoning": "LLMが単一解釈として返したパターン",
+        }
+        return {
+            "company_name": raw.get("company_name", ""),
+            "document_narrative": raw.get("executive_summary", ""),
+            "key_facts": [],
+            "proposals": [proposal],
+            "currency": raw.get("currency", "JPY"),
+        }
+
     def _parse_result(self, raw: Dict[str, Any]) -> BusinessModelAnalysis:
         """Parse LLM JSON response into BusinessModelAnalysis model."""
+        proposals = []
+        for p_data in raw.get("proposals", []):
+            segments = self._parse_segments(p_data.get("segments", []))
+            costs = self._parse_costs(p_data.get("shared_costs", []))
+            proposals.append(BusinessModelProposal(
+                label=p_data.get("label", ""),
+                industry=p_data.get("industry", ""),
+                business_model_type=p_data.get("business_model_type", ""),
+                executive_summary=p_data.get("executive_summary", ""),
+                segments=segments,
+                shared_costs=costs,
+                growth_trajectory=p_data.get("growth_trajectory", ""),
+                risk_factors=p_data.get("risk_factors", []),
+                time_horizon=p_data.get("time_horizon", ""),
+                confidence=min(1.0, max(0.0, float(p_data.get("confidence", 0.5)))),
+                reasoning=p_data.get("reasoning", ""),
+            ))
+
+        # Sort by confidence descending
+        proposals.sort(key=lambda p: p.confidence, reverse=True)
+
+        # Build initial analysis with first proposal selected
+        analysis = BusinessModelAnalysis(
+            company_name=raw.get("company_name", ""),
+            document_narrative=raw.get("document_narrative", ""),
+            key_facts=raw.get("key_facts", []),
+            proposals=proposals,
+            selected_index=0,
+            currency=raw.get("currency", "JPY"),
+            raw_json=raw,
+        )
+
+        # Auto-select first proposal to populate main fields
+        if proposals:
+            analysis = analysis.select_proposal(0)
+
+        return analysis
+
+    @staticmethod
+    def _parse_segments(segments_raw: List[Dict[str, Any]]) -> List[BusinessSegment]:
+        """Parse segment data from LLM response."""
         segments = []
-        for seg_data in raw.get("segments", []):
+        for seg_data in segments_raw:
             drivers = []
             for d in seg_data.get("revenue_drivers", []):
                 drivers.append(RevenueDriver(
@@ -281,9 +432,13 @@ class BusinessModelAnalyzer:
                 revenue_drivers=drivers,
                 key_assumptions=seg_data.get("key_assumptions", []),
             ))
+        return segments
 
+    @staticmethod
+    def _parse_costs(costs_raw: List[Dict[str, Any]]) -> List[CostItem]:
+        """Parse cost data from LLM response."""
         costs = []
-        for c in raw.get("shared_costs", []):
+        for c in costs_raw:
             costs.append(CostItem(
                 name=c.get("name", ""),
                 category=c.get("category", "fixed"),
@@ -291,17 +446,4 @@ class BusinessModelAnalyzer:
                 estimated_value=c.get("estimated_value"),
                 evidence=c.get("evidence", ""),
             ))
-
-        return BusinessModelAnalysis(
-            company_name=raw.get("company_name", ""),
-            industry=raw.get("industry", ""),
-            business_model_type=raw.get("business_model_type", ""),
-            executive_summary=raw.get("executive_summary", ""),
-            segments=segments,
-            shared_costs=costs,
-            growth_trajectory=raw.get("growth_trajectory", ""),
-            risk_factors=raw.get("risk_factors", []),
-            time_horizon=raw.get("time_horizon", ""),
-            currency=raw.get("currency", "JPY"),
-            raw_json=raw,
-        )
+        return costs
