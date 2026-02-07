@@ -1,19 +1,20 @@
 """Business Model Analyzer Agent.
 
-Reads a business plan document and produces a deep narrative understanding
+Reads a business plan document and produces a GROUNDED analysis
 of the business, then proposes 3-5 structural interpretations (patterns)
 for the user to choose from.
 
-Approach:
-  1. Read ALL the document — understand the big picture, create a story
-  2. Categorize by industry & business model type
-  3. Propose 3-5 reasonable structural patterns
-  4. User selects/refines → confirmed model feeds downstream phases
+Anti-hallucination design:
+  - Every claim MUST cite a verbatim quote from the document
+  - "I don't know" is preferred over fabrication
+  - Grounding validation checks evidence against source text
+  - Smart truncation preserves both start and end of long documents
 """
 from __future__ import annotations
 
 import json
 import logging
+import re
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
@@ -31,7 +32,8 @@ class RevenueDriver(BaseModel):
     description: str = Field(default="")
     unit: str = Field(default="", description="e.g. '人', '円', '%'")
     estimated_value: Optional[str] = Field(default=None, description="Value from document if found")
-    evidence: str = Field(default="", description="Quote from document")
+    evidence: str = Field(default="", description="Verbatim quote from document")
+    is_from_document: bool = Field(default=False, description="True if value is directly from document text")
 
 
 class CostItem(BaseModel):
@@ -40,7 +42,8 @@ class CostItem(BaseModel):
     category: str = Field(description="'fixed' or 'variable'")
     description: str = Field(default="")
     estimated_value: Optional[str] = Field(default=None)
-    evidence: str = Field(default="")
+    evidence: str = Field(default="", description="Verbatim quote from document")
+    is_from_document: bool = Field(default=False, description="True if value is directly from document text")
 
 
 class BusinessSegment(BaseModel):
@@ -66,6 +69,7 @@ class BusinessModelProposal(BaseModel):
     time_horizon: str = Field(default="")
     confidence: float = Field(default=0.5, ge=0.0, le=1.0, description="How confident in this interpretation")
     reasoning: str = Field(default="", description="Why this interpretation is plausible")
+    grounding_score: float = Field(default=0.0, description="Fraction of claims backed by document evidence")
 
 
 class BusinessModelAnalysis(BaseModel):
@@ -88,8 +92,8 @@ class BusinessModelAnalysis(BaseModel):
     currency: str = Field(default="JPY")
     raw_json: Dict[str, Any] = Field(default_factory=dict, description="Full LLM response")
 
-    # --- NEW: deep analysis fields ---
-    document_narrative: str = Field(default="", description="Deep narrative understanding of the business")
+    # --- deep analysis fields ---
+    document_narrative: str = Field(default="", description="Grounded summary of the business from document")
     key_facts: List[str] = Field(default_factory=list, description="Key facts/figures extracted from document")
     proposals: List[BusinessModelProposal] = Field(default_factory=list, description="3-5 structural interpretations")
     selected_index: int = Field(default=0, description="Which proposal is selected")
@@ -142,70 +146,90 @@ class BusinessModelAnalysis(BaseModel):
 
 BM_ANALYZER_SYSTEM_PROMPT = """\
 あなたは投資銀行のシニアバンカー兼管理会計のエキスパートです。
-事業計画書を深く読み込み、ビジネスモデルの本質を理解する専門家です。
+事業計画書を正確に読み取り、ビジネスモデルを構造化する専門家です。
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-【あなたの思考プロセス（この順番で分析せよ）】
+【最重要原則：ハルシネーション厳禁】
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-■ STEP 1: 資料を徹底的に読み込む
-  - 全ページを丁寧に読み、会社が何をしているか全体像を把握する
-  - 数字、固有名詞、製品名、サービス名、ターゲット顧客の記述を全て拾う
-  - 図表やグラフの説明文からも情報を読み取る
-  - 行間を読む：明示されていなくても文脈から推測できることを考える
+★ 文書に書かれていない情報を「でっち上げ」ることは絶対に禁止。
+★ すべての事実・数値は、必ず文書からの「原文引用」(evidence)で裏付けよ。
+★ 文書に書かれていない場合は、正直に「文書に記載なし」と書け。
+★ 推定・推測を行う場合は【推定】と必ず明記し、推定根拠を述べよ。
+  ただし推定は最小限に留め、文書からの直接抽出を優先せよ。
+★ 会社名が文書に明記されていなければ「記載なし」とせよ。勝手に命名するな。
 
-■ STEP 2: ストーリーを組み立てる
-  - 「この会社は何者で、誰に、何を、どうやって提供し、どう稼いでいるか」
-    を自分の言葉で語れるレベルまで理解する
-  - 創業の背景、解決している課題、市場でのポジション、競合優位性を把握する
-  - 資料に明記されていなくても、断片情報から合理的に推論する
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+【思考プロセス（この順番で分析せよ）】
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-■ STEP 3: 複数のビジネスモデル解釈を検討する
-  - 同じ事業でも見方によって異なるモデルとして解釈できる
-  - 例：飲食チェーンは「直営型」「FC型」「プラットフォーム型」等の解釈がありうる
-  - 例：SaaSでも「ホリゾンタルSaaS」「バーティカルSaaS」「SaaS+コンサル複合」等
+■ STEP 1: 文書の事実を抽出する
+  - 文書に明示的に書かれている事実だけを拾い上げる
+  - 会社名、事業内容、製品名、サービス名、顧客像、数値（売上、顧客数等）
+  - 各事実に対して「文書のどこに書いてあるか」を原文引用で記録する
+  - 図表の説明文やキャプションの文字列も情報源として使う
+
+■ STEP 2: 抽出した事実のみに基づいて全体像を構成する
+  - STEP 1で抽出した事実だけを使い、ビジネスの概要を組み立てる
+  - 文書にない情報を補完してはいけない
+  - 事実が少ない場合は、少ないまま記述する（無理に膨らませない）
+
+■ STEP 3: 事実に基づいて複数のビジネスモデル解釈を検討する
+  - 同じ事実から、異なるセグメント分割・収益構造の解釈がありうる
+  - 各解釈は文書の事実に基づくこと（空想のモデルを提案しない）
   - 3〜5つの合理的な解釈パターンを提案する
+  - 各パターンの違いは「同じ事実をどう構造化するか」の違いであること
 
 ■ STEP 4: 各パターンを構造化する
-  - 各解釈パターンごとに、セグメント分割・収益モデル・コスト構造を具体的に定義する
-  - 各パターンの確信度（confidence）と「なぜこの解釈が合理的か」を明記する
+  - 各解釈パターンごとに、セグメント分割・収益モデル・コスト構造を定義
+  - revenue_driversのevidenceには必ず文書からの原文引用を入れる
+  - 文書に記載のないドライバーは「文書に記載なし」と明記する
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-【重要ルール】
+【出力ルール】
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-- 「不明」「情報不足」で済ませることは禁止。断片情報からでも最善の推論を行え
 - proposals（パターン案）は必ず3件以上返すこと
 - 各proposalのsegmentsは必ず1件以上
-- 情報が限定的な場合でも、業種の一般的な知識を動員して合理的に推定せよ
-- 推定した場合はreasoningに「推定根拠」を明記する
+- evidenceフィールドは文書の原文を「」で囲んで引用すること
+- 文書に記載がない項目のevidenceは「文書に記載なし」とすること
+- estimated_valueは文書に数値がある場合のみ記入。ない場合はnullとする
+- is_from_document: 文書から直接読み取った値はtrue、推定はfalse
 - 日本語の数値表記を正規化: 億=×100,000,000、万=×10,000
 - 有効なJSONのみを返す
 """
 
 BM_ANALYZER_USER_PROMPT = """\
-以下の事業計画書を深く読み込み、ビジネスモデルを分析してください。
+以下の事業計画書の文書テキストを読み、ビジネスモデルを分析してください。
 
-■ 事業計画書:
+【絶対ルール】
+- 以下の文書テキストに書かれている内容だけを根拠として使うこと
+- 文書にない情報を勝手に補完しないこと
+- すべてのevidenceフィールドに文書からの原文引用を入れること
+
+■ 事業計画書の文書テキスト:
+---
 {document_text}
+---
 
 ■ 出力形式（JSON）:
 {{
-  "company_name": "会社名（推定でもよい）",
-  "document_narrative": "この会社のビジネスについて、投資銀行のバンカーとして深く理解した内容を日本語で詳細に記述する。会社が何をしているか、誰に価値を提供しているか、どうやって収益を得ているか、成長の仮説は何か、を自分の言葉でストーリーとして語る。最低300文字以上。",
+  "company_name": "文書に明記されている会社名（なければ「記載なし」）",
+  "document_narrative": "文書から読み取れた事実だけに基づくビジネスの概要。文書に書いてあることだけを述べ、推測で補完しない。各主張の根拠を文書から示せること。",
   "key_facts": [
-    "資料から読み取れた重要な事実や数値（例: '月間アクティブユーザー5万人'）",
-    "推定した場合は【推定】と明記（例: '【推定】従業員数50-100名規模'）"
+    "「〜〜」（原文引用）に基づく事実",
+    "文書に明記された数値や情報のみ記載",
+    "推定した場合は【推定】と明記し、推定根拠を付記"
   ],
   "proposals": [
     {{
       "label": "パターンA: [簡潔なモデル名]",
-      "industry": "業種",
+      "industry": "業種（文書から読み取れるもの）",
       "business_model_type": "B2B / B2C / B2B2C / marketplace / etc.",
-      "executive_summary": "この解釈の要約（1-3文）",
-      "diagram": "テキストベースのビジネスモデル図解。収益の流れ・価値の流れを視覚的に示す。\\n例:\\n[顧客企業] --月額課金--> [SaaSプラットフォーム] --サブスク収益--> [売上]\\n                              |\\n                        [導入支援] --プロジェクト収益-->\\n\\n矢印(-->)、ボックス([])、パイプ(|)を使ってフローを表現する。",
+      "executive_summary": "文書の事実に基づくこの解釈の要約（1-3文）",
+      "diagram": "テキストベースのビジネスモデル図解。\\n[顧客] --課金方法--> [サービス] --収益--> [売上]\\n矢印(-->)、ボックス([])、パイプ(|)を使ってフローを表現する。",
       "segments": [
         {{
-          "name": "セグメント名",
+          "name": "セグメント名（文書に基づく）",
           "model_type": "subscription / transaction / project / marketplace / license / advertising / freemium / etc.",
           "revenue_formula": "売上 = ドライバー1 × ドライバー2 × ...",
           "revenue_drivers": [
@@ -213,11 +237,12 @@ BM_ANALYZER_USER_PROMPT = """\
               "name": "ドライバー名",
               "description": "説明",
               "unit": "単位",
-              "estimated_value": "文書から読み取った値（推定の場合は【推定】と付記）",
-              "evidence": "文書からの引用 or 推定根拠"
+              "estimated_value": "文書に記載の値（なければnull）",
+              "evidence": "「文書からの原文引用」（なければ「文書に記載なし」）",
+              "is_from_document": true
             }}
           ],
-          "key_assumptions": ["前提1", "前提2"]
+          "key_assumptions": ["文書に基づく前提"]
         }}
       ],
       "shared_costs": [
@@ -225,15 +250,16 @@ BM_ANALYZER_USER_PROMPT = """\
           "name": "コスト名",
           "category": "fixed / variable",
           "description": "説明",
-          "estimated_value": "値",
-          "evidence": "引用 or 推定根拠"
+          "estimated_value": "文書に記載の値（なければnull）",
+          "evidence": "「文書からの原文引用」（なければ「文書に記載なし」）",
+          "is_from_document": true
         }}
       ],
-      "growth_trajectory": "成長シナリオの説明",
-      "risk_factors": ["リスク1", "リスク2"],
-      "time_horizon": "計画期間（推定でもよい）",
+      "growth_trajectory": "文書に記載の成長計画・見通し（なければ「文書に記載なし」）",
+      "risk_factors": ["文書に記載のリスク要因"],
+      "time_horizon": "文書に記載の計画期間（なければ「文書に記載なし」）",
       "confidence": 0.8,
-      "reasoning": "なぜこの解釈が合理的と考えるか"
+      "reasoning": "文書のどの記述からこの解釈が導かれるかの説明"
     }},
     {{
       "label": "パターンB: [別の解釈]",
@@ -249,9 +275,10 @@ BM_ANALYZER_USER_PROMPT = """\
 
 【注意】
 - proposalsは必ず3〜5件。少なすぎても多すぎてもいけない。
-- 各proposalは完全に独立した1つの解釈（セグメント構成もコスト構造も異なりうる）。
+- 各proposalは完全に独立した1つの解釈（セグメント構成が異なりうる）。
 - confidenceの高い順に並べる。
-- document_narrativeは資料全体を深く理解した上でのストーリー。テンプレ的な回答は禁止。
+- document_narrativeは文書の事実に基づく。文書にない情報を補完してはいけない。
+- evidenceフィールドには必ず文書からの「原文引用」を入れること。推測の場合は「文書に記載なし・【推定】〜」と記載。
 """
 
 
@@ -260,12 +287,12 @@ BM_ANALYZER_USER_PROMPT = """\
 # ---------------------------------------------------------------------------
 
 class BusinessModelAnalyzer:
-    """Agent 1: Deeply analyzes a business plan to understand the business model.
+    """Agent 1: Analyzes a business plan with anti-hallucination safeguards.
 
-    Instead of shallow template matching, this agent:
-    1. Reads the entire document to build a narrative understanding
-    2. Proposes 3-5 structural interpretations (patterns)
-    3. Lets the user select/refine the best interpretation
+    Grounding principles:
+    1. Every fact must cite the source document
+    2. Missing information is stated honestly, not fabricated
+    3. Post-hoc grounding validation checks evidence against document
     """
 
     def __init__(
@@ -291,7 +318,7 @@ class BusinessModelAnalyzer:
         Returns
         -------
         BusinessModelAnalysis
-            Deep analysis with narrative and 3-5 proposals.
+            Grounded analysis with narrative and 3-5 proposals.
 
         Raises
         ------
@@ -301,13 +328,8 @@ class BusinessModelAnalyzer:
         if not document_text or not document_text.strip():
             raise RuntimeError("事業計画書のテキストが空です。PDFが正しく読み取れているか確認してください。")
 
-        # Truncate if too long for a single call (keep first 15K chars)
-        max_chars = 15000
-        if len(document_text) > max_chars:
-            truncated = document_text[:max_chars]
-            truncated += f"\n\n[... 文書は {len(document_text):,} 文字中、先頭 {max_chars:,} 文字を分析しています ...]"
-        else:
-            truncated = document_text
+        # Smart truncation: preserve start + end of document
+        truncated = self._smart_truncate(document_text)
 
         user_content = self._user_prompt.format(document_text=truncated)
 
@@ -316,7 +338,7 @@ class BusinessModelAnalyzer:
                 f"\n\n━━━ ユーザーフィードバック ━━━\n"
                 f"{feedback}\n\n"
                 f"上記のフィードバックを考慮して、分析を修正してください。"
-                f"document_narrativeも更新し、proposalsも再検討してください。"
+                f"ただし文書に基づくことは維持してください。"
             )
 
         messages = [
@@ -324,7 +346,8 @@ class BusinessModelAnalyzer:
             {"role": "user", "content": user_content},
         ]
 
-        logger.info("BusinessModelAnalyzer: sending document (%d chars) to LLM", len(truncated))
+        logger.info("BusinessModelAnalyzer: sending document (%d chars, original %d) to LLM",
+                     len(truncated), len(document_text))
         result = self.llm.extract(messages)
         logger.info("BusinessModelAnalyzer: received response keys=%s", list(result.keys()))
 
@@ -354,7 +377,41 @@ class BusinessModelAnalyzer:
                 f"ドキュメント先頭100文字: {document_text[:100]!r}"
             )
 
-        return self._parse_result(result)
+        analysis = self._parse_result(result)
+
+        # Post-hoc grounding validation
+        analysis = self._validate_grounding(analysis, document_text)
+
+        return analysis
+
+    @staticmethod
+    def _smart_truncate(text: str, max_chars: int = 30000) -> str:
+        """Smart truncation that preserves start and end of document.
+
+        Instead of blindly cutting at max_chars, this keeps:
+        - First 70% of budget: beginning of document (usually most important)
+        - Last 30% of budget: end of document (often contains financials, plans)
+        - Middle section noted as omitted
+
+        This ensures key sections at both ends are preserved.
+        """
+        if len(text) <= max_chars:
+            return text
+
+        head_budget = int(max_chars * 0.7)
+        tail_budget = int(max_chars * 0.25)
+        # Reserve ~5% for the separator message
+        omitted_chars = len(text) - head_budget - tail_budget
+
+        head = text[:head_budget]
+        tail = text[-tail_budget:]
+
+        separator = (
+            f"\n\n[... 中間部分 約{omitted_chars:,}文字を省略 "
+            f"(全{len(text):,}文字中、先頭{head_budget:,}文字+末尾{tail_budget:,}文字を分析) ...]\n\n"
+        )
+
+        return head + separator + tail
 
     @staticmethod
     def _wrap_legacy_format(raw: Dict[str, Any]) -> Dict[str, Any]:
@@ -422,6 +479,102 @@ class BusinessModelAnalyzer:
         return analysis
 
     @staticmethod
+    def _validate_grounding(
+        analysis: BusinessModelAnalysis,
+        document_text: str,
+    ) -> BusinessModelAnalysis:
+        """Post-hoc grounding validation.
+
+        Checks how well the LLM's output is grounded in the actual document.
+        Calculates a grounding_score for each proposal based on how many
+        evidence fields actually match text found in the document.
+        """
+        doc_lower = document_text.lower()
+
+        for proposal in analysis.proposals:
+            total_evidence = 0
+            grounded_evidence = 0
+
+            for seg in proposal.segments:
+                for driver in seg.revenue_drivers:
+                    if driver.evidence and driver.evidence != "文書に記載なし":
+                        total_evidence += 1
+                        # Extract quoted text from evidence (between 「」)
+                        quotes = re.findall(r'「(.+?)」', driver.evidence)
+                        if quotes:
+                            for quote in quotes:
+                                if quote.lower() in doc_lower:
+                                    grounded_evidence += 1
+                                    driver.is_from_document = True
+                                    break
+                            else:
+                                driver.is_from_document = False
+                                logger.warning(
+                                    "Grounding check: evidence quote not found in document: %s",
+                                    driver.evidence[:80],
+                                )
+                        else:
+                            # No quoted text — check if evidence text appears
+                            evidence_snippet = driver.evidence[:30]
+                            if evidence_snippet.lower() in doc_lower:
+                                grounded_evidence += 1
+                                driver.is_from_document = True
+                            else:
+                                driver.is_from_document = False
+
+            for cost in proposal.shared_costs:
+                if cost.evidence and cost.evidence != "文書に記載なし":
+                    total_evidence += 1
+                    quotes = re.findall(r'「(.+?)」', cost.evidence)
+                    if quotes:
+                        for quote in quotes:
+                            if quote.lower() in doc_lower:
+                                grounded_evidence += 1
+                                cost.is_from_document = True
+                                break
+                        else:
+                            cost.is_from_document = False
+                    else:
+                        evidence_snippet = cost.evidence[:30]
+                        if evidence_snippet.lower() in doc_lower:
+                            grounded_evidence += 1
+                            cost.is_from_document = True
+                        else:
+                            cost.is_from_document = False
+
+            # Calculate grounding score
+            if total_evidence > 0:
+                proposal.grounding_score = grounded_evidence / total_evidence
+            else:
+                proposal.grounding_score = 0.0
+
+            # Penalize confidence if grounding is low
+            if proposal.grounding_score < 0.5:
+                original_conf = proposal.confidence
+                proposal.confidence = min(
+                    proposal.confidence,
+                    proposal.grounding_score + 0.1,
+                )
+                if proposal.confidence != original_conf:
+                    logger.info(
+                        "Grounding penalty: %s confidence %.2f -> %.2f (grounding=%.2f)",
+                        proposal.label, original_conf, proposal.confidence, proposal.grounding_score,
+                    )
+
+        # Also validate company name
+        if analysis.company_name and analysis.company_name not in ("記載なし", ""):
+            if analysis.company_name not in document_text:
+                logger.warning(
+                    "Grounding check: company_name '%s' not found in document text",
+                    analysis.company_name,
+                )
+
+        # Re-sort by confidence (may have changed after penalties)
+        analysis.proposals.sort(key=lambda p: p.confidence, reverse=True)
+
+        return analysis
+
+    @staticmethod
     def _parse_segments(segments_raw: List[Dict[str, Any]]) -> List[BusinessSegment]:
         """Parse segment data from LLM response."""
         segments = []
@@ -434,6 +587,7 @@ class BusinessModelAnalyzer:
                     unit=d.get("unit", ""),
                     estimated_value=d.get("estimated_value"),
                     evidence=d.get("evidence", ""),
+                    is_from_document=d.get("is_from_document", False),
                 ))
             segments.append(BusinessSegment(
                 name=seg_data.get("name", ""),
@@ -455,5 +609,6 @@ class BusinessModelAnalyzer:
                 description=c.get("description", ""),
                 estimated_value=c.get("estimated_value"),
                 evidence=c.get("evidence", ""),
+                is_from_document=c.get("is_from_document", False),
             ))
         return costs

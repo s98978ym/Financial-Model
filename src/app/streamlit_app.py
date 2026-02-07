@@ -745,7 +745,8 @@ def _render_bm_results(bm: Any) -> None:
         proposal_labels = []
         for i, p in enumerate(proposals):
             conf_pct = int(p.confidence * 100)
-            proposal_labels.append(f"{p.label} (確信度: {conf_pct}%)")
+            grounding_pct = int(getattr(p, "grounding_score", 0) * 100)
+            proposal_labels.append(f"{p.label} (確信度: {conf_pct}% / 文書根拠: {grounding_pct}%)")
 
         selected_idx = st.radio(
             "パターン選択",
@@ -765,6 +766,18 @@ def _render_bm_results(bm: Any) -> None:
                 f"{icon}{p.label}",
                 expanded=is_selected,
             ):
+                # Grounding score indicator
+                grounding = getattr(p, "grounding_score", 0)
+                if grounding >= 0.7:
+                    gs_label = f"文書根拠率: {grounding:.0%} (高)"
+                elif grounding >= 0.4:
+                    gs_label = f"文書根拠率: {grounding:.0%} (中)"
+                elif grounding > 0:
+                    gs_label = f"文書根拠率: {grounding:.0%} (低 - 推定が多い)"
+                else:
+                    gs_label = "文書根拠率: 未検証"
+                st.caption(gs_label)
+
                 st.markdown(f"**解釈の根拠:** {p.reasoning}")
                 st.markdown(f"**業種:** {p.industry} | **モデル:** {p.business_model_type} | **期間:** {p.time_horizon}")
                 st.markdown(f"**概要:** {p.executive_summary}")
@@ -785,10 +798,12 @@ def _render_bm_results(bm: Any) -> None:
                             import pandas as pd
                             driver_data = []
                             for d in seg.revenue_drivers:
+                                src_icon = "文書" if getattr(d, "is_from_document", False) else "推定"
                                 driver_data.append({
                                     "ドライバー": d.name,
                                     "単位": d.unit,
                                     "推定値": d.estimated_value or "-",
+                                    "出典": src_icon,
                                     "根拠": d.evidence[:80] if d.evidence else "-",
                                 })
                             st.dataframe(pd.DataFrame(driver_data), use_container_width=True, hide_index=True)
