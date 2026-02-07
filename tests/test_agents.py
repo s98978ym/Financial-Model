@@ -157,13 +157,19 @@ class TestBusinessModelAnalyzer:
         assert result.shared_costs[0].category == "fixed"
         assert result.shared_costs[1].category == "variable"
 
-    def test_analyze_truncates_long_documents(self) -> None:
+    def test_analyze_smart_truncates_long_documents(self) -> None:
         llm = _make_mock_llm([MOCK_BM_RESPONSE])
-        long_doc = "x" * 20000
+        long_doc = "A" * 15000 + "B" * 15000 + "C" * 15000  # 45K chars
         BusinessModelAnalyzer(llm).analyze(long_doc)
         call_args = llm.extract.call_args[0][0]
         user_msg = call_args[1]["content"]
-        assert "先頭 15,000 文字を分析" in user_msg
+        # Smart truncation preserves start + end
+        assert "中間部分" in user_msg
+        assert "先頭" in user_msg
+        assert "末尾" in user_msg
+        # Start and end of document preserved
+        assert "A" in user_msg  # head
+        assert "C" in user_msg  # tail
 
     def test_analyze_legacy_format_wrapped_as_proposal(self) -> None:
         """Old-format LLM response (segments at top level) should be wrapped."""
@@ -200,7 +206,7 @@ MOCK_BM_PROPOSALS_RESPONSE = {
                     "model_type": "subscription",
                     "revenue_formula": "顧客数 × ARPU × 12",
                     "revenue_drivers": [
-                        {"name": "顧客数", "unit": "社", "estimated_value": "100", "evidence": "資料記載", "description": ""},
+                        {"name": "顧客数", "unit": "社", "estimated_value": "100", "evidence": "「顧客数100社」", "description": "", "is_from_document": True},
                     ],
                     "key_assumptions": ["解約率10%"],
                 },
@@ -331,6 +337,102 @@ class TestBusinessModelAnalyzerProposals:
         assert p.label != ""
         assert p.reasoning != ""
         assert 0.0 <= p.confidence <= 1.0
+
+
+class TestGroundingValidation:
+    """Tests for the anti-hallucination grounding validation."""
+
+    def test_grounding_score_calculated(self) -> None:
+        """Evidence matching document text should yield high grounding score."""
+        llm = _make_mock_llm([MOCK_BM_PROPOSALS_RESPONSE])
+        # Document contains the quoted evidence text
+        doc = "この会社の顧客数100社を誇る法人向けクラウドサービスです"
+        result = BusinessModelAnalyzer(llm).analyze(doc)
+        # First proposal has evidence "「顧客数100社」" which IS in the doc
+        p = result.proposals[0]
+        assert hasattr(p, "grounding_score")
+        assert p.grounding_score > 0
+
+    def test_grounding_penalizes_ungrounded_confidence(self) -> None:
+        """If evidence is not found in document, confidence should be penalized."""
+        # Create a response with evidence that won't match the doc
+        fake_response = {
+            "company_name": "捏造会社",
+            "document_narrative": "テスト",
+            "key_facts": [],
+            "proposals": [{
+                "label": "パターンA: 捏造モデル",
+                "industry": "IT",
+                "business_model_type": "B2B",
+                "executive_summary": "テスト",
+                "segments": [{
+                    "name": "セグメント1",
+                    "model_type": "subscription",
+                    "revenue_formula": "A × B",
+                    "revenue_drivers": [
+                        {
+                            "name": "顧客数",
+                            "unit": "社",
+                            "estimated_value": "999",
+                            "evidence": "「この文書には存在しないテキスト」",
+                            "description": "",
+                            "is_from_document": True,
+                        },
+                        {
+                            "name": "単価",
+                            "unit": "円",
+                            "estimated_value": "50000",
+                            "evidence": "「これも存在しないテキスト」",
+                            "description": "",
+                            "is_from_document": True,
+                        },
+                    ],
+                    "key_assumptions": [],
+                }],
+                "shared_costs": [],
+                "growth_trajectory": "",
+                "risk_factors": [],
+                "time_horizon": "",
+                "confidence": 0.9,
+                "reasoning": "テスト",
+            }],
+            "currency": "JPY",
+        }
+        llm = _make_mock_llm([fake_response])
+        result = BusinessModelAnalyzer(llm).analyze("全く異なる内容の文書テキスト")
+        p = result.proposals[0]
+        # Grounding should be 0 (no evidence matches)
+        assert p.grounding_score == 0.0
+        # Confidence should be penalized (was 0.9, should be much lower)
+        assert p.confidence < 0.9
+
+    def test_smart_truncation_preserves_start_and_end(self) -> None:
+        """Smart truncation should keep both the start and end of the document."""
+        start_marker = "START_OF_DOCUMENT_MARKER"
+        end_marker = "END_OF_DOCUMENT_MARKER"
+        text = start_marker + ("x" * 40000) + end_marker
+        result = BusinessModelAnalyzer._smart_truncate(text, max_chars=30000)
+        assert start_marker in result
+        assert end_marker in result
+        assert "中間部分" in result
+        assert len(result) <= 35000  # some overhead for separator
+
+    def test_smart_truncation_no_change_for_short_docs(self) -> None:
+        """Short documents should pass through unchanged."""
+        text = "short document"
+        result = BusinessModelAnalyzer._smart_truncate(text, max_chars=30000)
+        assert result == text
+
+    def test_is_from_document_field_populated(self) -> None:
+        """is_from_document should be set on revenue drivers after grounding check."""
+        llm = _make_mock_llm([MOCK_BM_PROPOSALS_RESPONSE])
+        doc = "法人向けサービスで顧客数100社"
+        result = BusinessModelAnalyzer(llm).analyze(doc)
+        p = result.proposals[0]
+        for seg in p.segments:
+            for d in seg.revenue_drivers:
+                assert hasattr(d, "is_from_document")
+                assert isinstance(d.is_from_document, bool)
 
 
 # ---------------------------------------------------------------------------

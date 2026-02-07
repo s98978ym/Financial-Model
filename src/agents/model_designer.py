@@ -125,8 +125,15 @@ MD_USER_PROMPT = """\
 class ModelDesigner:
     """Agent 3 (Phase 4): Maps business concepts to specific cells."""
 
-    def __init__(self, llm_client: Any) -> None:
+    def __init__(
+        self,
+        llm_client: Any,
+        system_prompt: Optional[str] = None,
+        user_prompt: Optional[str] = None,
+    ) -> None:
         self.llm = llm_client
+        self._system_prompt = system_prompt or MD_SYSTEM_PROMPT
+        self._user_prompt = user_prompt or MD_USER_PROMPT
 
     def design(
         self,
@@ -161,8 +168,8 @@ class ModelDesigner:
             )
 
         messages = [
-            {"role": "system", "content": MD_SYSTEM_PROMPT},
-            {"role": "user", "content": MD_USER_PROMPT.format(
+            {"role": "system", "content": self._system_prompt},
+            {"role": "user", "content": self._user_prompt.format(
                 business_analysis_json=analysis_str,
                 template_structure_json=structure_str,
                 catalog_json=catalog_str,

@@ -474,10 +474,31 @@ def _get_llm_client() -> Any:
     return LLMClient()
 
 
+def _get_prompt_registry():
+    """Get or create the PromptRegistry from session state."""
+    if "prompt_registry" not in st.session_state:
+        try:
+            from src.agents.prompt_registry import PromptRegistry
+            st.session_state["prompt_registry"] = PromptRegistry()
+        except Exception:
+            return None
+    return st.session_state["prompt_registry"]
+
+
 def _get_orchestrator() -> Any:
-    """Create AgentOrchestrator with pre-flight check."""
+    """Create AgentOrchestrator with prompt overrides from registry."""
     llm = _get_llm_client()
-    return AgentOrchestrator(llm)
+    registry = _get_prompt_registry()
+    prompt_overrides = None
+    if registry:
+        # Collect custom prompts from registry
+        customized = {}
+        for entry in registry.list_entries():
+            if entry.is_customized:
+                customized[entry.key] = entry.content
+        if customized:
+            prompt_overrides = customized
+    return AgentOrchestrator(llm, prompt_overrides=prompt_overrides)
 
 
 # ===================================================================
@@ -724,7 +745,8 @@ def _render_bm_results(bm: Any) -> None:
         proposal_labels = []
         for i, p in enumerate(proposals):
             conf_pct = int(p.confidence * 100)
-            proposal_labels.append(f"{p.label} (確信度: {conf_pct}%)")
+            grounding_pct = int(getattr(p, "grounding_score", 0) * 100)
+            proposal_labels.append(f"{p.label} (確信度: {conf_pct}% / 文書根拠: {grounding_pct}%)")
 
         selected_idx = st.radio(
             "パターン選択",
@@ -744,9 +766,27 @@ def _render_bm_results(bm: Any) -> None:
                 f"{icon}{p.label}",
                 expanded=is_selected,
             ):
+                # Grounding score indicator
+                grounding = getattr(p, "grounding_score", 0)
+                if grounding >= 0.7:
+                    gs_label = f"文書根拠率: {grounding:.0%} (高)"
+                elif grounding >= 0.4:
+                    gs_label = f"文書根拠率: {grounding:.0%} (中)"
+                elif grounding > 0:
+                    gs_label = f"文書根拠率: {grounding:.0%} (低 - 推定が多い)"
+                else:
+                    gs_label = "文書根拠率: 未検証"
+                st.caption(gs_label)
+
                 st.markdown(f"**解釈の根拠:** {p.reasoning}")
                 st.markdown(f"**業種:** {p.industry} | **モデル:** {p.business_model_type} | **期間:** {p.time_horizon}")
                 st.markdown(f"**概要:** {p.executive_summary}")
+
+                # Business model diagram
+                diagram = getattr(p, "diagram", "")
+                if diagram:
+                    st.markdown("**ビジネスモデル図解:**")
+                    st.code(diagram, language=None)
 
                 # Segments
                 if p.segments:
@@ -758,10 +798,12 @@ def _render_bm_results(bm: Any) -> None:
                             import pandas as pd
                             driver_data = []
                             for d in seg.revenue_drivers:
+                                src_icon = "文書" if getattr(d, "is_from_document", False) else "推定"
                                 driver_data.append({
                                     "ドライバー": d.name,
                                     "単位": d.unit,
                                     "推定値": d.estimated_value or "-",
+                                    "出典": src_icon,
                                     "根拠": d.evidence[:80] if d.evidence else "-",
                                 })
                             st.dataframe(pd.DataFrame(driver_data), use_container_width=True, hide_index=True)
@@ -1823,6 +1865,12 @@ def _render_sidebar() -> None:
                     mime=mime, key=f"sidebar_dl_{fname}", use_container_width=True,
                 )
 
+        # Prompt management toggle
+        st.divider()
+        if st.button("プロンプト管理", key="btn_prompt_mgmt", use_container_width=True):
+            st.session_state["show_prompt_mgmt"] = not st.session_state.get("show_prompt_mgmt", False)
+            st.rerun()
+
         try:
             from src.app.version import version_label
             st.caption(f"Version: {version_label()}")
@@ -1849,6 +1897,92 @@ def _render_sidebar() -> None:
 
 
 # ===================================================================
+# Prompt Management Page
+# ===================================================================
+
+_PHASE_LABELS = {2: "Phase 2: BM分析", 3: "Phase 3: テンプレ構造", 4: "Phase 4: モデル設計", 5: "Phase 5: パラメーター抽出", 0: "レガシー"}
+
+
+def _render_prompt_management() -> None:
+    """Render the prompt management page."""
+    st.markdown("## プロンプト管理")
+    st.caption("各フェーズで使用されるLLMプロンプトの確認・編集ができます。編集はセッション中のみ有効です。")
+
+    registry = _get_prompt_registry()
+    if not registry:
+        st.error("プロンプトレジストリを初期化できませんでした。")
+        if st.button("← ウィザードに戻る", key="btn_prompt_back_err"):
+            st.session_state["show_prompt_mgmt"] = False
+            st.rerun()
+        return
+
+    # Back button
+    col_back, col_reset_all = st.columns([3, 1])
+    with col_back:
+        if st.button("← ウィザードに戻る", key="btn_prompt_back", use_container_width=True):
+            st.session_state["show_prompt_mgmt"] = False
+            st.rerun()
+    with col_reset_all:
+        if st.button("全てデフォルトに戻す", key="btn_prompt_reset_all", use_container_width=True):
+            registry.reset_all()
+            st.success("全プロンプトをデフォルトに戻しました。")
+            st.rerun()
+
+    # Show customized count
+    customized = registry.get_customized_keys()
+    if customized:
+        st.info(f"カスタマイズ中: {len(customized)}件")
+
+    st.divider()
+
+    # Group entries by phase
+    entries = registry.list_entries()
+    current_phase = None
+    for entry in entries:
+        if entry.phase != current_phase:
+            current_phase = entry.phase
+            phase_label = _PHASE_LABELS.get(current_phase, f"Phase {current_phase}")
+            st.markdown(f"### {phase_label}")
+
+        # Customized indicator
+        status = " (カスタマイズ済)" if entry.is_customized else ""
+        prompt_type_label = "システム" if entry.prompt_type == "system" else "ユーザー"
+
+        with st.expander(
+            f"{prompt_type_label}: {entry.display_name}{status}",
+            expanded=False,
+        ):
+            st.caption(entry.description)
+
+            # Text area for editing
+            new_content = st.text_area(
+                f"プロンプト内容",
+                value=entry.content,
+                height=300,
+                key=f"prompt_edit_{entry.key}",
+                label_visibility="collapsed",
+            )
+
+            col_save, col_reset, col_info = st.columns([1, 1, 2])
+            with col_save:
+                if st.button("保存", key=f"btn_save_{entry.key}", use_container_width=True):
+                    if new_content != entry.content:
+                        registry.set(entry.key, new_content)
+                        st.success("保存しました。")
+                        st.rerun()
+                    else:
+                        st.info("変更なし")
+            with col_reset:
+                if entry.is_customized:
+                    if st.button("デフォルトに戻す", key=f"btn_reset_{entry.key}", use_container_width=True):
+                        registry.reset(entry.key)
+                        st.success("デフォルトに戻しました。")
+                        st.rerun()
+            with col_info:
+                st.caption(f"文字数: {len(entry.content):,}")
+
+
+# ===================================================================
 # Main
 # ===================================================================
 
@@ -1863,6 +1997,12 @@ def main() -> None:
     _init_session_state()
     _inject_custom_css()
     _render_sidebar()
+
+    # Check if prompt management page is active
+    if st.session_state.get("show_prompt_mgmt", False):
+        _render_prompt_management()
+        return
+
     _render_step_indicator()
 
     phase = st.session_state["wizard_phase"]

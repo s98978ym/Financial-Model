@@ -53,10 +53,11 @@ TS_SYSTEM_PROMPT = """\
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 1. **シート名・ブロック名・ラベルから目的を推定**
-   - 「ミールモデル」→ ミール/食事関連セグメントの収益モデル
+   - 「収益モデルN」→ 事業セグメントNの収益モデル（汎用スロット）
    - 「費用リスト」→ 全セグメント共通のコスト一覧
    - 「前提条件」→ 基本前提
    - 「PL」「損益」→ PL集計シート
+   - テンプレートのシート名は汎用的であり、特定業種に紐づかない
 
 2. **事業分析のセグメントとの対応**
    - 各セグメントがどのシートに対応するか
@@ -113,8 +114,15 @@ TS_USER_PROMPT = """\
 class TemplateMapper:
     """Agent 2 (Phase 3): Maps template sheets to business segments."""
 
-    def __init__(self, llm_client: Any) -> None:
+    def __init__(
+        self,
+        llm_client: Any,
+        system_prompt: Optional[str] = None,
+        user_prompt: Optional[str] = None,
+    ) -> None:
         self.llm = llm_client
+        self._system_prompt = system_prompt or TS_SYSTEM_PROMPT
+        self._user_prompt = user_prompt or TS_USER_PROMPT
 
     def map_structure(
         self,
@@ -158,8 +166,8 @@ class TemplateMapper:
             )
 
         messages = [
-            {"role": "system", "content": TS_SYSTEM_PROMPT},
-            {"role": "user", "content": TS_USER_PROMPT.format(
+            {"role": "system", "content": self._system_prompt},
+            {"role": "user", "content": self._user_prompt.format(
                 business_analysis_json=analysis_str,
                 template_summary_json=summary_str,
                 feedback_section=feedback_section,

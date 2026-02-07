@@ -105,13 +105,34 @@ class AgentOrchestrator:
         result = orch.run(document_text, catalog_items)
     """
 
-    def __init__(self, llm_client: Any) -> None:
+    def __init__(
+        self,
+        llm_client: Any,
+        prompt_overrides: Optional[Dict[str, str]] = None,
+    ) -> None:
         self.llm = llm_client
-        self.agent1 = BusinessModelAnalyzer(llm_client)
+        po = prompt_overrides or {}
+        self.agent1 = BusinessModelAnalyzer(
+            llm_client,
+            system_prompt=po.get("bm_analyzer_system"),
+            user_prompt=po.get("bm_analyzer_user"),
+        )
         self.agent2 = FMDesigner(llm_client)
-        self.template_mapper = TemplateMapper(llm_client)
-        self.model_designer = ModelDesigner(llm_client)
-        self.param_extractor = ParameterExtractorAgent(llm_client)
+        self.template_mapper = TemplateMapper(
+            llm_client,
+            system_prompt=po.get("template_mapper_system"),
+            user_prompt=po.get("template_mapper_user"),
+        )
+        self.model_designer = ModelDesigner(
+            llm_client,
+            system_prompt=po.get("model_designer_system"),
+            user_prompt=po.get("model_designer_user"),
+        )
+        self.param_extractor = ParameterExtractorAgent(
+            llm_client,
+            system_prompt=po.get("param_extractor_system"),
+            user_prompt=po.get("param_extractor_user"),
+        )
 
     # ------------------------------------------------------------------
     # Phased execution (new)

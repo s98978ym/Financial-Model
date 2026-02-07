@@ -333,3 +333,78 @@ class TestOrchestratorPhased:
         pe = orch.run_parameter_extraction(MOCK_MD_RESPONSE, "document text")
         assert len(pe.extractions) == 2
         assert pe.extractions[0].value == 100
+
+    def test_orchestrator_with_prompt_overrides(self) -> None:
+        """Orchestrator should pass custom prompts to agents."""
+        mock_bm = {
+            "company_name": "Test",
+            "industry": "IT",
+            "business_model_type": "B2B",
+            "segments": [{"name": "IT", "model_type": "subscription",
+                          "revenue_formula": "N×P", "revenue_drivers": [], "key_assumptions": []}],
+            "shared_costs": [], "risk_factors": [],
+        }
+        llm = _make_mock_llm([mock_bm])
+        overrides = {"bm_analyzer_system": "Custom system prompt"}
+        orch = AgentOrchestrator(llm, prompt_overrides=overrides)
+        assert orch.agent1._system_prompt == "Custom system prompt"
+        # Others should have defaults
+        from src.agents.template_mapper import TS_SYSTEM_PROMPT
+        assert orch.template_mapper._system_prompt == TS_SYSTEM_PROMPT
+
+
+# ---------------------------------------------------------------------------
+# Prompt Registry
+# ---------------------------------------------------------------------------
+
+class TestPromptRegistry:
+    def test_registry_initializes_all_prompts(self) -> None:
+        from src.agents.prompt_registry import PromptRegistry
+        registry = PromptRegistry()
+        entries = registry.list_entries()
+        assert len(entries) == 10  # 5 agents × 2 (system + user)
+
+    def test_get_default_content(self) -> None:
+        from src.agents.prompt_registry import PromptRegistry
+        from src.agents.business_model_analyzer import BM_ANALYZER_SYSTEM_PROMPT
+        registry = PromptRegistry()
+        content = registry.get("bm_analyzer_system")
+        assert content == BM_ANALYZER_SYSTEM_PROMPT
+
+    def test_set_and_get_custom(self) -> None:
+        from src.agents.prompt_registry import PromptRegistry
+        registry = PromptRegistry()
+        registry.set("bm_analyzer_system", "Custom prompt")
+        assert registry.get("bm_analyzer_system") == "Custom prompt"
+        assert registry.get_entry("bm_analyzer_system").is_customized
+
+    def test_reset_to_default(self) -> None:
+        from src.agents.prompt_registry import PromptRegistry
+        from src.agents.business_model_analyzer import BM_ANALYZER_SYSTEM_PROMPT
+        registry = PromptRegistry()
+        registry.set("bm_analyzer_system", "Custom prompt")
+        registry.reset("bm_analyzer_system")
+        assert registry.get("bm_analyzer_system") == BM_ANALYZER_SYSTEM_PROMPT
+        assert not registry.get_entry("bm_analyzer_system").is_customized
+
+    def test_reset_all(self) -> None:
+        from src.agents.prompt_registry import PromptRegistry
+        registry = PromptRegistry()
+        registry.set("bm_analyzer_system", "Custom 1")
+        registry.set("template_mapper_system", "Custom 2")
+        assert len(registry.get_customized_keys()) == 2
+        registry.reset_all()
+        assert len(registry.get_customized_keys()) == 0
+
+    def test_list_by_phase(self) -> None:
+        from src.agents.prompt_registry import PromptRegistry
+        registry = PromptRegistry()
+        phase2 = registry.list_entries(phase=2)
+        assert len(phase2) == 2  # system + user for BM analyzer
+        assert all(e.phase == 2 for e in phase2)
+
+    def test_unknown_key_raises(self) -> None:
+        from src.agents.prompt_registry import PromptRegistry
+        registry = PromptRegistry()
+        with pytest.raises(KeyError):
+            registry.get("nonexistent_key")
