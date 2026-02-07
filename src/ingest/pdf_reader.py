@@ -704,6 +704,42 @@ def _extract_with_pypdf2(file_path: str) -> DocumentContent:
 # OCR fallback (last resort for NotebookLM / Type3 font PDFs)
 # ---------------------------------------------------------------------------
 
+def _render_pages_fitz(file_path: str) -> list:
+    """Render PDF pages to PIL Images using PyMuPDF (fitz) at 300 DPI."""
+    import io
+
+    import fitz  # PyMuPDF
+    from PIL import Image
+
+    doc = fitz.open(file_path)
+    images = []
+    for idx in range(doc.page_count):
+        page = doc[idx]
+        mat = fitz.Matrix(300 / 72, 300 / 72)
+        pix = page.get_pixmap(matrix=mat)
+        img_bytes = pix.tobytes("png")
+        images.append(Image.open(io.BytesIO(img_bytes)))
+    doc.close()
+    return images
+
+
+def _render_pages_pypdfium2(file_path: str) -> list:
+    """Render PDF pages to PIL Images using pypdfium2 at 300 DPI."""
+    import pypdfium2 as pdfium  # type: ignore
+
+    doc = pdfium.PdfDocument(file_path)
+    images = []
+    for idx in range(len(doc)):
+        page = doc[idx]
+        # scale = DPI / 72
+        bitmap = page.render(scale=300 / 72)
+        pil_image = bitmap.to_pil()
+        images.append(pil_image)
+        page.close()
+    doc.close()
+    return images
+
+
 def _extract_with_ocr(file_path: str) -> DocumentContent:
     """Extract text from a PDF by rendering pages as images and running OCR.
 
@@ -711,93 +747,105 @@ def _extract_with_ocr(file_path: str) -> DocumentContent:
     backends fail (e.g. NotebookLM / Chrome PDFs with Type3 fonts and
     missing /ToUnicode CMap).
 
-    Requires: PyMuPDF (for rendering), pytesseract, Pillow, tesseract-ocr.
+    Page rendering tries PyMuPDF first, then pypdfium2 as fallback.
+    Requires: pytesseract, Pillow, tesseract-ocr, and at least one of
+    PyMuPDF or pypdfium2 for page rendering.
     """
-    import io
-
-    import fitz  # PyMuPDF — for page rendering
     import pytesseract
-    from PIL import Image
+    from PIL import Image  # noqa: F401
 
     pages: List[PageContent] = []
     metadata: dict = {}
 
-    try:
-        doc = fitz.open(file_path)
+    # --- Render pages to images (try fitz first, then pypdfium2) ---
+    images: list = []
+    render_errors: List[str] = []
 
-        raw_meta = doc.metadata or {}
-        for key in ("title", "author", "subject", "creator", "producer"):
-            val = raw_meta.get(key)
-            if val:
-                metadata[key.capitalize()] = str(val)
+    if _HAS_PYMUPDF:
+        try:
+            images = _render_pages_fitz(file_path)
+            logger.info("OCR: rendered %d pages via PyMuPDF", len(images))
+        except BaseException as exc:
+            render_errors.append(f"PyMuPDF render: {exc}")
+            logger.debug("OCR: PyMuPDF rendering failed: %s", exc)
 
-        total_pages = doc.page_count
-        logger.info(
-            "OCR fallback: rendering %d pages at 300 DPI for %s",
-            total_pages, Path(file_path).name,
+    if not images and _HAS_PYPDFIUM2:
+        try:
+            images = _render_pages_pypdfium2(file_path)
+            logger.info("OCR: rendered %d pages via pypdfium2", len(images))
+        except BaseException as exc:
+            render_errors.append(f"pypdfium2 render: {exc}")
+            logger.debug("OCR: pypdfium2 rendering failed: %s", exc)
+
+    if not images:
+        raise RuntimeError(
+            f"OCR fallback: cannot render pages for {file_path}. "
+            f"Need PyMuPDF or pypdfium2 for rendering. "
+            f"Errors: {'; '.join(render_errors)}"
         )
 
-        for idx in range(total_pages):
-            page_number = idx + 1
-            page = doc[idx]
+    total_pages = len(images)
+    logger.info(
+        "OCR fallback: processing %d pages at 300 DPI for %s",
+        total_pages, Path(file_path).name,
+    )
 
-            try:
-                # Render page at 300 DPI
-                mat = fitz.Matrix(300 / 72, 300 / 72)
-                pix = page.get_pixmap(matrix=mat)
-                img_bytes = pix.tobytes("png")
-                img = Image.open(io.BytesIO(img_bytes))
+    for idx, img in enumerate(images):
+        page_number = idx + 1
+        try:
+            # Run Tesseract OCR (Japanese + English)
+            text = pytesseract.image_to_string(img, lang="jpn+eng")
+            text = (text or "").strip()
 
-                # Run Tesseract OCR (Japanese + English)
-                text = pytesseract.image_to_string(img, lang="jpn+eng")
-                text = (text or "").strip()
-
-                if text:
-                    logger.info(
-                        "OCR: page %d → %d chars extracted",
-                        page_number, len(text),
-                    )
-            except Exception as exc:
-                logger.warning("OCR failed on page %d: %s", page_number, exc)
-                text = ""
-
-            pages.append(
-                PageContent(
-                    page_number=page_number,
-                    text=text,
-                    tables=[],
-                    source_type="pdf",
+            if text:
+                logger.info(
+                    "OCR: page %d → %d chars extracted",
+                    page_number, len(text),
                 )
+        except Exception as exc:
+            logger.warning("OCR failed on page %d: %s", page_number, exc)
+            text = ""
+
+        pages.append(
+            PageContent(
+                page_number=page_number,
+                text=text,
+                tables=[],
+                source_type="pdf",
             )
-
-        doc.close()
-
-    except Exception as exc:
-        raise RuntimeError(
-            f"OCR extraction failed for {file_path} — {exc}"
-        ) from exc
+        )
 
     return DocumentContent(
         file_path=str(file_path),
         file_type="pdf",
         pages=pages,
-        total_pages=total_pages if pages else 0,
+        total_pages=total_pages,
         metadata=metadata,
         source_filename=Path(file_path).name,
     )
 
 
 def _can_ocr() -> bool:
-    """Check if OCR dependencies are available."""
+    """Check if OCR dependencies are available.
+
+    Requires:
+    - pytesseract + tesseract binary (for OCR)
+    - Pillow (for image handling)
+    - At least one of PyMuPDF or pypdfium2 (for page rendering)
+    """
     try:
-        import fitz  # noqa: F811
         import pytesseract  # noqa: F811
         from PIL import Image  # noqa: F401
         # Verify tesseract binary exists
         pytesseract.get_tesseract_version()
-        return True
-    except Exception:
+    except BaseException:
         return False
+
+    # Need at least one renderer
+    if not (_HAS_PYMUPDF or _HAS_PYPDFIUM2):
+        return False
+
+    return True
 
 
 # ---------------------------------------------------------------------------
@@ -862,6 +910,7 @@ def extract_pdf(file_path: str) -> DocumentContent:
 
     best_result: Optional[DocumentContent] = None
     best_chars = 0
+    backend_errors: List[str] = []
 
     for name, extract_fn in backends:
         try:
@@ -883,27 +932,49 @@ def extract_pdf(file_path: str) -> DocumentContent:
             if char_count > best_chars:
                 best_chars = char_count
                 best_result = result
+            if char_count == 0:
+                backend_errors.append(f"{name}: 0 chars extracted")
 
-        except Exception as exc:
+        except BaseException as exc:
             logger.warning("PDF extraction with %s failed: %s", name, exc)
+            backend_errors.append(f"{name}: {exc}")
             continue
 
     # --- OCR fallback: all text backends failed or produced very little ---
-    if best_chars < _MIN_USEFUL_CHARS_PER_PAGE and _can_ocr():
+    if best_chars < _MIN_USEFUL_CHARS_PER_PAGE:
+        ocr_available = _can_ocr()
         logger.info(
-            "All text extraction backends failed (best: %d chars). "
-            "Falling back to OCR for %s",
-            best_chars, path.name,
+            "All text extraction backends produced ≤%d chars (best: %d). "
+            "OCR available: %s. Attempting OCR for %s",
+            _MIN_USEFUL_CHARS_PER_PAGE, best_chars, ocr_available, path.name,
         )
-        try:
-            ocr_result = _extract_with_ocr(file_path)
-            ocr_chars = ocr_result.text_char_count
-            logger.info("OCR extracted %d chars from %d pages",
-                        ocr_chars, ocr_result.total_pages)
-            if ocr_chars > best_chars:
-                return ocr_result
-        except Exception as exc:
-            logger.warning("OCR fallback failed: %s", exc)
+        if ocr_available:
+            try:
+                ocr_result = _extract_with_ocr(file_path)
+                ocr_chars = ocr_result.text_char_count
+                logger.info("OCR extracted %d chars from %d pages",
+                            ocr_chars, ocr_result.total_pages)
+                if ocr_chars > best_chars:
+                    return ocr_result
+            except BaseException as exc:
+                logger.warning("OCR fallback failed: %s", exc)
+                backend_errors.append(f"OCR: {exc}")
+        else:
+            # Log why OCR is unavailable to help with debugging
+            _ocr_missing: List[str] = []
+            try:
+                import pytesseract  # noqa: F811
+                pytesseract.get_tesseract_version()
+            except BaseException:
+                _ocr_missing.append("tesseract-ocr")
+            try:
+                from PIL import Image  # noqa: F401
+            except BaseException:
+                _ocr_missing.append("Pillow")
+            if not (_HAS_PYMUPDF or _HAS_PYPDFIUM2):
+                _ocr_missing.append("PyMuPDF or pypdfium2 (for rendering)")
+            logger.warning("OCR unavailable — missing: %s", ", ".join(_ocr_missing) or "unknown")
+            backend_errors.append(f"OCR unavailable (missing: {', '.join(_ocr_missing)})")
 
     # Return the best text-extraction result we have (even if low quality)
     if best_result is not None:
@@ -914,7 +985,9 @@ def extract_pdf(file_path: str) -> DocumentContent:
         )
         return best_result
 
+    # Build detailed error message for debugging
+    error_detail = "; ".join(backend_errors) if backend_errors else "no backends available"
     raise RuntimeError(
         f"All PDF extraction backends failed for {file_path}. "
-        "The file may be corrupted or password-protected."
+        f"Details: {error_detail}"
     )
