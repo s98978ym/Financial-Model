@@ -701,6 +701,106 @@ def _extract_with_pypdf2(file_path: str) -> DocumentContent:
 
 
 # ---------------------------------------------------------------------------
+# OCR fallback (last resort for NotebookLM / Type3 font PDFs)
+# ---------------------------------------------------------------------------
+
+def _extract_with_ocr(file_path: str) -> DocumentContent:
+    """Extract text from a PDF by rendering pages as images and running OCR.
+
+    This is the last-resort fallback for PDFs where ALL text extraction
+    backends fail (e.g. NotebookLM / Chrome PDFs with Type3 fonts and
+    missing /ToUnicode CMap).
+
+    Requires: PyMuPDF (for rendering), pytesseract, Pillow, tesseract-ocr.
+    """
+    import io
+
+    import fitz  # PyMuPDF — for page rendering
+    import pytesseract
+    from PIL import Image
+
+    pages: List[PageContent] = []
+    metadata: dict = {}
+
+    try:
+        doc = fitz.open(file_path)
+
+        raw_meta = doc.metadata or {}
+        for key in ("title", "author", "subject", "creator", "producer"):
+            val = raw_meta.get(key)
+            if val:
+                metadata[key.capitalize()] = str(val)
+
+        total_pages = doc.page_count
+        logger.info(
+            "OCR fallback: rendering %d pages at 300 DPI for %s",
+            total_pages, Path(file_path).name,
+        )
+
+        for idx in range(total_pages):
+            page_number = idx + 1
+            page = doc[idx]
+
+            try:
+                # Render page at 300 DPI
+                mat = fitz.Matrix(300 / 72, 300 / 72)
+                pix = page.get_pixmap(matrix=mat)
+                img_bytes = pix.tobytes("png")
+                img = Image.open(io.BytesIO(img_bytes))
+
+                # Run Tesseract OCR (Japanese + English)
+                text = pytesseract.image_to_string(img, lang="jpn+eng")
+                text = (text or "").strip()
+
+                if text:
+                    logger.info(
+                        "OCR: page %d → %d chars extracted",
+                        page_number, len(text),
+                    )
+            except Exception as exc:
+                logger.warning("OCR failed on page %d: %s", page_number, exc)
+                text = ""
+
+            pages.append(
+                PageContent(
+                    page_number=page_number,
+                    text=text,
+                    tables=[],
+                    source_type="pdf",
+                )
+            )
+
+        doc.close()
+
+    except Exception as exc:
+        raise RuntimeError(
+            f"OCR extraction failed for {file_path} — {exc}"
+        ) from exc
+
+    return DocumentContent(
+        file_path=str(file_path),
+        file_type="pdf",
+        pages=pages,
+        total_pages=total_pages if pages else 0,
+        metadata=metadata,
+        source_filename=Path(file_path).name,
+    )
+
+
+def _can_ocr() -> bool:
+    """Check if OCR dependencies are available."""
+    try:
+        import fitz  # noqa: F811
+        import pytesseract  # noqa: F811
+        from PIL import Image  # noqa: F401
+        # Verify tesseract binary exists
+        pytesseract.get_tesseract_version()
+        return True
+    except Exception:
+        return False
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
@@ -712,6 +812,8 @@ def extract_pdf(file_path: str) -> DocumentContent:
 
     Tries backends in priority order.  If the primary backend yields
     very little text, automatically retries with the next one.
+    If ALL backends fail, falls back to OCR (renders pages as images
+    and runs Tesseract OCR for Japanese + English).
 
     Parameters
     ----------
@@ -786,11 +888,28 @@ def extract_pdf(file_path: str) -> DocumentContent:
             logger.warning("PDF extraction with %s failed: %s", name, exc)
             continue
 
-    # If no backend produced good results, return the best we have
+    # --- OCR fallback: all text backends failed or produced very little ---
+    if best_chars < _MIN_USEFUL_CHARS_PER_PAGE and _can_ocr():
+        logger.info(
+            "All text extraction backends failed (best: %d chars). "
+            "Falling back to OCR for %s",
+            best_chars, path.name,
+        )
+        try:
+            ocr_result = _extract_with_ocr(file_path)
+            ocr_chars = ocr_result.text_char_count
+            logger.info("OCR extracted %d chars from %d pages",
+                        ocr_chars, ocr_result.total_pages)
+            if ocr_chars > best_chars:
+                return ocr_result
+        except Exception as exc:
+            logger.warning("OCR fallback failed: %s", exc)
+
+    # Return the best text-extraction result we have (even if low quality)
     if best_result is not None:
         logger.warning(
             "All PDF backends produced low text yield. Best: %d chars. "
-            "The PDF may be image-based (scanned).",
+            "The PDF may use fonts that prevent text extraction.",
             best_chars,
         )
         return best_result

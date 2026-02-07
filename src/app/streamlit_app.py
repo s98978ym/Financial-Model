@@ -634,7 +634,7 @@ def _run_phase_1_scan(doc_file) -> None:
         )
         st.session_state["color_config"] = cc
 
-        progress.progress(40, text="事業計画書を読み取り中...")
+        progress.progress(40, text="事業計画書を読み取り中（OCR自動フォールバック付き）...")
         document = read_document(doc_path)
         # Store source filename for sidebar display
         if not getattr(document, "source_filename", ""):
@@ -650,14 +650,10 @@ def _run_phase_1_scan(doc_file) -> None:
             progress.empty()
             st.error(
                 f"⚠ PDFからテキストを抽出できませんでした（{document.total_pages}ページ中 {pages_with}ページで抽出成功）。\n\n"
-                "**考えられる原因:**\n"
-                "- NotebookLMやChrome「PDF印刷」で生成されたPDF（フォントのUnicodeマッピングが欠落）\n"
-                "- PDFの内部構造が特殊（フォント埋込方式・エンコーディング等）\n"
-                "- パスワード保護されたPDF\n\n"
+                "テキスト抽出（5ライブラリ）＋OCR（画像認識）を含む全手法で抽出に失敗しました。\n\n"
                 "**対処法:**\n"
                 '- **「テキスト貼り付け」タブ** を使って事業計画書のテキストを直接貼り付けてください\n'
                 "- NotebookLMの場合: ノート画面でテキストをコピー → 「テキスト貼り付け」タブに貼り付け\n"
-                "- PDFの場合: ブラウザで開き Ctrl+A → Ctrl+C → 「テキスト貼り付け」タブに貼り付け\n"
                 "- PowerPoint(.pptx)やWord(.docx)の元ファイルがあればそちらをアップロード"
             )
             with st.expander("抽出結果の詳細"):
