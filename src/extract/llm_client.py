@@ -80,7 +80,7 @@ class LLMClient:
 
             kwargs: Dict[str, Any] = {
                 "model": self.model,
-                "max_tokens": 16384,
+                "max_tokens": 32768,
                 "temperature": temperature,
                 "messages": conversation,
             }
@@ -107,7 +107,11 @@ class LLMClient:
             except json.JSONDecodeError:
                 # If response was truncated (max_tokens), try to repair
                 if stop_reason == "max_tokens":
-                    logger.warning("Response truncated at max_tokens, attempting JSON repair")
+                    logger.warning(
+                        "LLM response truncated at max_tokens. "
+                        "Response length: %d chars. Attempting JSON repair.",
+                        len(content),
+                    )
                     repaired = self._repair_truncated_json(content)
                     if repaired is not None:
                         return repaired
@@ -124,8 +128,9 @@ class LLMClient:
     def _repair_truncated_json(text: str) -> Optional[Dict[str, Any]]:
         """Attempt to repair JSON that was truncated at max_tokens.
 
-        Strategy: find the first '{', then try closing open brackets/braces
-        from the end until json.loads succeeds.
+        Properly tracks string boundaries (quotes & escapes) to find
+        clean structural truncation points, then closes remaining open
+        brackets/braces.  Tries the most recent positions first.
         """
         start = text.find("{")
         if start < 0:
@@ -133,32 +138,63 @@ class LLMClient:
 
         candidate = text[start:]
 
-        # Count open/close brackets to figure out what's missing
-        open_braces = candidate.count("{") - candidate.count("}")
-        open_brackets = candidate.count("[") - candidate.count("]")
+        # Single-pass scan: track string state and record structural positions
+        in_string = False
+        escape = False
+        brace_depth = 0
+        bracket_depth = 0
+        # (position, char, brace_depth_after, bracket_depth_after)
+        trim_points: list = []
 
-        # Trim trailing incomplete value (after last comma or colon)
-        # Find last complete entry
-        for trim_char in (",", "{", "["):
-            last_pos = candidate.rfind(trim_char)
-            if last_pos > 0:
-                trimmed = candidate[:last_pos]
-                # Close all open brackets/braces
-                suffix = "]" * (trimmed.count("[") - trimmed.count("]"))
-                suffix += "}" * (trimmed.count("{") - trimmed.count("}"))
-                try:
-                    result = json.loads(trimmed + suffix)
-                    logger.info("Repaired truncated JSON (trimmed at '%s', added '%s')", trim_char, suffix)
-                    return result
-                except json.JSONDecodeError:
-                    continue
+        for i, ch in enumerate(candidate):
+            if escape:
+                escape = False
+                continue
+            if ch == '\\' and in_string:
+                escape = True
+                continue
+            if ch == '"':
+                in_string = not in_string
+                continue
+            if in_string:
+                continue
 
-        # Simple approach: just close all open brackets
-        suffix = "]" * max(0, open_brackets) + "}" * max(0, open_braces)
-        try:
-            return json.loads(candidate + suffix)
-        except json.JSONDecodeError:
-            return None
+            # Structural character outside a string
+            if ch == '{':
+                brace_depth += 1
+            elif ch == '}':
+                brace_depth -= 1
+                trim_points.append((i, ch, brace_depth, bracket_depth))
+            elif ch == '[':
+                bracket_depth += 1
+            elif ch == ']':
+                bracket_depth -= 1
+                trim_points.append((i, ch, brace_depth, bracket_depth))
+            elif ch == ',':
+                trim_points.append((i, ch, brace_depth, bracket_depth))
+
+        # Try the most recent trim points first (last 30)
+        for pos, ch, bd, bkd in reversed(trim_points[-30:]):
+            if bd < 0 or bkd < 0:
+                continue
+
+            if ch == ',':
+                sub = candidate[:pos]       # exclude trailing comma
+            else:
+                sub = candidate[:pos + 1]   # include the closing bracket
+
+            suffix = ']' * bkd + '}' * bd
+            try:
+                result = json.loads(sub + suffix)
+                logger.info(
+                    "Repaired truncated JSON (trim at pos %d '%s', added '%s')",
+                    pos, ch, suffix,
+                )
+                return result
+            except json.JSONDecodeError:
+                continue
+
+        return None
 
     def _try_extract_json(self, text: str) -> Dict[str, Any]:
         """Try to extract JSON from text that may contain markdown or other formatting."""
