@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 from src.agents.business_model_analyzer import (
     BusinessModelAnalyzer,
     BusinessModelAnalysis,
+    BusinessModelProposal,
     BusinessSegment,
     RevenueDriver,
     CostItem,
@@ -162,7 +163,174 @@ class TestBusinessModelAnalyzer:
         BusinessModelAnalyzer(llm).analyze(long_doc)
         call_args = llm.extract.call_args[0][0]
         user_msg = call_args[1]["content"]
-        assert "先頭 12,000 文字を分析" in user_msg
+        assert "先頭 15,000 文字を分析" in user_msg
+
+    def test_analyze_legacy_format_wrapped_as_proposal(self) -> None:
+        """Old-format LLM response (segments at top level) should be wrapped."""
+        llm = _make_mock_llm([MOCK_BM_RESPONSE])
+        result = BusinessModelAnalyzer(llm).analyze("doc")
+        # Should have proposals (wrapped from legacy)
+        assert len(result.proposals) == 1
+        assert result.proposals[0].industry == "SaaS"
+        assert len(result.proposals[0].segments) == 1
+
+    def test_analyze_with_feedback(self) -> None:
+        llm = _make_mock_llm([MOCK_BM_RESPONSE])
+        BusinessModelAnalyzer(llm).analyze("doc", feedback="セグメント追加して")
+        call_args = llm.extract.call_args[0][0]
+        user_msg = call_args[1]["content"]
+        assert "ユーザーフィードバック" in user_msg
+        assert "セグメント追加して" in user_msg
+
+
+# Mock for new proposals-format LLM response
+MOCK_BM_PROPOSALS_RESPONSE = {
+    "company_name": "テスト株式会社",
+    "document_narrative": "テスト株式会社は法人向けクラウドサービスを提供する企業である。主にSaaS型のサブスクリプションモデルで収益を得ている。",
+    "key_facts": ["月額5万円のプラン", "顧客数100社", "年間解約率10%"],
+    "proposals": [
+        {
+            "label": "パターンA: SaaS単一モデル",
+            "industry": "SaaS",
+            "business_model_type": "B2B",
+            "executive_summary": "純粋なSaaS型で単一セグメント",
+            "segments": [
+                {
+                    "name": "SaaSサブスクリプション",
+                    "model_type": "subscription",
+                    "revenue_formula": "顧客数 × ARPU × 12",
+                    "revenue_drivers": [
+                        {"name": "顧客数", "unit": "社", "estimated_value": "100", "evidence": "資料記載", "description": ""},
+                    ],
+                    "key_assumptions": ["解約率10%"],
+                },
+            ],
+            "shared_costs": [
+                {"name": "人件費", "category": "fixed", "estimated_value": "30000000", "evidence": "推定", "description": ""},
+            ],
+            "growth_trajectory": "3年で300社",
+            "risk_factors": ["解約率上振れ"],
+            "time_horizon": "5年間",
+            "confidence": 0.85,
+            "reasoning": "資料の記述がサブスクリプション型に合致",
+        },
+        {
+            "label": "パターンB: SaaS+コンサル複合",
+            "industry": "IT",
+            "business_model_type": "B2B",
+            "executive_summary": "SaaS+導入コンサルティングの複合モデル",
+            "segments": [
+                {
+                    "name": "SaaSサブスクリプション",
+                    "model_type": "subscription",
+                    "revenue_formula": "顧客数 × ARPU × 12",
+                    "revenue_drivers": [],
+                    "key_assumptions": [],
+                },
+                {
+                    "name": "導入コンサルティング",
+                    "model_type": "project",
+                    "revenue_formula": "案件数 × 単価",
+                    "revenue_drivers": [],
+                    "key_assumptions": [],
+                },
+            ],
+            "shared_costs": [],
+            "growth_trajectory": "SaaS拡大+コンサル安定",
+            "risk_factors": ["人材確保"],
+            "time_horizon": "5年間",
+            "confidence": 0.65,
+            "reasoning": "IT企業は導入支援を併設することが多い",
+        },
+        {
+            "label": "パターンC: プラットフォーム型",
+            "industry": "IT",
+            "business_model_type": "B2B2C",
+            "executive_summary": "将来的にプラットフォーム型に進化する可能性",
+            "segments": [
+                {
+                    "name": "プラットフォーム",
+                    "model_type": "marketplace",
+                    "revenue_formula": "取引額 × 手数料率",
+                    "revenue_drivers": [],
+                    "key_assumptions": [],
+                },
+            ],
+            "shared_costs": [],
+            "growth_trajectory": "ネットワーク効果で加速",
+            "risk_factors": ["鶏と卵問題"],
+            "time_horizon": "5年間",
+            "confidence": 0.35,
+            "reasoning": "プラットフォーム化の兆候あり",
+        },
+    ],
+    "currency": "JPY",
+}
+
+
+class TestBusinessModelAnalyzerProposals:
+    """Tests for the new proposals-based BM analysis."""
+
+    def test_analyze_returns_proposals(self) -> None:
+        llm = _make_mock_llm([MOCK_BM_PROPOSALS_RESPONSE])
+        result = BusinessModelAnalyzer(llm).analyze("doc text")
+        assert isinstance(result, BusinessModelAnalysis)
+        assert len(result.proposals) == 3
+        assert result.document_narrative != ""
+        assert len(result.key_facts) == 3
+
+    def test_proposals_sorted_by_confidence(self) -> None:
+        llm = _make_mock_llm([MOCK_BM_PROPOSALS_RESPONSE])
+        result = BusinessModelAnalyzer(llm).analyze("doc")
+        confidences = [p.confidence for p in result.proposals]
+        assert confidences == sorted(confidences, reverse=True)
+
+    def test_first_proposal_auto_selected(self) -> None:
+        llm = _make_mock_llm([MOCK_BM_PROPOSALS_RESPONSE])
+        result = BusinessModelAnalyzer(llm).analyze("doc")
+        assert result.selected_index == 0
+        # Main fields should match first (highest-confidence) proposal
+        assert result.industry == result.proposals[0].industry
+        assert result.segments == result.proposals[0].segments
+
+    def test_select_proposal_updates_fields(self) -> None:
+        llm = _make_mock_llm([MOCK_BM_PROPOSALS_RESPONSE])
+        result = BusinessModelAnalyzer(llm).analyze("doc")
+        # Select pattern B (index 1)
+        result2 = result.select_proposal(1)
+        assert result2.selected_index == 1
+        assert result2.industry == "IT"
+        assert len(result2.segments) == 2
+        assert result2.segments[1].name == "導入コンサルティング"
+        # Narrative preserved
+        assert result2.document_narrative == result.document_narrative
+
+    def test_select_proposal_raw_json_compat(self) -> None:
+        """raw_json should have old-format keys for downstream phases."""
+        llm = _make_mock_llm([MOCK_BM_PROPOSALS_RESPONSE])
+        result = BusinessModelAnalyzer(llm).analyze("doc")
+        result2 = result.select_proposal(0)
+        raw = result2.raw_json
+        assert "segments" in raw
+        assert "shared_costs" in raw
+        assert "industry" in raw
+        assert raw["company_name"] == "テスト株式会社"
+
+    def test_select_proposal_out_of_range(self) -> None:
+        llm = _make_mock_llm([MOCK_BM_PROPOSALS_RESPONSE])
+        result = BusinessModelAnalyzer(llm).analyze("doc")
+        # Out of range should return self unchanged
+        result2 = result.select_proposal(99)
+        assert result2.selected_index == result.selected_index
+
+    def test_proposal_model_fields(self) -> None:
+        llm = _make_mock_llm([MOCK_BM_PROPOSALS_RESPONSE])
+        result = BusinessModelAnalyzer(llm).analyze("doc")
+        p = result.proposals[0]
+        assert isinstance(p, BusinessModelProposal)
+        assert p.label != ""
+        assert p.reasoning != ""
+        assert 0.0 <= p.confidence <= 1.0
 
 
 # ---------------------------------------------------------------------------

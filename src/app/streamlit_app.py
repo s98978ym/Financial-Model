@@ -619,7 +619,7 @@ def _run_phase_1_scan(doc_file) -> None:
 
 def _render_phase_2() -> None:
     st.markdown("### Phase 2: ビジネスモデル分析")
-    st.caption("事業計画書からビジネスモデルを分析します。結果を確認し、フィードバックを入力してください。")
+    st.caption("事業計画書を深く読み込み、ビジネスモデルを分析します。複数の解釈パターンから最適なものを選択してください。")
 
     bm = st.session_state.get("bm_result")
     bm_error = st.session_state.get("bm_error", "")
@@ -643,11 +643,11 @@ def _render_phase_2() -> None:
 
     # Feedback section
     st.markdown("**フィードバック**")
-    st.caption("分析結果に修正が必要な場合、指示を入力して「再分析」してください。問題なければ「確定」してください。")
+    st.caption("分析結果に修正が必要な場合、指示を入力して「再分析」してください。パターンを選択して「確定」してください。")
     feedback = st.text_area(
         "フィードバック",
         value="",
-        placeholder="例: セグメントが1つ足りない。コンサルティング事業も追加してください。",
+        placeholder="例: SaaS事業だけでなくコンサルティング収益もあります / パターンBが近いがセグメントをもう1つ追加してほしい",
         key="bm_feedback",
         label_visibility="collapsed",
     )
@@ -661,6 +661,11 @@ def _render_phase_2() -> None:
         can_confirm = bm is not None
         if st.button("確定 → テンプレ構造へ", type="primary", use_container_width=True,
                       disabled=not can_confirm, key="btn_bm_confirm"):
+            # Apply the selected proposal before moving to Phase 3
+            selected_idx = st.session_state.get("bm_selected_proposal", 0)
+            if bm is not None and hasattr(bm, "select_proposal"):
+                bm = bm.select_proposal(selected_idx)
+                st.session_state["bm_result"] = bm
             st.session_state["wizard_phase"] = 3
             st.rerun()
     with col3:
@@ -675,59 +680,153 @@ def _run_bm_analysis(feedback: str = "") -> None:
         st.session_state["bm_error"] = "ドキュメントがありません。Phase 1に戻ってください。"
         return
 
-    with st.spinner("ビジネスモデルを分析中..."):
+    with st.spinner("ビジネスモデルを深く分析中... (30秒〜1分程度)"):
         try:
             orch = _get_orchestrator()
             bm = orch.run_bm_analysis(document.full_text, feedback=feedback)
             st.session_state["bm_result"] = bm
             st.session_state["bm_error"] = ""
+            st.session_state["bm_selected_proposal"] = 0
         except Exception as exc:
             st.session_state["bm_error"] = str(exc)
             logger.error("BM analysis failed: %s", exc)
 
 
 def _render_bm_results(bm: Any) -> None:
-    st.success(f"分析完了: {bm.industry} / {bm.business_model_type} / {len(bm.segments)}セグメント")
+    # --- Header ---
+    num_proposals = len(bm.proposals) if hasattr(bm, "proposals") else 0
+    if num_proposals > 0:
+        st.success(f"分析完了: {bm.company_name} / {num_proposals}パターン提案")
+    else:
+        st.success(f"分析完了: {bm.industry} / {bm.business_model_type} / {len(bm.segments)}セグメント")
 
-    st.markdown(f"**会社名:** {bm.company_name}")
-    st.markdown(f"**事業概要:** {bm.executive_summary}")
-    st.markdown(f"**業種:** {bm.industry} | **モデル:** {bm.business_model_type} | **期間:** {bm.time_horizon}")
+    # --- Narrative (story) ---
+    narrative = getattr(bm, "document_narrative", "")
+    if narrative:
+        st.markdown("#### ビジネス理解 (ストーリー)")
+        st.info(narrative)
 
-    st.markdown("---")
-    st.markdown("**事業セグメント:**")
-    for i, seg in enumerate(bm.segments):
-        with st.expander(f"#{i+1} {seg.name} ({seg.model_type})", expanded=True):
-            st.markdown(f"**収益公式:** `{seg.revenue_formula}`")
-            if seg.revenue_drivers:
-                import pandas as pd
-                driver_data = []
-                for d in seg.revenue_drivers:
-                    driver_data.append({
-                        "ドライバー": d.name,
-                        "単位": d.unit,
-                        "推定値": d.estimated_value or "-",
-                        "根拠": d.evidence[:80] if d.evidence else "-",
-                    })
-                st.dataframe(pd.DataFrame(driver_data), use_container_width=True, hide_index=True)
-            if seg.key_assumptions:
-                st.markdown("**前提条件:** " + " / ".join(seg.key_assumptions))
+    # --- Key facts ---
+    key_facts = getattr(bm, "key_facts", [])
+    if key_facts:
+        st.markdown("#### 読み取った重要事実")
+        for fact in key_facts:
+            st.markdown(f"- {fact}")
 
-    if bm.shared_costs:
+    # --- Proposals (3-5 pattern selection) ---
+    proposals = getattr(bm, "proposals", [])
+    if proposals:
         st.markdown("---")
-        st.markdown("**共通コスト:**")
-        import pandas as pd
-        cost_data = []
-        for c in bm.shared_costs:
-            cost_data.append({
-                "項目": c.name,
-                "区分": c.category,
-                "推定値": c.estimated_value or "-",
-                "根拠": c.evidence[:80] if c.evidence else "-",
-            })
-        st.dataframe(pd.DataFrame(cost_data), use_container_width=True, hide_index=True)
+        st.markdown("#### ビジネスモデル解釈パターン")
+        st.caption("以下のパターンから最も近いものを選択してください。選択したパターンを元に次フェーズでテンプレート構造を設計します。")
 
-    if bm.risk_factors:
-        st.markdown(f"**リスク要因:** {', '.join(bm.risk_factors)}")
+        # Radio selection for proposals
+        proposal_labels = []
+        for i, p in enumerate(proposals):
+            conf_pct = int(p.confidence * 100)
+            proposal_labels.append(f"{p.label} (確信度: {conf_pct}%)")
+
+        selected_idx = st.radio(
+            "パターン選択",
+            options=list(range(len(proposals))),
+            format_func=lambda i: proposal_labels[i],
+            index=st.session_state.get("bm_selected_proposal", 0),
+            key="bm_proposal_radio",
+            label_visibility="collapsed",
+        )
+        st.session_state["bm_selected_proposal"] = selected_idx
+
+        # Show all proposals as expandable cards
+        for i, p in enumerate(proposals):
+            is_selected = (i == selected_idx)
+            icon = ">> " if is_selected else ""
+            with st.expander(
+                f"{icon}{p.label}",
+                expanded=is_selected,
+            ):
+                st.markdown(f"**解釈の根拠:** {p.reasoning}")
+                st.markdown(f"**業種:** {p.industry} | **モデル:** {p.business_model_type} | **期間:** {p.time_horizon}")
+                st.markdown(f"**概要:** {p.executive_summary}")
+
+                # Segments
+                if p.segments:
+                    st.markdown("**セグメント構成:**")
+                    for j, seg in enumerate(p.segments):
+                        st.markdown(f"  **{j+1}. {seg.name}** ({seg.model_type})")
+                        st.markdown(f"  収益公式: `{seg.revenue_formula}`")
+                        if seg.revenue_drivers:
+                            import pandas as pd
+                            driver_data = []
+                            for d in seg.revenue_drivers:
+                                driver_data.append({
+                                    "ドライバー": d.name,
+                                    "単位": d.unit,
+                                    "推定値": d.estimated_value or "-",
+                                    "根拠": d.evidence[:80] if d.evidence else "-",
+                                })
+                            st.dataframe(pd.DataFrame(driver_data), use_container_width=True, hide_index=True)
+                        if seg.key_assumptions:
+                            st.markdown("  前提条件: " + " / ".join(seg.key_assumptions))
+
+                # Shared costs
+                if p.shared_costs:
+                    st.markdown("**共通コスト:**")
+                    import pandas as pd
+                    cost_data = []
+                    for c in p.shared_costs:
+                        cost_data.append({
+                            "項目": c.name,
+                            "区分": c.category,
+                            "推定値": c.estimated_value or "-",
+                            "根拠": c.evidence[:80] if c.evidence else "-",
+                        })
+                    st.dataframe(pd.DataFrame(cost_data), use_container_width=True, hide_index=True)
+
+                if p.growth_trajectory:
+                    st.markdown(f"**成長シナリオ:** {p.growth_trajectory}")
+                if p.risk_factors:
+                    st.markdown(f"**リスク要因:** {', '.join(p.risk_factors)}")
+    else:
+        # Fallback: old-style single result (no proposals)
+        st.markdown(f"**会社名:** {bm.company_name}")
+        st.markdown(f"**事業概要:** {bm.executive_summary}")
+        st.markdown(f"**業種:** {bm.industry} | **モデル:** {bm.business_model_type} | **期間:** {bm.time_horizon}")
+
+        st.markdown("---")
+        st.markdown("**事業セグメント:**")
+        for i, seg in enumerate(bm.segments):
+            with st.expander(f"#{i+1} {seg.name} ({seg.model_type})", expanded=True):
+                st.markdown(f"**収益公式:** `{seg.revenue_formula}`")
+                if seg.revenue_drivers:
+                    import pandas as pd
+                    driver_data = []
+                    for d in seg.revenue_drivers:
+                        driver_data.append({
+                            "ドライバー": d.name,
+                            "単位": d.unit,
+                            "推定値": d.estimated_value or "-",
+                            "根拠": d.evidence[:80] if d.evidence else "-",
+                        })
+                    st.dataframe(pd.DataFrame(driver_data), use_container_width=True, hide_index=True)
+                if seg.key_assumptions:
+                    st.markdown("**前提条件:** " + " / ".join(seg.key_assumptions))
+
+        if bm.shared_costs:
+            st.markdown("---")
+            st.markdown("**共通コスト:**")
+            import pandas as pd
+            cost_data = []
+            for c in bm.shared_costs:
+                cost_data.append({
+                    "項目": c.name,
+                    "区分": c.category,
+                    "推定値": c.estimated_value or "-",
+                    "根拠": c.evidence[:80] if c.evidence else "-",
+                })
+            st.dataframe(pd.DataFrame(cost_data), use_container_width=True, hide_index=True)
+
+        if bm.risk_factors:
+            st.markdown(f"**リスク要因:** {', '.join(bm.risk_factors)}")
 
     # Raw JSON (collapsed)
     with st.expander("Raw JSON", expanded=False):
