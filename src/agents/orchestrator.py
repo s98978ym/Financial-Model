@@ -1,19 +1,18 @@
-"""Agent Orchestrator -- coordinates the two-agent extraction pipeline.
+"""Agent Orchestrator -- coordinates the multi-phase extraction pipeline.
 
-Pipeline:
-    Document + Template
-        │
-        ├─ Step 1: BusinessModelAnalyzer  (Agent 1)
-        │   → What kind of business is this?
-        │
-        ├─ Step 2: FMDesigner  (Agent 2)
-        │   → How does this business map to the template?
-        │
-        └─ Output: cell-level extractions with full context
+Pipeline (6 phases):
+    Phase 1: Upload + Template Scan (no LLM)
+    Phase 2: Business Model Analysis        (Agent 1) -> feedback -> confirm
+    Phase 3: Template Structure Mapping      (Agent 2) -> feedback -> confirm
+    Phase 4: Model Design (cell assignments) (Agent 3) -> feedback -> confirm
+    Phase 5: Parameter Extraction            (Agent 4) -> feedback -> confirm
+    Phase 6: Final Review + Excel Generation
 
-This replaces the old single-pass ParameterExtractor with a
-two-agent pipeline that first understands the business, then
-maps it intelligently to the template.
+Each phase can be run independently with optional user feedback.
+The Streamlit UI controls the flow between phases.
+
+Legacy two-agent pipeline (``run()``) is preserved for backward
+compatibility and tests.
 """
 from __future__ import annotations
 
@@ -25,6 +24,9 @@ from typing import Any, Dict, List, Optional
 
 from .business_model_analyzer import BusinessModelAnalyzer, BusinessModelAnalysis
 from .fm_designer import FMDesigner, FMDesignResult, CellExtraction
+from .template_mapper import TemplateMapper, TemplateStructureResult
+from .model_designer import ModelDesigner, ModelDesignResult
+from .parameter_extractor import ParameterExtractorAgent, ParameterExtractionResult
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +50,7 @@ class AgentStep:
 
 @dataclass
 class OrchestrationResult:
-    """Complete result from the two-agent pipeline."""
+    """Complete result from the two-agent pipeline (legacy)."""
     analysis: Optional[BusinessModelAnalysis] = None
     design: Optional[FMDesignResult] = None
     steps: List[AgentStep] = field(default_factory=list)
@@ -78,30 +80,89 @@ class OrchestrationResult:
 
 
 class AgentOrchestrator:
-    """Coordinates the two-agent extraction pipeline.
+    """Coordinates the multi-phase extraction pipeline.
 
-    Usage::
+    Phased usage (new)::
 
-        from src.extract.llm_client import LLMClient
-        from src.agents.orchestrator import AgentOrchestrator
+        orch = AgentOrchestrator(llm_client)
 
-        llm = LLMClient()
-        orch = AgentOrchestrator(llm)
+        # Phase 2
+        bm = orch.run_bm_analysis(document_text)
+        # ... user feedback ...
+        bm = orch.run_bm_analysis(document_text, feedback="add segment X")
+
+        # Phase 3
+        ts = orch.run_template_mapping(bm.raw_json, catalog_items)
+
+        # Phase 4
+        md = orch.run_model_design(bm.raw_json, ts.raw_json, catalog_items)
+
+        # Phase 5
+        pe = orch.run_parameter_extraction(md.raw_json, document_text)
+
+    Legacy usage (preserved for backward compat)::
+
         result = orch.run(document_text, catalog_items)
-
-        # Business model analysis
-        print(result.analysis.executive_summary)
-        print(result.analysis.segments)
-
-        # Cell extractions
-        for ext in result.extractions:
-            print(f"{ext.sheet}!{ext.cell} = {ext.value} ({ext.confidence})")
     """
 
     def __init__(self, llm_client: Any) -> None:
         self.llm = llm_client
         self.agent1 = BusinessModelAnalyzer(llm_client)
         self.agent2 = FMDesigner(llm_client)
+        self.template_mapper = TemplateMapper(llm_client)
+        self.model_designer = ModelDesigner(llm_client)
+        self.param_extractor = ParameterExtractorAgent(llm_client)
+
+    # ------------------------------------------------------------------
+    # Phased execution (new)
+    # ------------------------------------------------------------------
+
+    def run_bm_analysis(
+        self,
+        document_text: str,
+        feedback: str = "",
+    ) -> BusinessModelAnalysis:
+        """Phase 2: Run Business Model Analyzer."""
+        return self.agent1.analyze(document_text, feedback=feedback)
+
+    def run_template_mapping(
+        self,
+        analysis_json: Dict[str, Any],
+        catalog_items: List[Dict[str, Any]],
+        feedback: str = "",
+    ) -> TemplateStructureResult:
+        """Phase 3: Run Template Structure Mapper."""
+        return self.template_mapper.map_structure(
+            analysis_json, catalog_items, feedback=feedback,
+        )
+
+    def run_model_design(
+        self,
+        analysis_json: Dict[str, Any],
+        template_structure_json: Dict[str, Any],
+        catalog_items: List[Dict[str, Any]],
+        feedback: str = "",
+    ) -> ModelDesignResult:
+        """Phase 4: Run Model Designer."""
+        return self.model_designer.design(
+            analysis_json, template_structure_json, catalog_items,
+            feedback=feedback,
+        )
+
+    def run_parameter_extraction(
+        self,
+        model_design_json: Dict[str, Any],
+        document_text: str,
+        feedback: str = "",
+    ) -> ParameterExtractionResult:
+        """Phase 5: Run Parameter Extractor."""
+        return self.param_extractor.extract_values(
+            model_design_json, document_text, feedback=feedback,
+        )
+
+    # ------------------------------------------------------------------
+    # Legacy two-agent pipeline (backward compat)
+    # ------------------------------------------------------------------
 
     def run(
         self,
@@ -110,7 +171,7 @@ class AgentOrchestrator:
         *,
         on_step: Any = None,
     ) -> OrchestrationResult:
-        """Run the full two-agent pipeline.
+        """Run the full two-agent pipeline (legacy).
 
         Parameters
         ----------
@@ -155,8 +216,6 @@ class AgentOrchestrator:
                 on_step(step1)
 
         # ---- Step 2: FM Design ----
-        # Runs even if Step 1 failed -- uses empty analysis as fallback
-        # so the LLM can still attempt direct extraction from the document.
         step2 = AgentStep(agent_name="FM Designer")
         result.steps.append(step2)
         step2.status = "running"
@@ -164,12 +223,11 @@ class AgentOrchestrator:
         if on_step:
             on_step(step2)
 
-        # Use analysis from Step 1, or an empty fallback
         analysis_for_step2 = result.analysis or BusinessModelAnalysis()
 
         if not result.analysis or not result.analysis.segments:
             step2.summary = "Agent 1 未完了のため、直接抽出モードで実行"
-            logger.info("Step 2: running in direct extraction mode (no business model analysis)")
+            logger.info("Step 2: running in direct extraction mode")
 
         try:
             design = self.agent2.design(

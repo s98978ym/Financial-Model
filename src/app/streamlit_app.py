@@ -1,14 +1,16 @@
 """
-PL Generator -- PL Blueprint Wizard (Streamlit UI)
-===================================================
+PL Generator -- Multi-Phase Wizard (Streamlit UI)
+==================================================
 
-A two-phase wizard for generating P&L Excel models from business-plan
-documents.  The "PL Blueprint" view shows the template structure as the
-organising principle, with extracted values filling slots and gaps
-clearly visible.
+A 6-phase interactive wizard for generating P&L Excel models from
+business-plan documents, with user feedback at each stage.
 
-* **Phase A** -- Upload & Analysis  (アップロード & 分析)
-* **Phase B** -- PL Blueprint       (PL 設計図 & 生成)
+* **Phase 1** -- Upload & Scan       (アップロード & スキャン)
+* **Phase 2** -- BM Analysis          (ビジネスモデル分析)
+* **Phase 3** -- Template Structure   (テンプレート構造)
+* **Phase 4** -- Model Design         (モデル設計)
+* **Phase 5** -- Parameters           (パラメーター抽出)
+* **Phase 6** -- Final Output         (最終出力 & Excel生成)
 
 Run with::
 
@@ -95,8 +97,7 @@ try:
     from src.excel.case_generator import CaseGenerator
 
     # Compat layer: centralised fallbacks for names that may not exist
-    # in older deployments.  If compat.py itself is missing (because it
-    # hasn't been merged yet), fall back to inline definitions.
+    # in older deployments.
     try:
         from src.app.compat import (  # noqa: F811
             LLMClient, LLMError,
@@ -105,7 +106,6 @@ try:
             USER_PROMPT_TEMPLATE,
         )
     except ImportError:
-        # compat.py not yet deployed -- define everything inline
         from src.extract.llm_client import LLMClient  # noqa: F811
         try:
             from src.extract.llm_client import LLMError  # noqa: F811
@@ -153,39 +153,40 @@ except ImportError as exc:
     SimulationEngine = None  # type: ignore[assignment,misc]
     export_simulation_summary = None  # type: ignore[assignment]
 
+# Agent imports (new multi-phase pipeline)
+try:
+    from src.agents.orchestrator import AgentOrchestrator
+    from src.agents.business_model_analyzer import BusinessModelAnalysis
+    from src.agents.template_mapper import TemplateStructureResult
+    from src.agents.model_designer import ModelDesignResult
+    from src.agents.parameter_extractor import ParameterExtractionResult
+except ImportError as exc:
+    _IMPORT_ERRORS.append(f"agents: {exc}")
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
 
-INDUSTRY_OPTIONS: List[str] = [
-    "SaaS",
-    "教育",
-    "人材",
-    "EC",
-    "小売",
-    "飲食",
-    "メーカー",
-    "ヘルスケア",
-    "その他 (自由入力)",
-]
-
-BUSINESS_MODEL_OPTIONS: List[str] = ["B2B", "B2C", "B2B2C", "MIX", "Other"]
-CASE_OPTIONS: List[str] = ["Best", "Base", "Worst"]
 ALLOWED_DOC_EXTENSIONS: List[str] = ["pdf", "docx", "pptx"]
 DEFAULT_TEMPLATE_PATH = "templates/base.xlsx"
 
-# Default colour values
 DEFAULT_INPUT_COLOR = "#FFF2CC"
 DEFAULT_FORMULA_COLOR = "#4472C4"
 DEFAULT_TOTAL_COLOR = "#D9E2F3"
 
-# Phase definitions (2-phase flow)
-PHASES = {
-    "A": {"label": "アップロード & 分析", "en": "Upload", "icon": "1"},
-    "B": {"label": "PL 設計図", "en": "Blueprint", "icon": "2"},
-}
+# Phase definitions (6-phase flow)
+PHASES = [
+    {"key": 1, "label": "アップロード", "short": "Upload"},
+    {"key": 2, "label": "BM分析", "short": "BM Analysis"},
+    {"key": 3, "label": "テンプレ構造", "short": "Template"},
+    {"key": 4, "label": "モデル設計", "short": "Model"},
+    {"key": 5, "label": "パラメーター", "short": "Params"},
+    {"key": 6, "label": "最終出力", "short": "Output"},
+]
+
+CASE_OPTIONS: List[str] = ["Best", "Base", "Worst"]
 
 
 # ---------------------------------------------------------------------------
@@ -198,11 +199,11 @@ def _inject_custom_css() -> None:
     /* Step indicator bar */
     .step-bar {
         display: flex; justify-content: center; gap: 0;
-        margin: 0 auto 1.5rem auto; max-width: 720px;
+        margin: 0 auto 1.5rem auto; max-width: 900px;
     }
     .step-item {
-        flex: 1; text-align: center; padding: 0.75rem 0.5rem;
-        font-size: 0.85rem; color: #888;
+        flex: 1; text-align: center; padding: 0.6rem 0.3rem;
+        font-size: 0.78rem; color: #888;
         border-bottom: 3px solid #e0e0e0; transition: all 0.2s;
     }
     .step-item.active {
@@ -213,10 +214,10 @@ def _inject_custom_css() -> None:
         color: #198754; border-bottom: 3px solid #198754;
     }
     .step-num {
-        display: inline-block; width: 24px; height: 24px;
-        line-height: 24px; border-radius: 50%;
+        display: inline-block; width: 22px; height: 22px;
+        line-height: 22px; border-radius: 50%;
         background: #e0e0e0; color: #666;
-        font-weight: 700; font-size: 0.8rem; margin-right: 0.4rem;
+        font-weight: 700; font-size: 0.75rem; margin-right: 0.3rem;
     }
     .step-item.active .step-num,
     .step-item.completed .step-num {
@@ -235,7 +236,6 @@ def _inject_custom_css() -> None:
     }
     .metric-label { font-size: 0.8rem; color: #666; margin-top: 0.25rem; }
 
-    /* Gap metric (red accent) */
     .metric-card-gap {
         background: linear-gradient(135deg, #fff8f8 0%, #fef0f0 100%);
         border: 1px solid #f5c6cb; border-radius: 12px;
@@ -265,11 +265,17 @@ def _inject_custom_css() -> None:
         background: #e2e3e5; color: #41464b;
     }
 
-    /* File upload feedback */
     .file-ok {
         background: #d4edda; border: 1px solid #c3e6cb;
         border-radius: 8px; padding: 0.6rem 1rem;
         color: #155724; font-size: 0.9rem; margin: 0.5rem 0;
+    }
+
+    /* Feedback card */
+    .feedback-card {
+        background: #f8f9fa; border: 1px solid #dee2e6;
+        border-radius: 12px; padding: 1rem;
+        margin: 1rem 0;
     }
 
     /* KPI banner */
@@ -289,13 +295,11 @@ def _inject_custom_css() -> None:
     .kpi-banner li { color: #333; }
     .kpi-dep { color: #666; font-size: 0.78rem; }
 
-    /* Navigation hint */
     .nav-hint {
         text-align: center; color: #999;
         font-size: 0.8rem; margin-top: 0.5rem;
     }
 
-    /* Sidebar */
     section[data-testid="stSidebar"] {
         background: linear-gradient(180deg, #f0faf6 0%, #ffffff 100%);
     }
@@ -322,17 +326,31 @@ class ColorConfig:
 
 def _init_session_state() -> None:
     defaults = {
-        "phase": "A",
-        "config": None,
+        "wizard_phase": 1,
         "color_config": ColorConfig(),
+        # Phase 1 data
+        "config": None,
         "document": None,
         "catalog": None,
-        "analysis": None,
+        "analysis": None,  # Template formula structure
+        "writable_items": [],
+        # Phase 2 data
+        "bm_result": None,
+        "bm_error": "",
+        # Phase 3 data
+        "ts_result": None,
+        "ts_error": "",
+        # Phase 4 data
+        "md_result": None,
+        "md_error": "",
+        # Phase 5 data
+        "pe_result": None,
+        "pe_error": "",
+        # Phase 6 data
         "parameters": [],
-        "extraction_result": None,
         "generation_outputs": {},
+        # Common
         "error_message": "",
-        "success_message": "",
         "reset_confirm": False,
     }
     for key, default in defaults.items():
@@ -345,26 +363,23 @@ def _init_session_state() -> None:
 # ---------------------------------------------------------------------------
 
 def _render_step_indicator() -> None:
-    current = st.session_state["phase"]
-    phase_order = ["A", "B"]
-    current_idx = phase_order.index(current) if current in phase_order else 0
-
+    current = st.session_state["wizard_phase"]
     html_parts = ['<div class="step-bar">']
-    for idx, code in enumerate(phase_order):
-        info = PHASES[code]
-        if idx < current_idx:
+    for p in PHASES:
+        idx = p["key"]
+        if idx < current:
             cls = "completed"
             check = "&#10003;"
-        elif idx == current_idx:
+        elif idx == current:
             cls = "active"
-            check = info["icon"]
+            check = str(idx)
         else:
             cls = ""
-            check = info["icon"]
+            check = str(idx)
         html_parts.append(
             f'<div class="step-item {cls}">'
             f'<span class="step-num">{check}</span>'
-            f'{info["label"]}'
+            f'{p["label"]}'
             f'</div>'
         )
     html_parts.append('</div>')
@@ -405,6 +420,10 @@ def _confidence_text(confidence: float) -> str:
     return "LOW"
 
 
+def _esc(text: str) -> str:
+    return html_mod.escape(str(text)) if text else ""
+
+
 # ---------------------------------------------------------------------------
 # Utility helpers
 # ---------------------------------------------------------------------------
@@ -416,19 +435,61 @@ def _save_uploaded_file(uploaded_file) -> str:
     return str(dest)
 
 
-def _esc(text: str) -> str:
-    """HTML-escape a string for safe embedding in markdown."""
-    return html_mod.escape(str(text)) if text else ""
+def _get_llm_client() -> Any:
+    """Create LLMClient with pre-flight API check."""
+    import time as _time
+
+    _api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    if not _api_key:
+        raise RuntimeError(
+            "ANTHROPIC_API_KEY が見つかりません。\n"
+            f"APIキー検索結果: {_API_KEY_SOURCE}\n"
+            "Streamlit Cloud: Settings → Secrets で ANTHROPIC_API_KEY を設定してください。"
+        )
+
+    # Direct API connectivity test
+    _preflight_start = _time.time()
+    try:
+        from anthropic import Anthropic as _Anthropic
+        _test_client = _Anthropic(api_key=_api_key)
+        _test_resp = _test_client.messages.create(
+            model="claude-sonnet-4-5-20250929",
+            max_tokens=16,
+            messages=[{"role": "user", "content": "Reply with exactly: OK"}],
+        )
+        _test_content = (_test_resp.content[0].text or "").strip()
+        if not _test_content:
+            raise RuntimeError("Claude API応答が空です。")
+    except ImportError:
+        raise RuntimeError("anthropic パッケージが見つかりません。")
+    except RuntimeError:
+        raise
+    except Exception as _pf_exc:
+        _elapsed = _time.time() - _preflight_start
+        raise RuntimeError(
+            f"Claude API 接続失敗: {type(_pf_exc).__name__}: {_pf_exc}\n"
+            f"時間={_elapsed:.1f}秒, APIキーソース: {_API_KEY_SOURCE}"
+        ) from _pf_exc
+
+    return LLMClient()
+
+
+def _get_orchestrator() -> Any:
+    """Create AgentOrchestrator with pre-flight check."""
+    llm = _get_llm_client()
+    return AgentOrchestrator(llm)
 
 
 # ===================================================================
-# Phase A: Upload & Analysis
+# Phase 1: Upload & Scan
 # ===================================================================
 
-def _render_phase_a() -> None:
-    st.markdown("#### 事業計画書をアップロードしてください")
+def _render_phase_1() -> None:
+    st.markdown("### Phase 1: アップロード & スキャン")
+    st.caption("事業計画書とExcelテンプレートをアップロードしてください。")
+
     doc_file = st.file_uploader(
-        "事業計画書", type=ALLOWED_DOC_EXTENSIONS,
+        "事業計画書 (PDF / DOCX / PPTX)", type=ALLOWED_DOC_EXTENSIONS,
         key="doc_upload", label_visibility="collapsed",
     )
 
@@ -436,95 +497,22 @@ def _render_phase_a() -> None:
         ext = doc_file.name.split(".")[-1].upper()
         size_kb = len(doc_file.getvalue()) / 1024
         st.markdown(
-            f'<div class="file-ok">&#10003; {doc_file.name} ({ext}, {size_kb:.0f} KB) アップロード済み</div>',
+            f'<div class="file-ok">&#10003; {doc_file.name} ({ext}, {size_kb:.0f} KB)</div>',
             unsafe_allow_html=True,
         )
 
-        if st.button(
-            "分析開始",
-            type="primary",
-            use_container_width=True,
-            key="btn_start_analysis",
-        ):
-            industry = st.session_state.get("industry_select", "SaaS")
-            if "その他" in industry:
-                industry = st.session_state.get("industry_freetext", "その他") or "その他"
-            business_model = st.session_state.get("biz_model_select", "B2B")
-            strictness_label = st.session_state.get("strictness_select", "ノーマル (normal)")
-            strictness = "strict" if "厳密" in strictness_label else "normal"
-            cases_raw = st.session_state.get("case_multiselect", ["Base"])
-            if not cases_raw:
-                cases_raw = ["Base"]
-            run_simulation = st.session_state.get("sim_checkbox", False)
-
-            _run_phase_a_analysis(
-                industry=industry, business_model=business_model,
-                strictness=strictness, cases=[c.lower() for c in cases_raw],
-                run_simulation=run_simulation,
-                input_color=st.session_state.get("color_input", DEFAULT_INPUT_COLOR),
-                formula_color=st.session_state.get("color_formula", DEFAULT_FORMULA_COLOR),
-                total_color=st.session_state.get("color_total", DEFAULT_TOTAL_COLOR),
-                apply_formula_color=st.session_state.get("toggle_formula_color", False),
-                apply_total_color=st.session_state.get("toggle_total_color", False),
-                doc_file=doc_file,
-                template_file=st.session_state.get("template_upload_file", None),
-            )
-
-        st.caption("通常 30〜60 秒かかります")
-
-    else:
-        st.markdown(
-            '<div style="text-align:center; padding:3rem 1rem; '
-            'color:#999; border:2px dashed #ddd; border-radius:12px; '
-            'margin:1rem 0;">'
-            '<p style="font-size:1.2rem;">PDF / DOCX / PPTX ファイルを'
-            'ドラッグ＆ドロップ</p>'
-            '<p style="font-size:0.85rem;">またはクリックしてファイルを選択</p>'
-            '</div>',
-            unsafe_allow_html=True,
-        )
-
-    # Optional settings (collapsed)
-    st.markdown("")
-    with st.expander("設定をカスタマイズ（任意 - デフォルトでも動作します）", expanded=False):
-        st.caption("通常は変更不要です。必要な場合のみ調整してください。")
-
+    with st.expander("設定（任意）", expanded=False):
         col1, col2 = st.columns(2)
         with col1:
-            industry_choice = st.selectbox(
-                "業種", options=INDUSTRY_OPTIONS, index=0,
-                key="industry_select",
-            )
-            if "その他" in industry_choice:
-                st.text_input("業種を入力", value="", key="industry_freetext", placeholder="例: フィンテック")
-            st.selectbox(
-                "ビジネスモデル", options=BUSINESS_MODEL_OPTIONS, index=0,
-                key="biz_model_select",
-            )
+            st.multiselect("生成ケース", options=CASE_OPTIONS, default=["Base"], key="case_multiselect")
+            st.checkbox("Monte Carlo シミュレーション", value=False, key="sim_checkbox")
         with col2:
-            st.selectbox(
-                "厳密度",
-                options=["ノーマル (normal)", "厳密 (strict)"],
-                index=0, key="strictness_select",
-                help="厳密: エビデンス必須。ノーマル: LLM推定で補完。",
+            template_file = st.file_uploader(
+                "Excel テンプレート（任意）", type=["xlsx"], key="template_upload",
             )
-            st.multiselect(
-                "生成ケース", options=CASE_OPTIONS, default=["Base"],
-                key="case_multiselect",
-            )
-            st.checkbox(
-                "Monte Carlo シミュレーション", value=False, key="sim_checkbox",
-            )
+            if template_file:
+                st.session_state["template_upload_file"] = template_file
 
-        st.markdown("---")
-        template_file = st.file_uploader(
-            "Excel テンプレート（任意 - 未指定ならデフォルト使用）", type=["xlsx"],
-            key="template_upload",
-        )
-        if template_file:
-            st.session_state["template_upload_file"] = template_file
-
-        st.markdown("---")
         st.caption("セル色設定")
         c1, c2, c3 = st.columns(3)
         with c1:
@@ -533,128 +521,27 @@ def _render_phase_a() -> None:
             st.color_picker("数式フォント色", value=DEFAULT_FORMULA_COLOR, key="color_formula")
         with c3:
             st.color_picker("合計セル色", value=DEFAULT_TOTAL_COLOR, key="color_total")
-        tc1, tc2 = st.columns(2)
-        with tc1:
-            st.toggle("数式色を適用", value=False, key="toggle_formula_color")
-        with tc2:
-            st.toggle("合計色を適用", value=False, key="toggle_total_color")
 
-    # --- Prompt settings (separate expander) ---
-    with st.expander("プロンプト設定（AI 抽出に使用される指示文）", expanded=False):
-        _render_prompt_settings()
-
-
-def _get_default_system_prompt(strictness: str = "normal") -> str:
-    """Return the default system prompt based on strictness."""
-    return (
-        SYSTEM_PROMPT_STRICT if strictness == "strict"
-        else SYSTEM_PROMPT_NORMAL
-    )
-
-
-def _get_default_industry_hint(industry: str) -> str:
-    return INDUSTRY_PROMPTS.get(industry, "")
-
-
-def _get_default_biz_model_hint(biz_model: str) -> str:
-    return BUSINESS_MODEL_PROMPTS.get(biz_model, "")
-
-
-def _render_prompt_settings() -> None:
-    """Show editable prompt text areas."""
-    st.caption(
-        "AI がパラメータを抽出する際に使用するプロンプトです。"
-        "内容を確認し、必要に応じて編集できます。"
-        "空欄にするとデフォルトが使用されます。"
-    )
-
-    # Determine defaults based on current settings
-    strictness = st.session_state.get("strictness_select", "ノーマル (normal)")
-    strict_mode = "strict" if "厳密" in strictness else "normal"
-    industry = st.session_state.get("industry_select", "SaaS")
-    biz_model = st.session_state.get("biz_model_select", "B2B")
-
-    # System prompt
-    st.markdown("**システムプロンプト** — AI の役割と抽出ルール")
-    default_sys = _get_default_system_prompt(strict_mode)
-    st.text_area(
-        "システムプロンプト",
-        value=default_sys,
-        height=220,
-        key="prompt_system",
-        label_visibility="collapsed",
-    )
-
-    # Industry hint
-    col_ind, col_biz = st.columns(2)
-    with col_ind:
-        st.markdown("**業種ガイダンス** — 業種固有の抽出指示")
-        default_ind = _get_default_industry_hint(industry)
-        st.text_area(
-            "業種ガイダンス",
-            value=default_ind,
-            height=80,
-            key="prompt_industry",
-            label_visibility="collapsed",
-            placeholder="例: Focus on: MRR, ARPU, churn rate ...",
-        )
-    with col_biz:
-        st.markdown("**ビジネスモデルガイダンス** — モデル固有の抽出指示")
-        default_biz = _get_default_biz_model_hint(biz_model)
-        st.text_area(
-            "ビジネスモデルガイダンス",
-            value=default_biz,
-            height=80,
-            key="prompt_biz_model",
-            label_visibility="collapsed",
-            placeholder="例: Focus on enterprise sales: deal size ...",
+    if doc_file:
+        if st.button("スキャン開始 →", type="primary", use_container_width=True, key="btn_scan"):
+            _run_phase_1_scan(doc_file)
+    else:
+        st.markdown(
+            '<div style="text-align:center; padding:3rem 1rem; '
+            'color:#999; border:2px dashed #ddd; border-radius:12px;">'
+            '<p style="font-size:1.2rem;">PDF / DOCX / PPTX をドラッグ＆ドロップ</p>'
+            '</div>',
+            unsafe_allow_html=True,
         )
 
-    # User message template
-    st.markdown(
-        "**抽出指示テンプレート** — ドキュメント+カタログと共に送信される指示文  \n"
-        "`{cases}` `{catalog_block}` `{document_chunk}` は実行時に自動置換されます"
-    )
-    st.text_area(
-        "抽出指示テンプレート",
-        value=USER_PROMPT_TEMPLATE,
-        height=280,
-        key="prompt_user_template",
-        label_visibility="collapsed",
-    )
 
-
-def _collect_prompt_overrides() -> dict:
-    """Collect prompt overrides from session state."""
-    overrides: dict = {}
-    sys_prompt = st.session_state.get("prompt_system", "").strip()
-    if sys_prompt:
-        overrides["system_prompt"] = sys_prompt
-    ind_hint = st.session_state.get("prompt_industry", "").strip()
-    if ind_hint:
-        overrides["industry_hint"] = ind_hint
-    biz_hint = st.session_state.get("prompt_biz_model", "").strip()
-    if biz_hint:
-        overrides["biz_model_hint"] = biz_hint
-    user_tpl = st.session_state.get("prompt_user_template", "").strip()
-    if user_tpl:
-        overrides["user_template"] = user_tpl
-    return overrides
-
-
-def _run_phase_a_analysis(
-    *, industry: str, business_model: str, strictness: str,
-    cases: List[str], run_simulation: bool,
-    input_color: str, formula_color: str, total_color: str,
-    apply_formula_color: bool, apply_total_color: bool,
-    doc_file, template_file,
-) -> None:
+def _run_phase_1_scan(doc_file) -> None:
     progress = st.progress(0, text="準備中...")
-
     try:
-        progress.progress(5, text="ファイルを保存中...")
+        progress.progress(10, text="ファイルを保存中...")
         doc_path = _save_uploaded_file(doc_file)
 
+        template_file = st.session_state.get("template_upload_file", None)
         if template_file is not None:
             template_path = _save_uploaded_file(template_file)
         else:
@@ -664,261 +551,668 @@ def _run_phase_a_analysis(
                 progress.empty()
                 return
 
-        progress.progress(10, text="設定を構築中...")
+        cases_raw = st.session_state.get("case_multiselect", ["Base"])
+        if not cases_raw:
+            cases_raw = ["Base"]
+
+        progress.progress(20, text="設定を構築中...")
         config = PhaseAConfig(
-            industry=industry, business_model=business_model,
-            strictness=strictness, cases=cases,
+            industry="auto", business_model="auto",
+            strictness="normal", cases=[c.lower() for c in cases_raw],
             template_path=template_path, document_paths=[doc_path],
         )
         st.session_state["config"] = config
-        st.session_state["run_simulation"] = run_simulation
+        st.session_state["run_simulation"] = st.session_state.get("sim_checkbox", False)
 
         cc = ColorConfig(
-            input_color=input_color, formula_color=formula_color,
-            total_color=total_color, apply_formula_color=apply_formula_color,
-            apply_total_color=apply_total_color,
+            input_color=st.session_state.get("color_input", DEFAULT_INPUT_COLOR),
+            formula_color=st.session_state.get("color_formula", DEFAULT_FORMULA_COLOR),
+            total_color=st.session_state.get("color_total", DEFAULT_TOTAL_COLOR),
         )
         st.session_state["color_config"] = cc
 
-        progress.progress(20, text="事業計画書を読み取り中...")
+        progress.progress(40, text="事業計画書を読み取り中...")
         document = read_document(doc_path)
         st.session_state["document"] = document
 
-        progress.progress(40, text="テンプレートをスキャン中...")
-        input_color_hex = input_color.lstrip("#")
+        progress.progress(60, text="テンプレートをスキャン中...")
+        input_color_hex = cc.input_color.lstrip("#")
         if len(input_color_hex) == 6:
             input_color_hex = "FF" + input_color_hex
         catalog = scan_template(template_path, input_color=input_color_hex)
         st.session_state["catalog"] = catalog
 
-        progress.progress(55, text="数式構造を分析中...")
+        progress.progress(80, text="数式構造を分析中...")
         analysis = analyze_model(template_path, catalog)
         st.session_state["analysis"] = analysis
 
-        progress.progress(70, text="Agent 1: ビジネスモデル分析中...")
-        llm_ok = False
-        parameters: List[ExtractedParameter] = []
-        llm_error_msg = ""
-        prompt_overrides = _collect_prompt_overrides()
+        # Pre-compute writable items
+        writable_items = [
+            {
+                "sheet": item.sheet,
+                "cell": item.cell,
+                "labels": item.label_candidates,
+                "units": item.unit_candidates,
+                "period": item.year_or_period,
+                "block": item.block,
+                "current_value": item.current_value,
+            }
+            for item in catalog.items
+            if not item.has_formula
+        ]
+        st.session_state["writable_items"] = writable_items
 
-        try:
-            llm_client = LLMClient()
-
-            # ============================================================
-            # PRE-FLIGHT CHECK: Verify Claude API is actually reachable
-            # Uses direct Anthropic API call for clear diagnostics.
-            # ============================================================
-            import time as _time
-
-            # Step 1: Check API key availability
-            _api_key = os.environ.get("ANTHROPIC_API_KEY", "")
-            if not _api_key:
-                raise RuntimeError(
-                    "ANTHROPIC_API_KEY が見つかりません。\n"
-                    f"APIキー検索結果: {_API_KEY_SOURCE}\n"
-                    "Streamlit Cloud: Settings → Secrets で ANTHROPIC_API_KEY を設定してください。\n"
-                    "形式: ANTHROPIC_API_KEY = \"sk-ant-...\""
-                )
-
-            # Step 2: Direct API connectivity test
-            _preflight_start = _time.time()
-            try:
-                from anthropic import Anthropic as _Anthropic
-                _test_client = _Anthropic(api_key=_api_key)
-                _test_resp = _test_client.messages.create(
-                    model="claude-sonnet-4-5-20250929",
-                    max_tokens=16,
-                    messages=[{"role": "user", "content": "Reply with exactly: OK"}],
-                )
-                _preflight_elapsed = _time.time() - _preflight_start
-                _test_content = (_test_resp.content[0].text or "").strip()
-                if not _test_content:
-                    raise RuntimeError(
-                        f"Claude API応答が空です (時間={_preflight_elapsed:.1f}秒)。"
-                        f"APIキーソース: {_API_KEY_SOURCE}"
-                    )
-            except ImportError:
-                raise RuntimeError(
-                    "anthropic パッケージが見つかりません。"
-                    "requirements.txt に anthropic を追加してください。"
-                )
-            except RuntimeError:
-                raise
-            except Exception as _pf_exc:
-                _preflight_elapsed = _time.time() - _preflight_start
-                raise RuntimeError(
-                    f"Claude API 接続失敗: {type(_pf_exc).__name__}: {_pf_exc}\n"
-                    f"時間={_preflight_elapsed:.1f}秒, "
-                    f"APIキーソース: {_API_KEY_SOURCE}, "
-                    f"キー先頭: {_api_key[:12]}..., キー末尾: ...{_api_key[-4:]}"
-                ) from _pf_exc
-
-            progress.progress(73, text="LLM接続確認OK — ビジネスモデル分析中...")
-
-            # ============================================================
-            # TWO-AGENT PIPELINE
-            # ============================================================
-            try:
-                from src.agents.orchestrator import AgentOrchestrator
-                orch = AgentOrchestrator(llm_client)
-
-                writable_items = [
-                    {
-                        "sheet": item.sheet,
-                        "cell": item.cell,
-                        "labels": item.label_candidates,
-                        "units": item.unit_candidates,
-                        "period": item.year_or_period,
-                        "block": item.block,
-                        "current_value": item.current_value,
-                    }
-                    for item in catalog.items
-                    if not item.has_formula
-                ]
-
-                def _update_progress(step: Any) -> None:
-                    if step.agent_name == "Business Model Analyzer":
-                        if step.status == "running":
-                            progress.progress(75, text="Agent 1: ビジネスモデル分析中...")
-                        elif step.status == "success":
-                            progress.progress(82, text=f"Agent 1 完了: {step.summary}")
-                    elif step.agent_name == "FM Designer":
-                        if step.status == "running":
-                            progress.progress(85, text="Agent 2: テンプレートマッピング中...")
-                        elif step.status == "success":
-                            progress.progress(95, text=f"Agent 2 完了: {step.summary}")
-
-                orch_result = orch.run(
-                    document_text=document.full_text,
-                    catalog_items=writable_items,
-                    on_step=_update_progress,
-                )
-
-                # ============================================================
-                # POST-PIPELINE VALIDATION (in streamlit_app.py, not in agents)
-                # ============================================================
-                for step in orch_result.steps:
-                    if step.agent_name == "Business Model Analyzer":
-                        # Check: Agent 1 must produce at least 1 segment
-                        if step.status == "success":
-                            a = orch_result.analysis
-                            if not a or not a.segments:
-                                step.status = "error"
-                                _raw = {}
-                                if a and hasattr(a, "raw_json"):
-                                    _raw = a.raw_json
-                                _raw_segs = _raw.get("segments", "(key missing)")
-                                step.error_message = (
-                                    f"LLMが有効なセグメントを返しませんでした "
-                                    f"(時間={step.elapsed_seconds:.1f}秒)。"
-                                    f"raw segments={type(_raw_segs).__name__}: "
-                                    f"{str(_raw_segs)[:200]}"
-                                )
-                    elif step.agent_name == "FM Designer":
-                        # Check: Agent 2 must produce at least 1 extraction
-                        if step.status == "success":
-                            d = orch_result.design
-                            if not d or not d.extractions:
-                                step.status = "error"
-                                _raw = {}
-                                if d and hasattr(d, "raw_json"):
-                                    _raw = d.raw_json
-                                _raw_ext = _raw.get("extractions", "(key missing)")
-                                step.error_message = (
-                                    f"LLMが抽出結果を返しませんでした "
-                                    f"(時間={step.elapsed_seconds:.1f}秒)。"
-                                    f"raw extractions={type(_raw_ext).__name__}: "
-                                    f"{str(_raw_ext)[:200]}"
-                                )
-
-                st.session_state["agent_result"] = orch_result
-
-                # Convert agent extractions to ExtractedParameter format
-                if orch_result.design:
-                    for ext in orch_result.design.extractions:
-                        if ext.value is not None:
-                            param = ExtractedParameter(
-                                key=f"{ext.sheet}::{ext.cell}",
-                                label=ext.label,
-                                value=ext.value,
-                                unit=ext.unit,
-                                mapped_targets=[CellTarget(sheet=ext.sheet, cell=ext.cell)],
-                                evidence=Evidence(
-                                    quote=ext.evidence,
-                                    page_or_slide="",
-                                    rationale=f"segment: {ext.segment}",
-                                ),
-                                confidence=ext.confidence,
-                                source=ext.source,
-                            )
-                            parameters.append(param)
-
-                llm_ok = len(parameters) > 0
-
-                # Generate error message from all failures
-                error_parts = []
-                for step in orch_result.steps:
-                    if step.status == "error":
-                        error_parts.append(f"{step.agent_name}: {step.error_message}")
-                if error_parts and not llm_ok:
-                    llm_error_msg = "; ".join(error_parts)
-
-            except ImportError:
-                # Fall back to old single-pass extractor if agents module missing
-                logger.warning("agents module not available, falling back to legacy extractor")
-                progress.progress(75, text="LLM パラメータ抽出中 (レガシー)...")
-                extractor = ParameterExtractor(
-                    config, llm_client=llm_client,
-                    prompt_overrides=prompt_overrides,
-                )
-                parameters = extractor.extract_parameters(document, catalog)
-                llm_ok = len(parameters) > 0
-
-        except LLMError as llm_exc:
-            llm_error_msg = str(llm_exc)
-            logger.error("LLM extraction failed: %s", llm_exc)
-        except RuntimeError as rt_exc:
-            llm_error_msg = str(rt_exc)
-            logger.error("LLM pre-flight failed: %s", rt_exc)
-        except Exception as llm_exc:
-            llm_error_msg = str(llm_exc)
-            logger.error("LLM extraction failed: %s", llm_exc)
-
-        st.session_state["parameters"] = parameters
-        st.session_state["llm_ok"] = llm_ok
-        st.session_state["llm_error"] = llm_error_msg
-
-        # Clear old blueprint state
-        for key in list(st.session_state.keys()):
-            if key.startswith("bp_"):
-                del st.session_state[key]
-
-        # Clear old generation outputs
-        st.session_state["generation_outputs"] = {}
-
-        progress.progress(100, text="分析完了!")
-        st.session_state["phase"] = "B"
+        progress.progress(100, text="スキャン完了!")
+        st.session_state["wizard_phase"] = 2
         st.rerun()
 
-    except FileNotFoundError as exc:
+    except Exception as exc:
         progress.empty()
-        st.error(f"ファイルが見つかりません: {exc}")
-    except ValueError as exc:
-        progress.empty()
-        st.error(f"値エラー: {exc}")
-    except Exception as exc:  # noqa: BLE001
-        progress.empty()
-        st.error("分析中にエラーが発生しました")
+        st.error(f"スキャン中にエラーが発生しました: {exc}")
         with st.expander("エラー詳細"):
             st.code(traceback.format_exc())
 
 
 # ===================================================================
-# Phase B: PL Blueprint
+# Phase 2: Business Model Analysis
+# ===================================================================
+
+def _render_phase_2() -> None:
+    st.markdown("### Phase 2: ビジネスモデル分析")
+    st.caption("事業計画書からビジネスモデルを分析します。結果を確認し、フィードバックを入力してください。")
+
+    bm = st.session_state.get("bm_result")
+    bm_error = st.session_state.get("bm_error", "")
+
+    # Show run button if no result yet
+    if bm is None and not bm_error:
+        if st.button("分析開始", type="primary", use_container_width=True, key="btn_bm_run"):
+            _run_bm_analysis()
+            st.rerun()
+        return
+
+    # Show error
+    if bm_error:
+        st.error(f"分析エラー: {bm_error}")
+
+    # Show results
+    if bm is not None:
+        _render_bm_results(bm)
+
+    st.divider()
+
+    # Feedback section
+    st.markdown("**フィードバック**")
+    st.caption("分析結果に修正が必要な場合、指示を入力して「再分析」してください。問題なければ「確定」してください。")
+    feedback = st.text_area(
+        "フィードバック",
+        value="",
+        placeholder="例: セグメントが1つ足りない。コンサルティング事業も追加してください。",
+        key="bm_feedback",
+        label_visibility="collapsed",
+    )
+
+    col1, col2, col3 = st.columns([2, 2, 1])
+    with col1:
+        if st.button("再分析 (フィードバック反映)", use_container_width=True, key="btn_bm_rerun"):
+            _run_bm_analysis(feedback=feedback)
+            st.rerun()
+    with col2:
+        can_confirm = bm is not None
+        if st.button("確定 → テンプレ構造へ", type="primary", use_container_width=True,
+                      disabled=not can_confirm, key="btn_bm_confirm"):
+            st.session_state["wizard_phase"] = 3
+            st.rerun()
+    with col3:
+        if st.button("← 戻る", use_container_width=True, key="btn_bm_back"):
+            st.session_state["wizard_phase"] = 1
+            st.rerun()
+
+
+def _run_bm_analysis(feedback: str = "") -> None:
+    document = st.session_state.get("document")
+    if not document:
+        st.session_state["bm_error"] = "ドキュメントがありません。Phase 1に戻ってください。"
+        return
+
+    with st.spinner("ビジネスモデルを分析中..."):
+        try:
+            orch = _get_orchestrator()
+            bm = orch.run_bm_analysis(document.full_text, feedback=feedback)
+            st.session_state["bm_result"] = bm
+            st.session_state["bm_error"] = ""
+        except Exception as exc:
+            st.session_state["bm_error"] = str(exc)
+            logger.error("BM analysis failed: %s", exc)
+
+
+def _render_bm_results(bm: Any) -> None:
+    st.success(f"分析完了: {bm.industry} / {bm.business_model_type} / {len(bm.segments)}セグメント")
+
+    st.markdown(f"**会社名:** {bm.company_name}")
+    st.markdown(f"**事業概要:** {bm.executive_summary}")
+    st.markdown(f"**業種:** {bm.industry} | **モデル:** {bm.business_model_type} | **期間:** {bm.time_horizon}")
+
+    st.markdown("---")
+    st.markdown("**事業セグメント:**")
+    for i, seg in enumerate(bm.segments):
+        with st.expander(f"#{i+1} {seg.name} ({seg.model_type})", expanded=True):
+            st.markdown(f"**収益公式:** `{seg.revenue_formula}`")
+            if seg.revenue_drivers:
+                import pandas as pd
+                driver_data = []
+                for d in seg.revenue_drivers:
+                    driver_data.append({
+                        "ドライバー": d.name,
+                        "単位": d.unit,
+                        "推定値": d.estimated_value or "-",
+                        "根拠": d.evidence[:80] if d.evidence else "-",
+                    })
+                st.dataframe(pd.DataFrame(driver_data), use_container_width=True, hide_index=True)
+            if seg.key_assumptions:
+                st.markdown("**前提条件:** " + " / ".join(seg.key_assumptions))
+
+    if bm.shared_costs:
+        st.markdown("---")
+        st.markdown("**共通コスト:**")
+        import pandas as pd
+        cost_data = []
+        for c in bm.shared_costs:
+            cost_data.append({
+                "項目": c.name,
+                "区分": c.category,
+                "推定値": c.estimated_value or "-",
+                "根拠": c.evidence[:80] if c.evidence else "-",
+            })
+        st.dataframe(pd.DataFrame(cost_data), use_container_width=True, hide_index=True)
+
+    if bm.risk_factors:
+        st.markdown(f"**リスク要因:** {', '.join(bm.risk_factors)}")
+
+    # Raw JSON (collapsed)
+    with st.expander("Raw JSON", expanded=False):
+        st.json(bm.raw_json)
+
+
+# ===================================================================
+# Phase 3: Template Structure
+# ===================================================================
+
+def _render_phase_3() -> None:
+    st.markdown("### Phase 3: テンプレート構造マッピング")
+    st.caption("テンプレートの各シートがどのビジネスセグメントに対応するかを決定します。")
+
+    ts = st.session_state.get("ts_result")
+    ts_error = st.session_state.get("ts_error", "")
+
+    if ts is None and not ts_error:
+        if st.button("テンプレ構造を検討", type="primary", use_container_width=True, key="btn_ts_run"):
+            _run_template_mapping()
+            st.rerun()
+        return
+
+    if ts_error:
+        st.error(f"エラー: {ts_error}")
+
+    if ts is not None:
+        _render_ts_results(ts)
+
+    st.divider()
+
+    st.markdown("**フィードバック**")
+    st.caption("シートとセグメントの対応に修正が必要な場合、指示を入力してください。")
+    feedback = st.text_area(
+        "フィードバック",
+        value="",
+        placeholder="例: 「費用リスト」シートは人件費専用です。",
+        key="ts_feedback",
+        label_visibility="collapsed",
+    )
+
+    col1, col2, col3 = st.columns([2, 2, 1])
+    with col1:
+        if st.button("再検討 (フィードバック反映)", use_container_width=True, key="btn_ts_rerun"):
+            _run_template_mapping(feedback=feedback)
+            st.rerun()
+    with col2:
+        can_confirm = ts is not None
+        if st.button("確定 → モデル設計へ", type="primary", use_container_width=True,
+                      disabled=not can_confirm, key="btn_ts_confirm"):
+            st.session_state["wizard_phase"] = 4
+            st.rerun()
+    with col3:
+        if st.button("← 戻る", use_container_width=True, key="btn_ts_back"):
+            st.session_state["wizard_phase"] = 2
+            st.rerun()
+
+
+def _run_template_mapping(feedback: str = "") -> None:
+    bm = st.session_state.get("bm_result")
+    writable_items = st.session_state.get("writable_items", [])
+    if not bm:
+        st.session_state["ts_error"] = "BM分析結果がありません。Phase 2に戻ってください。"
+        return
+
+    with st.spinner("テンプレート構造を検討中..."):
+        try:
+            orch = _get_orchestrator()
+            ts = orch.run_template_mapping(bm.raw_json, writable_items, feedback=feedback)
+            st.session_state["ts_result"] = ts
+            st.session_state["ts_error"] = ""
+        except Exception as exc:
+            st.session_state["ts_error"] = str(exc)
+            logger.error("Template mapping failed: %s", exc)
+
+
+def _render_ts_results(ts: Any) -> None:
+    st.success(f"構造検討完了: {len(ts.sheet_mappings)}シート")
+
+    if ts.overall_structure:
+        st.markdown(f"**全体構造:** {ts.overall_structure}")
+
+    st.markdown("---")
+    st.markdown("**シート → セグメント マッピング:**")
+    import pandas as pd
+    mapping_data = []
+    for sm in ts.sheet_mappings:
+        mapping_data.append({
+            "シート": sm.sheet_name,
+            "セグメント": sm.mapped_segment,
+            "役割": sm.sheet_purpose,
+            "信頼度": f"{sm.confidence:.0%}",
+            "理由": sm.reasoning[:80] if sm.reasoning else "-",
+        })
+    st.dataframe(pd.DataFrame(mapping_data), use_container_width=True, hide_index=True)
+
+    if ts.suggestions:
+        st.markdown("**提案:**")
+        for s in ts.suggestions:
+            st.info(s)
+
+    with st.expander("Raw JSON", expanded=False):
+        st.json(ts.raw_json)
+
+
+# ===================================================================
+# Phase 4: Model Design
+# ===================================================================
+
+def _render_phase_4() -> None:
+    st.markdown("### Phase 4: モデル設計（セル概念マッピング）")
+    st.caption("各入力セルが表すビジネス概念を決定します。値の抽出はまだ行いません。")
+
+    md = st.session_state.get("md_result")
+    md_error = st.session_state.get("md_error", "")
+
+    if md is None and not md_error:
+        if st.button("モデル設計を開始", type="primary", use_container_width=True, key="btn_md_run"):
+            _run_model_design()
+            st.rerun()
+        return
+
+    if md_error:
+        st.error(f"エラー: {md_error}")
+
+    if md is not None:
+        _render_md_results(md)
+
+    st.divider()
+
+    st.markdown("**フィードバック**")
+    st.caption("セルの概念マッピングに修正が必要な場合、指示を入力してください。")
+    feedback = st.text_area(
+        "フィードバック",
+        value="",
+        placeholder="例: B5セルは顧客数ではなく受講者数にしてください。",
+        key="md_feedback",
+        label_visibility="collapsed",
+    )
+
+    col1, col2, col3 = st.columns([2, 2, 1])
+    with col1:
+        if st.button("再設計 (フィードバック反映)", use_container_width=True, key="btn_md_rerun"):
+            _run_model_design(feedback=feedback)
+            st.rerun()
+    with col2:
+        can_confirm = md is not None
+        if st.button("確定 → パラメーターへ", type="primary", use_container_width=True,
+                      disabled=not can_confirm, key="btn_md_confirm"):
+            st.session_state["wizard_phase"] = 5
+            st.rerun()
+    with col3:
+        if st.button("← 戻る", use_container_width=True, key="btn_md_back"):
+            st.session_state["wizard_phase"] = 3
+            st.rerun()
+
+
+def _run_model_design(feedback: str = "") -> None:
+    bm = st.session_state.get("bm_result")
+    ts = st.session_state.get("ts_result")
+    writable_items = st.session_state.get("writable_items", [])
+    if not bm or not ts:
+        st.session_state["md_error"] = "前フェーズの結果がありません。戻ってください。"
+        return
+
+    with st.spinner("モデル設計中..."):
+        try:
+            orch = _get_orchestrator()
+            md = orch.run_model_design(
+                bm.raw_json, ts.raw_json, writable_items, feedback=feedback,
+            )
+            st.session_state["md_result"] = md
+            st.session_state["md_error"] = ""
+        except Exception as exc:
+            st.session_state["md_error"] = str(exc)
+            logger.error("Model design failed: %s", exc)
+
+
+def _render_md_results(md: Any) -> None:
+    n_assigned = len(md.cell_assignments)
+    n_unmapped = len(md.unmapped_cells)
+    st.success(f"モデル設計完了: {n_assigned}セル割当 / {n_unmapped}未割当")
+
+    # Group by sheet
+    import pandas as pd
+    if md.cell_assignments:
+        st.markdown("**セル概念マッピング:**")
+        sheets = sorted(set(ca.sheet for ca in md.cell_assignments))
+        for sheet in sheets:
+            items = [ca for ca in md.cell_assignments if ca.sheet == sheet]
+            with st.expander(f"{sheet} ({len(items)}セル)", expanded=True):
+                data = []
+                for ca in items:
+                    data.append({
+                        "セル": ca.cell,
+                        "ラベル": ca.label,
+                        "概念": ca.assigned_concept,
+                        "セグメント": ca.segment,
+                        "期間": ca.period,
+                        "単位": ca.unit,
+                        "信頼度": f"{ca.confidence:.0%}",
+                    })
+                st.dataframe(pd.DataFrame(data), use_container_width=True, hide_index=True)
+
+    if md.unmapped_cells:
+        with st.expander(f"未割当セル ({n_unmapped}件)", expanded=False):
+            data = []
+            for uc in md.unmapped_cells:
+                data.append({
+                    "シート": uc.get("sheet", ""),
+                    "セル": uc.get("cell", ""),
+                    "ラベル": uc.get("label", ""),
+                    "理由": uc.get("reason", ""),
+                })
+            st.dataframe(pd.DataFrame(data), use_container_width=True, hide_index=True)
+
+    if md.warnings:
+        for w in md.warnings:
+            st.warning(w)
+
+    with st.expander("Raw JSON", expanded=False):
+        st.json(md.raw_json)
+
+
+# ===================================================================
+# Phase 5: Parameter Extraction
+# ===================================================================
+
+def _render_phase_5() -> None:
+    st.markdown("### Phase 5: パラメーター抽出")
+    st.caption("確定したモデル設計に基づいて、事業計画書から実際の値を抽出します。")
+
+    pe = st.session_state.get("pe_result")
+    pe_error = st.session_state.get("pe_error", "")
+
+    if pe is None and not pe_error:
+        if st.button("パラメーター抽出開始", type="primary", use_container_width=True, key="btn_pe_run"):
+            _run_parameter_extraction()
+            st.rerun()
+        return
+
+    if pe_error:
+        st.error(f"エラー: {pe_error}")
+
+    if pe is not None:
+        _render_pe_results(pe)
+
+    st.divider()
+
+    st.markdown("**フィードバック**")
+    st.caption("抽出値に修正が必要な場合、指示を入力してください。値は次のフェーズでも個別編集可能です。")
+    feedback = st.text_area(
+        "フィードバック",
+        value="",
+        placeholder="例: 顧客数は100ではなく200です。",
+        key="pe_feedback",
+        label_visibility="collapsed",
+    )
+
+    col1, col2, col3 = st.columns([2, 2, 1])
+    with col1:
+        if st.button("再抽出 (フィードバック反映)", use_container_width=True, key="btn_pe_rerun"):
+            _run_parameter_extraction(feedback=feedback)
+            st.rerun()
+    with col2:
+        can_confirm = pe is not None
+        if st.button("確定 → 最終出力へ", type="primary", use_container_width=True,
+                      disabled=not can_confirm, key="btn_pe_confirm"):
+            # Convert extractions to ExtractedParameter format
+            _convert_extractions_to_parameters()
+            st.session_state["wizard_phase"] = 6
+            st.rerun()
+    with col3:
+        if st.button("← 戻る", use_container_width=True, key="btn_pe_back"):
+            st.session_state["wizard_phase"] = 4
+            st.rerun()
+
+
+def _run_parameter_extraction(feedback: str = "") -> None:
+    md = st.session_state.get("md_result")
+    document = st.session_state.get("document")
+    if not md or not document:
+        st.session_state["pe_error"] = "前フェーズの結果がありません。戻ってください。"
+        return
+
+    with st.spinner("パラメーターを抽出中..."):
+        try:
+            orch = _get_orchestrator()
+            pe = orch.run_parameter_extraction(
+                md.raw_json, document.full_text, feedback=feedback,
+            )
+            st.session_state["pe_result"] = pe
+            st.session_state["pe_error"] = ""
+        except Exception as exc:
+            st.session_state["pe_error"] = str(exc)
+            logger.error("Parameter extraction failed: %s", exc)
+
+
+def _render_pe_results(pe: Any) -> None:
+    n_ext = len(pe.extractions)
+    n_unmapped = len(pe.unmapped_cells)
+    # Count by source
+    n_doc = sum(1 for e in pe.extractions if e.source == "document")
+    n_inf = sum(1 for e in pe.extractions if e.source == "inferred")
+    n_def = sum(1 for e in pe.extractions if e.source == "default")
+
+    c1, c2, c3, c4 = st.columns(4)
+    with c1:
+        st.markdown(_render_metric_card(str(n_ext), "抽出済み"), unsafe_allow_html=True)
+    with c2:
+        st.markdown(_render_metric_card(str(n_doc), "文書から直接"), unsafe_allow_html=True)
+    with c3:
+        st.markdown(_render_metric_card(str(n_inf + n_def), "推定値"), unsafe_allow_html=True)
+    with c4:
+        if n_unmapped > 0:
+            st.markdown(_render_gap_metric_card(str(n_unmapped), "未抽出"), unsafe_allow_html=True)
+        else:
+            st.markdown(_render_metric_card("0", "未抽出"), unsafe_allow_html=True)
+
+    # Show extractions grouped by sheet
+    import pandas as pd
+    if pe.extractions:
+        sheets = sorted(set(e.sheet for e in pe.extractions))
+        for sheet in sheets:
+            items = [e for e in pe.extractions if e.sheet == sheet]
+            with st.expander(f"{sheet} ({len(items)}件)", expanded=True):
+                data = []
+                for e in items:
+                    data.append({
+                        "セル": e.cell,
+                        "ラベル": e.label,
+                        "概念": e.concept,
+                        "値": e.value,
+                        "単位": e.unit,
+                        "ソース": e.source,
+                        "信頼度": f"{e.confidence:.0%}",
+                        "根拠": (e.evidence[:60] + "..." if len(e.evidence) > 60 else e.evidence) if e.evidence else "-",
+                    })
+                st.dataframe(pd.DataFrame(data), use_container_width=True, hide_index=True)
+
+    if pe.unmapped_cells:
+        with st.expander(f"未抽出セル ({n_unmapped}件)", expanded=False):
+            data = [
+                {"シート": uc.get("sheet", ""), "セル": uc.get("cell", ""),
+                 "ラベル": uc.get("label", ""), "理由": uc.get("reason", "")}
+                for uc in pe.unmapped_cells
+            ]
+            st.dataframe(pd.DataFrame(data), use_container_width=True, hide_index=True)
+
+    if pe.warnings:
+        for w in pe.warnings:
+            st.warning(w)
+
+    with st.expander("Raw JSON", expanded=False):
+        st.json(pe.raw_json)
+
+
+def _convert_extractions_to_parameters() -> None:
+    """Convert Phase 5 extractions to ExtractedParameter format for Phase 6."""
+    pe = st.session_state.get("pe_result")
+    if not pe:
+        return
+
+    parameters: List[ExtractedParameter] = []
+    for ext in pe.extractions:
+        if ext.value is not None:
+            param = ExtractedParameter(
+                key=f"{ext.sheet}::{ext.cell}",
+                label=ext.label or ext.concept,
+                value=ext.value,
+                unit=ext.unit,
+                mapped_targets=[CellTarget(sheet=ext.sheet, cell=ext.cell)],
+                evidence=Evidence(
+                    quote=ext.evidence,
+                    page_or_slide="",
+                    rationale=f"segment: {ext.segment}",
+                ),
+                confidence=ext.confidence,
+                source=ext.source,
+            )
+            parameters.append(param)
+
+    st.session_state["parameters"] = parameters
+
+    # Clear old blueprint state
+    for key in list(st.session_state.keys()):
+        if key.startswith("bp_"):
+            del st.session_state[key]
+    st.session_state["generation_outputs"] = {}
+
+
+# ===================================================================
+# Phase 6: Final Output & Blueprint
+# ===================================================================
+
+def _render_phase_6() -> None:
+    st.markdown("### Phase 6: 最終出力")
+    analysis: Optional[AnalysisReport] = st.session_state.get("analysis")
+    catalog: Optional[InputCatalog] = st.session_state.get("catalog")
+    parameters: list = st.session_state.get("parameters", [])
+    config: Optional[PhaseAConfig] = st.session_state.get("config")
+
+    if analysis is None or catalog is None:
+        st.warning("データがありません。Phase 1に戻ってください。")
+        if st.button("Phase 1 に戻る"):
+            st.session_state["wizard_phase"] = 1
+            st.rerun()
+        return
+
+    param_map = _build_param_cell_map(parameters)
+
+    # Summary from all phases
+    bm = st.session_state.get("bm_result")
+    ts = st.session_state.get("ts_result")
+    md = st.session_state.get("md_result")
+    pe = st.session_state.get("pe_result")
+
+    st.success(f"**全フェーズ完了: {len(parameters)}件のパラメーターを抽出しました。**")
+
+    # Phase summary
+    with st.expander("フェーズサマリー", expanded=True):
+        if bm:
+            st.markdown(f"**BM分析:** {bm.industry} / {bm.business_model_type} / {len(bm.segments)}セグメント")
+        if ts:
+            st.markdown(f"**テンプレ構造:** {len(ts.sheet_mappings)}シート")
+        if md:
+            st.markdown(f"**モデル設計:** {len(md.cell_assignments)}セル割当")
+        if pe:
+            st.markdown(f"**パラメーター:** {len(pe.extractions)}件抽出 / {len(pe.unmapped_cells)}件未抽出")
+
+    # Summary Dashboard
+    _render_blueprint_summary(catalog, parameters, analysis, param_map)
+
+    st.markdown("")
+
+    # Action buttons
+    col_gen, col_back = st.columns([3, 1])
+    with col_gen:
+        generate_clicked = st.button(
+            "Excel を生成する",
+            type="primary", use_container_width=True, key="btn_blueprint_generate",
+        )
+    with col_back:
+        if st.button("← パラメーターに戻る", key="b_back", use_container_width=True):
+            st.session_state["wizard_phase"] = 5
+            st.rerun()
+
+    # Download section (if already generated)
+    gen_outputs = st.session_state.get("generation_outputs", {})
+    if gen_outputs:
+        _render_download_section(gen_outputs)
+
+    st.divider()
+
+    # Blueprint: Sheet tabs
+    st.markdown("### PL 設計図")
+    st.caption("値を確認・編集してから「Excel を生成する」をクリックしてください。")
+
+    sheets = catalog.sheets()
+    if not sheets:
+        st.info("テンプレートにシートが見つかりませんでした。")
+    else:
+        sheet_tabs = st.tabs([
+            f"{s} ({_count_sheet_filled(s, catalog, param_map)}/{_count_sheet_items(s, catalog)})"
+            for s in sheets
+        ])
+        for idx, sheet_name in enumerate(sheets):
+            with sheet_tabs[idx]:
+                _render_sheet_blueprint(sheet_name, catalog, parameters, analysis, param_map)
+
+    # Detail info
+    st.divider()
+    with st.expander("詳細情報（モデル構造・エビデンス）", expanded=False):
+        _render_detail_section(analysis, catalog, parameters)
+
+    # Run generation if clicked
+    if generate_clicked:
+        _run_generation_from_blueprint()
+
+
+# ===================================================================
+# Blueprint helpers (shared with Phase 6)
 # ===================================================================
 
 def _build_param_cell_map(parameters: list) -> Dict[str, Any]:
-    """Build a lookup from 'Sheet!Cell' address to ExtractedParameter."""
     cell_map: Dict[str, Any] = {}
     for p in parameters:
         for target in getattr(p, "mapped_targets", []):
@@ -943,226 +1237,10 @@ def _count_sheet_filled(sheet_name: str, catalog: InputCatalog, param_map: dict)
     return count
 
 
-def _render_phase_b() -> None:
-    """PL Blueprint -- the template structure IS the UI."""
-    analysis: AnalysisReport | None = st.session_state.get("analysis")
-    catalog: InputCatalog | None = st.session_state.get("catalog")
-    parameters: list = st.session_state.get("parameters", [])
-    config: PhaseAConfig | None = st.session_state.get("config")
-
-    if analysis is None or catalog is None:
-        st.warning("分析データがありません。Phase A に戻ってください。")
-        if st.button("Phase A に戻る"):
-            st.session_state["phase"] = "A"
-            st.rerun()
-        return
-
-    param_map = _build_param_cell_map(parameters)
-
-    # --- Agent status banner ---
-    llm_ok = st.session_state.get("llm_ok", False)
-    llm_error = st.session_state.get("llm_error", "")
-    orch_result = st.session_state.get("agent_result")
-
-    if llm_error:
-        st.error(
-            f"**AI Agent に失敗しました:** {llm_error}\n\n"
-            "下記はテンプレートの構造のみです。"
-            "値はすべて手動入力が必要です。"
-        )
-    elif not llm_ok:
-        st.warning(
-            "**AI Agent がパラメータを抽出できませんでした。**\n\n"
-            "考えられる原因: ANTHROPIC_API_KEY 未設定、ドキュメントに数値データが少ない、"
-            "またはテンプレートとの対応関係が見つからなかった。\n\n"
-            "下記はテンプレートの構造のみです。値は手動で入力してください。"
-        )
-    else:
-        agent_info = ""
-        if orch_result and orch_result.analysis:
-            bm = orch_result.analysis
-            n_seg = len(bm.segments)
-            agent_info = f" (検出: {bm.industry} / {n_seg}セグメント)"
-        st.success(
-            f"**AI Agent が {len(parameters)} 件のパラメータを抽出しました。**{agent_info}\n\n"
-            " 緑バッジ = AI抽出済み、グレー = 未抽出（手動入力してください）"
-        )
-
-    # --- Agent analysis results (if available) ---
-    _render_agent_analysis()
-
-    # --- Summary Dashboard ---
-    _render_blueprint_summary(catalog, parameters, analysis, param_map)
-
-    st.markdown("")
-
-    # --- Action buttons ---
-    col_gen, col_back = st.columns([3, 1])
-    with col_gen:
-        generate_clicked = st.button(
-            "Excel を生成する",
-            type="primary",
-            use_container_width=True,
-            key="btn_blueprint_generate",
-        )
-    with col_back:
-        if st.button("← やり直す", key="b_back", use_container_width=True):
-            st.session_state["phase"] = "A"
-            st.rerun()
-
-    # --- Download section (if already generated) ---
-    gen_outputs = st.session_state.get("generation_outputs", {})
-    if gen_outputs:
-        _render_download_section(gen_outputs)
-
-    st.divider()
-
-    # --- Blueprint: Sheet tabs ---
-    st.markdown("### PL 設計図")
-    st.caption(
-        "テンプレートの構造に沿って、抽出された値と未入力の項目を確認・編集できます。"
-        "値を変更してから「Excel を生成する」をクリックしてください。"
-    )
-
-    sheets = catalog.sheets()
-    if not sheets:
-        st.info("テンプレートにシートが見つかりませんでした。")
-        return
-
-    sheet_tabs = st.tabs([
-        f"{s} ({_count_sheet_filled(s, catalog, param_map)}/{_count_sheet_items(s, catalog)})"
-        for s in sheets
-    ])
-
-    for idx, sheet_name in enumerate(sheets):
-        with sheet_tabs[idx]:
-            _render_sheet_blueprint(sheet_name, catalog, parameters, analysis, param_map)
-
-    # --- Optional detail info (collapsed) ---
-    st.divider()
-    with st.expander("詳細情報（モデル構造・エビデンス）", expanded=False):
-        _render_detail_section(analysis, catalog, parameters)
-
-    # --- Run generation if clicked (after rendering so all widgets exist) ---
-    if generate_clicked:
-        _run_generation_from_blueprint()
-
-
-def _render_agent_analysis() -> None:
-    """Display the two-agent analysis results."""
-    orch_result = st.session_state.get("agent_result")
-    if orch_result is None:
-        return
-
-    with st.expander("Agent 分析結果（ビジネスモデル理解 → テンプレートマッピング）", expanded=True):
-        # Step status
-        for step in orch_result.steps:
-            if step.status == "success":
-                icon = "white_check_mark"
-                st.markdown(f":{icon}: **{step.agent_name}** — {step.summary}  ({step.elapsed_seconds:.1f}秒)")
-            elif step.status == "error":
-                st.error(f"**{step.agent_name}:** {step.error_message}")
-            else:
-                st.markdown(f":hourglass: **{step.agent_name}** — {step.status}")
-
-        # LLM diagnostic hint
-        all_failed = all(s.status == "error" for s in orch_result.steps)
-        any_fast = any(s.elapsed_seconds < 1.0 and s.status == "error" for s in orch_result.steps)
-        if all_failed and any_fast:
-            st.warning(
-                "**LLM APIが応答していない可能性があります。**\n\n"
-                "確認事項:\n"
-                "1. Streamlit Cloud の Settings → Secrets に `ANTHROPIC_API_KEY` が設定されているか\n"
-                "2. APIキーが有効で、残高があるか\n"
-                "3. キーの形式: `ANTHROPIC_API_KEY = \"sk-ant-...\"`"
-            )
-
-        # Business model analysis
-        bm = orch_result.analysis
-        if bm and bm.segments:
-            st.divider()
-            st.markdown(f"**事業概要:** {bm.executive_summary}")
-            st.markdown(f"**業種:** {bm.industry} | **モデル:** {bm.business_model_type} | **期間:** {bm.time_horizon}")
-
-            st.markdown("**事業セグメント:**")
-            for seg in bm.segments:
-                with st.container():
-                    st.markdown(
-                        f"- **{seg.name}** ({seg.model_type}) — `{seg.revenue_formula}`"
-                    )
-                    if seg.revenue_drivers:
-                        drivers_str = ", ".join(
-                            f"{d.name}={d.estimated_value}" if d.estimated_value
-                            else d.name
-                            for d in seg.revenue_drivers
-                        )
-                        st.caption(f"  ドライバー: {drivers_str}")
-
-            if bm.shared_costs:
-                cost_names = ", ".join(c.name for c in bm.shared_costs[:5])
-                st.markdown(f"**共通コスト:** {cost_names}")
-
-        # Sheet mappings
-        design = orch_result.design
-        if design and design.sheet_mappings:
-            st.divider()
-            st.markdown("**シート → セグメント マッピング:**")
-            for sm in design.sheet_mappings:
-                conf_pct = int(sm.confidence * 100)
-                st.markdown(
-                    f"- `{sm.sheet_name}` → **{sm.mapped_segment}** "
-                    f"({sm.sheet_purpose}) [{conf_pct}%]"
-                )
-
-        # Warnings
-        if design and design.warnings:
-            st.divider()
-            st.markdown("**:warning: 警告:**")
-            for w in design.warnings:
-                st.warning(w)
-
-        # Debug: Raw LLM response (always visible when errors present)
-        any_error = any(s.status == "error" for s in orch_result.steps)
-        if any_error:
-            st.divider()
-            with st.expander("Debug: LLM Raw Response", expanded=True):
-                # Document info
-                _doc_chars = getattr(orch_result, "document_chars", 0)
-                _doc_preview = getattr(orch_result, "document_preview", "")
-                st.markdown(f"**入力ドキュメント:** {_doc_chars:,} 文字")
-                if _doc_preview:
-                    st.code(_doc_preview[:500], language=None)
-                else:
-                    st.warning("ドキュメントテキストが空です！PDF読み取りを確認してください。")
-
-                st.markdown(f"**APIキーソース:** `{_API_KEY_SOURCE}`")
-
-                if bm and hasattr(bm, "raw_json") and bm.raw_json:
-                    st.markdown("**Agent 1 (BM Analyzer) raw JSON:**")
-                    try:
-                        st.json(bm.raw_json)
-                    except Exception:
-                        st.code(str(bm.raw_json)[:2000])
-                else:
-                    st.markdown("*Agent 1: レスポンスなし*")
-
-                if design and hasattr(design, "raw_json") and design.raw_json:
-                    st.markdown("**Agent 2 (FM Designer) raw JSON:**")
-                    try:
-                        st.json(design.raw_json)
-                    except Exception:
-                        st.code(str(design.raw_json)[:2000])
-                else:
-                    st.markdown("*Agent 2: レスポンスなし*")
-
-
 def _render_blueprint_summary(
-    catalog: InputCatalog,
-    parameters: list,
-    analysis: AnalysisReport,
-    param_map: dict,
+    catalog: InputCatalog, parameters: list,
+    analysis: AnalysisReport, param_map: dict,
 ) -> None:
-    """Dashboard cards showing blueprint completion status."""
     writable_items = [i for i in catalog.items if not i.has_formula]
     total_inputs = len(writable_items)
     filled = sum(1 for i in writable_items
@@ -1173,56 +1251,34 @@ def _render_blueprint_summary(
 
     c1, c2, c3, c4 = st.columns(4)
     with c1:
-        st.markdown(
-            _render_metric_card(f"{filled}/{total_inputs}", "入力済み"),
-            unsafe_allow_html=True,
-        )
+        st.markdown(_render_metric_card(f"{filled}/{total_inputs}", "入力済み"), unsafe_allow_html=True)
     with c2:
         if gaps > 0:
-            st.markdown(
-                _render_gap_metric_card(str(gaps), "未入力 (GAP)"),
-                unsafe_allow_html=True,
-            )
+            st.markdown(_render_gap_metric_card(str(gaps), "未入力 (GAP)"), unsafe_allow_html=True)
         else:
-            st.markdown(
-                _render_metric_card("0", "未入力 (GAP)"),
-                unsafe_allow_html=True,
-            )
+            st.markdown(_render_metric_card("0", "未入力 (GAP)"), unsafe_allow_html=True)
     with c3:
-        st.markdown(
-            _render_metric_card(str(kpi_count), "算出指標 (KPI)"),
-            unsafe_allow_html=True,
-        )
+        st.markdown(_render_metric_card(str(kpi_count), "算出指標 (KPI)"), unsafe_allow_html=True)
     with c4:
-        st.markdown(
-            _render_metric_card(f"{pct}%", "完成度"),
-            unsafe_allow_html=True,
-        )
+        st.markdown(_render_metric_card(f"{pct}%", "完成度"), unsafe_allow_html=True)
 
     if total_inputs > 0:
         st.progress(filled / total_inputs, text=f"{filled}/{total_inputs} 項目入力済み")
 
 
 def _render_sheet_blueprint(
-    sheet_name: str,
-    catalog: InputCatalog,
-    parameters: list,
-    analysis: AnalysisReport,
-    param_map: dict,
+    sheet_name: str, catalog: InputCatalog, parameters: list,
+    analysis: AnalysisReport, param_map: dict,
 ) -> None:
-    """Render one sheet tab in the blueprint view."""
-
-    # --- KPI banner (what this sheet calculates) ---
+    # KPI banner
     sheet_kpis = [k for k in (analysis.kpis or []) if k.sheet == sheet_name]
     if sheet_kpis:
         _render_kpi_banner(sheet_kpis)
 
-    # --- Group writable items by block ---
+    # Group writable items by block
     blocks: Dict[str, List[CatalogItem]] = {}
     for item in catalog.items:
-        if item.sheet != sheet_name:
-            continue
-        if item.has_formula:
+        if item.sheet != sheet_name or item.has_formula:
             continue
         block = item.block or "その他"
         blocks.setdefault(block, []).append(item)
@@ -1232,18 +1288,9 @@ def _render_sheet_blueprint(
         return
 
     for block_name, items in blocks.items():
-        filled_count = sum(
-            1 for i in items if f"{i.sheet}!{i.cell}" in param_map
-        )
+        filled_count = sum(1 for i in items if f"{i.sheet}!{i.cell}" in param_map)
         total_count = len(items)
         is_complete = (filled_count == total_count)
-
-        if is_complete:
-            status_icon = "&#9989;"   # green check
-        elif filled_count > 0:
-            status_icon = "&#9888;"   # warning
-        else:
-            status_icon = "&#10060;"  # red X
 
         with st.expander(
             f"{block_name}  ({filled_count}/{total_count} 入力済み)",
@@ -1253,46 +1300,31 @@ def _render_sheet_blueprint(
 
 
 def _extract_dep_label(dep: str) -> str:
-    """Extract a plain label from a dependency string like 'label (address)'."""
     if " (" in dep:
         return dep.split(" (")[0].strip()
-    # If it looks like a cell address, return as-is but clean it
     return dep.replace("'", "").strip()
 
 
 def _render_kpi_banner(kpis: List[KPIDefinition]) -> None:
-    """Show KPIs as informational banner -- no action needed from the user.
-
-    Only shows KPI names and which inputs feed them, in plain language.
-    Raw formulas and cell addresses are hidden.
-    """
     li_items: List[str] = []
     for kpi in kpis:
         name_esc = _esc(kpi.name)
         line = f"<strong>{name_esc}</strong>"
-
-        # Show dependency labels in plain language (no cell addresses)
         if kpi.dependencies:
-            seen: set[str] = set()
-            dep_labels: list[str] = []
+            seen: set = set()
+            dep_labels: list = []
             for d in kpi.dependencies:
                 label = _extract_dep_label(d)
                 if label and label not in seen:
                     seen.add(label)
                     dep_labels.append(_esc(label))
             if dep_labels:
-                # Show up to 5 dependency labels
                 shown = dep_labels[:5]
                 rest = len(dep_labels) - 5
                 deps_str = "、".join(shown)
                 if rest > 0:
                     deps_str += f" など（計 {len(dep_labels)} 項目）"
-                line += (
-                    f'<br><span class="kpi-dep">'
-                    f'&#8592; {deps_str} から算出'
-                    f'</span>'
-                )
-
+                line += f'<br><span class="kpi-dep">&#8592; {deps_str} から算出</span>'
         li_items.append(f"<li>{line}</li>")
 
     kpi_html = "\n".join(li_items)
@@ -1307,10 +1339,8 @@ def _render_kpi_banner(kpis: List[KPIDefinition]) -> None:
 
 
 def _render_block_inputs(
-    items: List[CatalogItem],
-    param_map: Dict[str, Any],
+    items: List[CatalogItem], param_map: Dict[str, Any],
 ) -> None:
-    """Render editable input rows for a block of catalog items."""
     for item in items:
         addr = f"{item.sheet}!{item.cell}"
         param = param_map.get(addr)
@@ -1319,7 +1349,6 @@ def _render_block_inputs(
         unit = item.unit_candidates[0] if item.unit_candidates else ""
         period = item.year_or_period or ""
 
-        # Build display label
         label_display = label
         if period:
             label_display += f" ({period})"
@@ -1337,22 +1366,16 @@ def _render_block_inputs(
                 current_val = param.value
                 if isinstance(current_val, (int, float)):
                     st.number_input(
-                        label_display,
-                        value=float(current_val),
-                        key=state_key,
-                        label_visibility="collapsed",
-                        format="%.2f",
+                        label_display, value=float(current_val),
+                        key=state_key, label_visibility="collapsed", format="%.2f",
                     )
                 else:
                     st.text_input(
                         label_display,
                         value=str(current_val) if current_val is not None else "",
-                        key=state_key,
-                        label_visibility="collapsed",
+                        key=state_key, label_visibility="collapsed",
                     )
             else:
-                # GAP cell -- no LLM extraction. Show empty input.
-                # Do NOT pre-fill with template current_value (that's misleading)
                 has_template_default = (
                     item.current_value is not None
                     and item.current_value != ""
@@ -1360,14 +1383,11 @@ def _render_block_inputs(
                              and item.current_value.startswith("="))
                 )
                 st.text_input(
-                    label_display,
-                    value="",
-                    key=state_key,
+                    label_display, value="", key=state_key,
                     label_visibility="collapsed",
                     placeholder=(
                         f"テンプレート参考値: {item.current_value}"
-                        if has_template_default
-                        else "値を入力..."
+                        if has_template_default else "値を入力..."
                     ),
                 )
 
@@ -1378,10 +1398,7 @@ def _render_block_inputs(
         with cols[3]:
             if param:
                 conf = getattr(param, "confidence", 0)
-                st.markdown(
-                    f"<br>{_confidence_badge(conf)}",
-                    unsafe_allow_html=True,
-                )
+                st.markdown(f"<br>{_confidence_badge(conf)}", unsafe_allow_html=True)
                 src = getattr(param, "source", "")
                 if src == "inferred":
                     st.caption("(推定値)")
@@ -1392,39 +1409,11 @@ def _render_block_inputs(
                 )
 
 
-def _render_kpi_banner_inline(kpis: List[KPIDefinition]) -> None:
-    """KPI list for the detail section -- slightly more info than the banner."""
-    for kpi in kpis:
-        # Show KPI name and sheet (without raw cell address)
-        with st.expander(f"{kpi.name}（{kpi.sheet} シート）"):
-            # Dependencies in plain language
-            if kpi.dependencies:
-                seen: set[str] = set()
-                labels: list[str] = []
-                for d in kpi.dependencies:
-                    label = _extract_dep_label(d)
-                    if label and label not in seen:
-                        seen.add(label)
-                        labels.append(label)
-                if labels:
-                    st.markdown(
-                        "**算出に使われる入力:** "
-                        + "、".join(labels)
-                    )
-            else:
-                st.caption("依存する入力項目が見つかりませんでした")
-
-
 def _render_detail_section(
-    analysis: AnalysisReport,
-    catalog: InputCatalog,
-    parameters: list,
+    analysis: AnalysisReport, catalog: InputCatalog, parameters: list,
 ) -> None:
-    """Optional detailed info: model structure, evidence, parameter table."""
     tab_model, tab_evidence, tab_params = st.tabs([
-        "モデル構造",
-        "エビデンス",
-        f"全パラメータ ({len(parameters)})",
+        "モデル構造", "エビデンス", f"全パラメータ ({len(parameters)})",
     ])
 
     with tab_model:
@@ -1437,24 +1426,28 @@ def _render_detail_section(
             import pandas as pd
             sheet_data = []
             for sn in sheet_names:
-                items_count = sum(
-                    1 for item in catalog.items if item.sheet == sn
-                )
-                kpi_count = sum(
-                    1 for k in (analysis.kpis or [])
-                    if getattr(k, "sheet", None) == sn
-                )
-                sheet_data.append({
-                    "シート": sn, "入力セル数": items_count, "KPI数": kpi_count
-                })
-            st.dataframe(
-                pd.DataFrame(sheet_data),
-                use_container_width=True, hide_index=True,
-            )
+                items_count = sum(1 for item in catalog.items if item.sheet == sn)
+                kpi_count = sum(1 for k in (analysis.kpis or [])
+                                if getattr(k, "sheet", None) == sn)
+                sheet_data.append({"シート": sn, "入力セル数": items_count, "KPI数": kpi_count})
+            st.dataframe(pd.DataFrame(sheet_data), use_container_width=True, hide_index=True)
 
         st.markdown("**自動計算される指標:**")
         if analysis.kpis:
-            _render_kpi_banner_inline(analysis.kpis)
+            for kpi in analysis.kpis:
+                with st.expander(f"{kpi.name}（{kpi.sheet} シート）"):
+                    if kpi.dependencies:
+                        seen: set = set()
+                        labels: list = []
+                        for d in kpi.dependencies:
+                            lbl = _extract_dep_label(d)
+                            if lbl and lbl not in seen:
+                                seen.add(lbl)
+                                labels.append(lbl)
+                        if labels:
+                            st.markdown("**算出に使われる入力:** " + "、".join(labels))
+                    else:
+                        st.caption("依存する入力項目が見つかりませんでした")
         else:
             st.info("自動計算される指標が検出されませんでした。")
 
@@ -1474,9 +1467,7 @@ def _render_detail_section(
                     st.markdown(f"> {ev.quote}")
                     ev_cols = st.columns(3)
                     with ev_cols[0]:
-                        st.markdown(
-                            _confidence_badge(conf), unsafe_allow_html=True
-                        )
+                        st.markdown(_confidence_badge(conf), unsafe_allow_html=True)
                     with ev_cols[1]:
                         if getattr(ev, "page_or_slide", ""):
                             st.caption(f"ページ: {ev.page_or_slide}")
@@ -1492,8 +1483,7 @@ def _render_detail_section(
             rows: List[Dict[str, Any]] = []
             for p in parameters:
                 mapped = ", ".join(
-                    f"{t.sheet}!{t.cell}"
-                    for t in getattr(p, "mapped_targets", [])
+                    f"{t.sheet}!{t.cell}" for t in getattr(p, "mapped_targets", [])
                 )
                 conf = getattr(p, "confidence", 0.0)
                 rows.append({
@@ -1509,7 +1499,6 @@ def _render_detail_section(
 
 
 def _render_download_section(gen_outputs: Dict[str, bytes]) -> None:
-    """Render download buttons for generated files."""
     st.markdown("")
     st.markdown("#### 生成完了 - ダウンロード")
     cols = st.columns(min(len(gen_outputs), 3))
@@ -1517,18 +1506,12 @@ def _render_download_section(gen_outputs: Dict[str, bytes]) -> None:
         with cols[idx % len(cols)]:
             mime = (
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                if fname.endswith(".xlsx")
-                else "text/csv"
+                if fname.endswith(".xlsx") else "text/csv"
             )
             st.download_button(
-                label=f"{fname}",
-                data=fbytes, file_name=fname, mime=mime,
+                label=f"{fname}", data=fbytes, file_name=fname, mime=mime,
                 use_container_width=True, key=f"dl_{fname}",
             )
-    st.markdown(
-        '<p class="nav-hint">ファイルが正しく生成されました</p>',
-        unsafe_allow_html=True,
-    )
 
 
 # ===================================================================
@@ -1536,13 +1519,11 @@ def _render_download_section(gen_outputs: Dict[str, bytes]) -> None:
 # ===================================================================
 
 def _collect_blueprint_parameters() -> list:
-    """Collect parameter values from the blueprint UI state."""
     parameters = st.session_state.get("parameters", [])
-    catalog: InputCatalog | None = st.session_state.get("catalog")
+    catalog: Optional[InputCatalog] = st.session_state.get("catalog")
 
     adjusted = deepcopy(parameters)
 
-    # Update existing parameters with edited values from the blueprint
     for p in adjusted:
         for target in getattr(p, "mapped_targets", []):
             state_key = f"bp_{target.sheet}_{target.cell}"
@@ -1554,7 +1535,6 @@ def _collect_blueprint_parameters() -> list:
                     except (AttributeError, TypeError):
                         pass
 
-    # Handle GAP cells where the user typed values in the blueprint
     if catalog:
         param_map = _build_param_cell_map(adjusted)
         for item in catalog.items:
@@ -1562,7 +1542,7 @@ def _collect_blueprint_parameters() -> list:
                 continue
             addr = f"{item.sheet}!{item.cell}"
             if addr in param_map:
-                continue  # Already has a parameter
+                continue
             state_key = f"bp_{item.sheet}_{item.cell}"
             if state_key in st.session_state:
                 val = st.session_state[state_key]
@@ -1571,14 +1551,8 @@ def _collect_blueprint_parameters() -> list:
                         key=f"manual_{item.sheet}_{item.cell}",
                         label=item.primary_label(),
                         value=val,
-                        unit=(
-                            item.unit_candidates[0]
-                            if item.unit_candidates
-                            else None
-                        ),
-                        mapped_targets=[
-                            CellTarget(sheet=item.sheet, cell=item.cell)
-                        ],
+                        unit=item.unit_candidates[0] if item.unit_candidates else None,
+                        mapped_targets=[CellTarget(sheet=item.sheet, cell=item.cell)],
                         confidence=1.0,
                         source="document",
                         selected=True,
@@ -1589,13 +1563,12 @@ def _collect_blueprint_parameters() -> list:
 
 
 def _run_generation_from_blueprint() -> None:
-    """Run Excel generation using values from the blueprint."""
-    config: PhaseAConfig | None = st.session_state.get("config")
-    catalog: InputCatalog | None = st.session_state.get("catalog")
+    config: Optional[PhaseAConfig] = st.session_state.get("config")
+    catalog: Optional[InputCatalog] = st.session_state.get("catalog")
     cc: ColorConfig = st.session_state.get("color_config", ColorConfig())
 
     if config is None:
-        st.error("設定がありません。Phase A からやり直してください。")
+        st.error("設定がありません。Phase 1 からやり直してください。")
         return
 
     progress = st.progress(0, text="生成を開始中...")
@@ -1621,7 +1594,6 @@ def _run_generation_from_blueprint() -> None:
 
             case_params = deepcopy(adjusted_params)
 
-            # Apply case multipliers for non-base cases
             if case_name != "base" and len(cases) > 1:
                 try:
                     gen = CaseGenerator(config)
@@ -1646,7 +1618,6 @@ def _run_generation_from_blueprint() -> None:
                     )
                     writer.generate(case_params)
 
-                    # Validate
                     try:
                         validator = PLValidator(config.template_path, output_path)
                         val_result = validator.validate()
@@ -1655,21 +1626,12 @@ def _run_generation_from_blueprint() -> None:
                                 f"{case_name.title()}: バリデーション警告 "
                                 f"({len(val_result.errors_found)} 件)"
                             )
-                            with st.expander(
-                                f"{case_name.title()} バリデーション詳細"
-                            ):
-                                for err in val_result.errors_found:
-                                    st.error(err)
-                                for warn in val_result.warnings:
-                                    st.warning(warn)
                         else:
                             st.success(f"{case_name.title()}: バリデーション OK")
                     except Exception as ve:
                         st.warning(f"バリデーション失敗: {ve}")
 
-                    output_files[f"PL_{case_name}.xlsx"] = (
-                        Path(output_path).read_bytes()
-                    )
+                    output_files[f"PL_{case_name}.xlsx"] = Path(output_path).read_bytes()
                 except Exception as exc:
                     st.error(f"{case_name.title()} ケース生成エラー: {exc}")
                     with st.expander("エラー詳細"):
@@ -1679,10 +1641,7 @@ def _run_generation_from_blueprint() -> None:
         run_sim = st.session_state.get("run_simulation", False)
         if run_sim and adjusted_params and SimulationEngine is not None:
             step += 1
-            progress.progress(
-                int(step / total_steps * 95),
-                text="シミュレーション実行中 (500回)...",
-            )
+            progress.progress(int(step / total_steps * 95), text="シミュレーション実行中...")
             try:
                 sim_engine = SimulationEngine(iterations=500)
                 sim_report = sim_engine.run(
@@ -1691,28 +1650,15 @@ def _run_generation_from_blueprint() -> None:
                 with tempfile.TemporaryDirectory() as sim_dir:
                     sim_path = str(Path(sim_dir) / "simulation_summary.xlsx")
                     export_simulation_summary(sim_report, sim_path)
-                    output_files["simulation_summary.xlsx"] = (
-                        Path(sim_path).read_bytes()
-                    )
+                    output_files["simulation_summary.xlsx"] = Path(sim_path).read_bytes()
                 st.success("シミュレーション完了")
-                with st.expander("シミュレーション結果サマリー"):
-                    for s in sim_report.summaries:
-                        st.markdown(
-                            f"**{s.kpi_name}**: 平均={s.mean:,.0f}, "
-                            f"P10={s.p10:,.0f}, P50={s.p50:,.0f}, "
-                            f"P90={s.p90:,.0f}"
-                        )
             except Exception as exc:
                 st.warning(f"シミュレーション失敗: {exc}")
 
         # Needs-review CSV
         try:
-            with tempfile.NamedTemporaryFile(
-                suffix=".csv", delete=False, mode="w"
-            ) as tmp_csv:
-                csv_path = generate_needs_review_csv(
-                    adjusted_params, tmp_csv.name,
-                )
+            with tempfile.NamedTemporaryFile(suffix=".csv", delete=False, mode="w") as tmp_csv:
+                csv_path = generate_needs_review_csv(adjusted_params, tmp_csv.name)
                 output_files["needs_review.csv"] = Path(csv_path).read_bytes()
         except Exception:
             pass
@@ -1720,7 +1666,7 @@ def _run_generation_from_blueprint() -> None:
         progress.progress(100, text="生成完了!")
         st.session_state["generation_outputs"] = output_files
 
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         progress.empty()
         st.error("生成中にエラーが発生しました")
         with st.expander("エラー詳細"):
@@ -1743,12 +1689,22 @@ def _render_sidebar() -> None:
 
         st.divider()
 
+        # Phase navigation
+        current_phase = st.session_state.get("wizard_phase", 1)
+        st.markdown("**現在のフェーズ**")
+        for p in PHASES:
+            if p["key"] == current_phase:
+                st.markdown(f"**→ {p['key']}. {p['label']}**")
+            elif p["key"] < current_phase:
+                st.caption(f"✓ {p['key']}. {p['label']}")
+            else:
+                st.caption(f"  {p['key']}. {p['label']}")
+
+        st.divider()
+
         cfg = st.session_state.get("config")
         if cfg:
             st.markdown("**セッション情報**")
-            st.caption(f"業種: {cfg.industry}")
-            st.caption(f"モデル: {cfg.business_model}")
-            st.caption(f"厳密度: {cfg.strictness}")
             st.caption(f"ケース: {', '.join(c.title() for c in cfg.cases)}")
             params = st.session_state.get("parameters", [])
             if params:
@@ -1761,16 +1717,13 @@ def _render_sidebar() -> None:
             for fname, fbytes in gen_outputs.items():
                 mime = (
                     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                    if fname.endswith(".xlsx")
-                    else "text/csv"
+                    if fname.endswith(".xlsx") else "text/csv"
                 )
                 st.download_button(
                     label=fname, data=fbytes, file_name=fname,
-                    mime=mime,
-                    key=f"sidebar_dl_{fname}", use_container_width=True,
+                    mime=mime, key=f"sidebar_dl_{fname}", use_container_width=True,
                 )
 
-        # Version stamp -- always visible so we know what's deployed
         try:
             from src.app.version import version_label
             st.caption(f"Version: {version_label()}")
@@ -1779,9 +1732,7 @@ def _render_sidebar() -> None:
 
         st.divider()
         if not st.session_state.get("reset_confirm", False):
-            if st.button(
-                "リセット (Reset)", key="btn_reset", use_container_width=True,
-            ):
+            if st.button("リセット (Reset)", key="btn_reset", use_container_width=True):
                 st.session_state["reset_confirm"] = True
                 st.rerun()
         else:
@@ -1815,13 +1766,21 @@ def main() -> None:
     _render_sidebar()
     _render_step_indicator()
 
-    phase = st.session_state["phase"]
-    if phase == "A":
-        _render_phase_a()
-    elif phase == "B":
-        _render_phase_b()
+    phase = st.session_state["wizard_phase"]
+    if phase == 1:
+        _render_phase_1()
+    elif phase == 2:
+        _render_phase_2()
+    elif phase == 3:
+        _render_phase_3()
+    elif phase == 4:
+        _render_phase_4()
+    elif phase == 5:
+        _render_phase_5()
+    elif phase == 6:
+        _render_phase_6()
     else:
-        st.session_state["phase"] = "A"
+        st.session_state["wizard_phase"] = 1
         st.rerun()
 
 
