@@ -12,7 +12,7 @@ import json
 import logging
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +33,17 @@ class CellAssignment(BaseModel):
     derivation: str = Field(default="direct", description="'direct' / 'calculated' / 'assumption'")
     confidence: float = Field(default=0.0, ge=0.0, le=1.0)
     reasoning: str = Field(default="")
+
+    @field_validator(
+        "label", "assigned_concept", "segment", "period",
+        "unit", "derivation", "reasoning",
+        mode="before",
+    )
+    @classmethod
+    def _none_to_empty(cls, v: Any) -> str:
+        if v is None:
+            return ""
+        return str(v)
 
 
 class ModelDesignResult(BaseModel):

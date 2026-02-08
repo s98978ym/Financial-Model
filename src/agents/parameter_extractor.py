@@ -11,7 +11,7 @@ import json
 import logging
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +33,16 @@ class ExtractedValue(BaseModel):
     evidence: str = Field(default="", description="Quote from document or reasoning")
     segment: str = Field(default="")
     period: str = Field(default="")
+
+    @field_validator(
+        "label", "concept", "unit", "source", "evidence", "segment", "period",
+        mode="before",
+    )
+    @classmethod
+    def _none_to_empty(cls, v: Any) -> str:
+        if v is None:
+            return ""
+        return str(v)
 
 
 class ParameterExtractionResult(BaseModel):

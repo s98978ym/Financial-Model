@@ -13,7 +13,7 @@ import json
 import logging
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +29,13 @@ class SheetMapping(BaseModel):
     sheet_purpose: str = Field(default="", description="e.g. 'revenue_model', 'cost_detail', 'pl_summary'")
     confidence: float = Field(default=0.0, ge=0.0, le=1.0)
     reasoning: str = Field(default="", description="Why this mapping was chosen")
+
+    @field_validator("mapped_segment", "sheet_purpose", "reasoning", mode="before")
+    @classmethod
+    def _none_to_empty(cls, v: Any) -> str:
+        if v is None:
+            return ""
+        return str(v)
 
 
 class TemplateStructureResult(BaseModel):
