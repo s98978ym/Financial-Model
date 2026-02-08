@@ -1673,9 +1673,12 @@ def _render_md_results(md: Any) -> None:
         for idx, sheet in enumerate(sheets):
             with sheet_tabs[idx]:
                 items = [ca for ca in md.cell_assignments if ca.sheet == sheet]
+                # Sort by category for grouping
+                items.sort(key=lambda x: (x.category or "zzz", x.cell))
                 data = []
                 for ca in items:
                     data.append({
+                        "カテゴリ": ca.category or "",
                         "セル": ca.cell,
                         "ラベル": ca.label,
                         "割当概念": ca.assigned_concept,
@@ -1688,6 +1691,7 @@ def _render_md_results(md: Any) -> None:
                 df = pd.DataFrame(data)
 
                 column_config = {
+                    "カテゴリ": st.column_config.TextColumn("カテゴリ", width="medium", disabled=True),
                     "セル": st.column_config.TextColumn("セル", width="small", disabled=True),
                     "ラベル": st.column_config.TextColumn("ラベル", width="medium", disabled=True),
                     "割当概念": st.column_config.TextColumn("割当概念", width="large"),
@@ -1880,6 +1884,15 @@ def _render_pe_results(pe: Any) -> None:
         unsafe_allow_html=True,
     )
 
+    # --- Build category lookup from Phase 4 model design ---
+    md = st.session_state.get("md_result")
+    category_map: Dict[str, str] = {}
+    if md and hasattr(md, "cell_assignments"):
+        for ca in md.cell_assignments:
+            cat = getattr(ca, "category", "")
+            if cat:
+                category_map[f"{ca.sheet}!{ca.cell}"] = cat
+
     # --- Editable grid per sheet (using tabs) ---
     if pe.extractions:
         sheets = sorted(set(e.sheet for e in pe.extractions))
@@ -1891,16 +1904,21 @@ def _render_pe_results(pe: Any) -> None:
         for idx, sheet in enumerate(sheets):
             with sheet_tabs[idx]:
                 items = [e for e in pe.extractions if e.sheet == sheet]
+                # Sort by category for grouping
+                items.sort(key=lambda x: (
+                    category_map.get(f"{x.sheet}!{x.cell}", "zzz"), x.cell
+                ))
                 data = []
                 for e in items:
-                    # Convert value to float if possible for better editing
                     val = e.value
                     if isinstance(val, str):
                         try:
                             val = float(val)
                         except (ValueError, TypeError):
                             pass
+                    cat = category_map.get(f"{e.sheet}!{e.cell}", "")
                     data.append({
+                        "カテゴリ": cat,
                         "セル": e.cell,
                         "ラベル": e.label or e.concept,
                         "値": val,
@@ -1912,6 +1930,7 @@ def _render_pe_results(pe: Any) -> None:
                 df = pd.DataFrame(data)
 
                 column_config = {
+                    "カテゴリ": st.column_config.TextColumn("カテゴリ", width="medium", disabled=True),
                     "セル": st.column_config.TextColumn("セル", width="small", disabled=True),
                     "ラベル": st.column_config.TextColumn("ラベル", width="medium", disabled=True),
                     "値": st.column_config.NumberColumn("値", width="medium", format="%.2f"),

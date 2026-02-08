@@ -25,6 +25,7 @@ class CellAssignment(BaseModel):
     """Maps a template cell to a business concept."""
     sheet: str
     cell: str
+    category: str = Field(default="", description="High-level PL category (e.g. 売上, 販管費, LTV)")
     label: str = Field(default="", description="Cell's template label")
     assigned_concept: str = Field(default="", description="What this cell represents")
     segment: str = Field(default="", description="Which segment this belongs to")
@@ -35,7 +36,7 @@ class CellAssignment(BaseModel):
     reasoning: str = Field(default="")
 
     @field_validator(
-        "label", "assigned_concept", "segment", "period",
+        "category", "label", "assigned_concept", "segment", "period",
         "unit", "derivation", "reasoning",
         mode="before",
     )
@@ -69,18 +70,27 @@ MD_SYSTEM_PROMPT = """\
 【マッピングの原則】
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-1. **セルラベルとビジネス概念の照合**
+1. **PLカテゴリの分類（category）**
+   - 各セルをPLの大分類にカテゴライズする
+   - 典型的なカテゴリ:
+     - 収益系: 「売上」「LTV」「MRR」「取引収益」
+     - 費用系: 「人件費」「販管費」「広告宣伝費」「開発費」「減価償却費」
+     - その他: 「前提条件」「成長率」「KPI」
+   - テンプレートのブロック構造（block）をヒントに分類
+   - 同じblock内のセルは同じcategoryにする
+
+2. **セルラベルとビジネス概念の照合**
    - 同義語対応：「受講者数」=「顧客数」=「ユーザー数」
    - 略語対応：「MRR」=「月間経常収益」
 
-2. **セグメントへの帰属**
+3. **セグメントへの帰属**
    - 各セルがどのビジネスセグメントに属するか
    - 共通項目（人件費等）はセグメント横断で記載
 
-3. **期間の特定**
+4. **期間の特定**
    - FY1/FY2/月次/四半期の区別
 
-4. **単位の確認**
+5. **単位の確認**
    - 千円 vs 円、% vs 小数、人数 vs 比率
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -88,6 +98,7 @@ MD_SYSTEM_PROMPT = """\
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 - 全入力セルに対して assignment または unmapped を返す
 - assigned_concept は日本語で簡潔に
+- category はPLの大分類を日本語で（例: 売上、人件費、販管費）
 - 有効なJSONのみを返す
 """
 
@@ -116,6 +127,7 @@ MD_USER_PROMPT = """\
     {{
       "sheet": "シート名",
       "cell": "B5",
+      "category": "PLの大分類（例: 売上, 人件費, 販管費, LTV, 前提条件）",
       "label": "セルの見出しテキスト（数値ではなく項目名）",
       "assigned_concept": "このセルが表す概念（例: 月間顧客数）",
       "segment": "セグメント名",
@@ -210,27 +222,34 @@ class ModelDesigner:
         raw: Dict[str, Any],
         catalog_items: Optional[List[Dict[str, Any]]] = None,
     ) -> ModelDesignResult:
-        # Build lookup: (sheet, cell) → best label from catalog
+        # Build lookups from catalog: label and block
         catalog_label_map: Dict[str, str] = {}
+        catalog_block_map: Dict[str, str] = {}
         for item in (catalog_items or []):
             sheet = item.get("sheet", "")
             cell = item.get("cell", "")
             labels = item.get("label_candidates", [])
-            if sheet and cell and labels:
-                catalog_label_map[f"{sheet}!{cell}"] = labels[0]
+            block = item.get("block", "")
+            addr = f"{sheet}!{cell}"
+            if sheet and cell:
+                if labels:
+                    catalog_label_map[addr] = labels[0]
+                if block:
+                    catalog_block_map[addr] = block
 
         assignments = []
         for ca in raw.get("cell_assignments", []):
             sheet = ca.get("sheet", "")
             cell = ca.get("cell", "")
             llm_label = ca.get("label", "")
+            llm_category = ca.get("category", "")
+
+            addr = f"{sheet}!{cell}"
 
             # Fix: if LLM returned a numeric value as label, use catalog label
-            addr = f"{sheet}!{cell}"
             actual_label = llm_label
             if addr in catalog_label_map:
                 cat_label = catalog_label_map[addr]
-                # Prefer catalog label if LLM label looks numeric or empty
                 try:
                     float(str(llm_label).replace(",", ""))
                     actual_label = cat_label
@@ -238,9 +257,15 @@ class ModelDesigner:
                     if not llm_label:
                         actual_label = cat_label
 
+            # Category: use LLM's category, fallback to catalog block
+            actual_category = llm_category
+            if not actual_category and addr in catalog_block_map:
+                actual_category = catalog_block_map[addr]
+
             assignments.append(CellAssignment(
                 sheet=sheet,
                 cell=cell,
+                category=actual_category,
                 label=actual_label,
                 assigned_concept=ca.get("assigned_concept", ""),
                 segment=ca.get("segment", ""),
