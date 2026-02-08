@@ -1,0 +1,79 @@
+version: "3.8"
+
+services:
+  # PostgreSQL (local replacement for Supabase)
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: plgen
+      POSTGRES_PASSWORD: plgen_dev
+      POSTGRES_DB: plgen
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U plgen"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Redis (local replacement for Upstash)
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # FastAPI application
+  api:
+    build:
+      context: ..
+      dockerfile: services/api/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://plgen:plgen_dev@postgres:5432/plgen
+      REDIS_URL: redis://redis:6379/0
+      CORS_ORIGINS: "http://localhost:3000"
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ../services/api:/app/services/api
+      - ../core:/app/core
+      - ../shared:/app/shared
+      - ../src:/app/src
+      - ../templates:/app/templates
+
+  # Celery worker
+  worker:
+    build:
+      context: ..
+      dockerfile: services/worker/Dockerfile
+    environment:
+      DATABASE_URL: postgresql://plgen:plgen_dev@postgres:5432/plgen
+      REDIS_URL: redis://redis:6379/0
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ../services/worker:/app/services/worker
+      - ../core:/app/core
+      - ../shared:/app/shared
+      - ../src:/app/src
+      - ../templates:/app/templates
+
+volumes:
+  pgdata:
