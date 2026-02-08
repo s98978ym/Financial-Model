@@ -756,7 +756,7 @@ def _render_phase_1() -> None:
 
     has_input = doc_file or (pasted_text and pasted_text.strip())
     if has_input:
-        if st.button("スキャン開始 →", type="primary", use_container_width=True, key="btn_scan"):
+        if st.button("スキャン開始 →", type="primary", width="stretch", key="btn_scan"):
             if pasted_text and pasted_text.strip():
                 _run_phase_1_scan_from_text(pasted_text.strip())
             else:
@@ -993,7 +993,7 @@ def _render_phase_2() -> None:
 
     # Show run button if no result yet
     if bm is None and not bm_error:
-        if st.button("分析開始", type="primary", use_container_width=True, key="btn_bm_run"):
+        if st.button("分析開始", type="primary", width="stretch", key="btn_bm_run"):
             _run_bm_analysis()
             st.rerun()
         return
@@ -1021,12 +1021,12 @@ def _render_phase_2() -> None:
 
     col1, col2, col3 = st.columns([2, 2, 1])
     with col1:
-        if st.button("再分析 (フィードバック反映)", use_container_width=True, key="btn_bm_rerun"):
+        if st.button("再分析 (フィードバック反映)", width="stretch", key="btn_bm_rerun"):
             _run_bm_analysis(feedback=feedback)
             st.rerun()
     with col2:
         can_confirm = bm is not None
-        if st.button("確定 → テンプレ構造へ", type="primary", use_container_width=True,
+        if st.button("確定 → テンプレ構造へ", type="primary", width="stretch",
                       disabled=not can_confirm, key="btn_bm_confirm"):
             # Apply the selected proposal before moving to Phase 3
             selected_idx = st.session_state.get("bm_selected_proposal", 0)
@@ -1036,7 +1036,7 @@ def _render_phase_2() -> None:
             st.session_state["wizard_phase"] = 3
             st.rerun()
     with col3:
-        if st.button("← 戻る", use_container_width=True, key="btn_bm_back"):
+        if st.button("← 戻る", width="stretch", key="btn_bm_back"):
             st.session_state["wizard_phase"] = 1
             st.rerun()
 
@@ -1152,7 +1152,7 @@ def _render_bm_results(bm: Any) -> None:
                                     "出典": src_icon,
                                     "根拠": d.evidence[:80] if d.evidence else "-",
                                 })
-                            st.dataframe(pd.DataFrame(driver_data), use_container_width=True, hide_index=True)
+                            st.dataframe(pd.DataFrame(driver_data), width="stretch", hide_index=True)
                         if seg.key_assumptions:
                             st.markdown("  前提条件: " + " / ".join(seg.key_assumptions))
 
@@ -1168,7 +1168,7 @@ def _render_bm_results(bm: Any) -> None:
                             "推定値": c.estimated_value or "-",
                             "根拠": c.evidence[:80] if c.evidence else "-",
                         })
-                    st.dataframe(pd.DataFrame(cost_data), use_container_width=True, hide_index=True)
+                    st.dataframe(pd.DataFrame(cost_data), width="stretch", hide_index=True)
 
                 if p.growth_trajectory:
                     st.markdown(f"**成長シナリオ:** {p.growth_trajectory}")
@@ -1195,7 +1195,7 @@ def _render_bm_results(bm: Any) -> None:
                             "推定値": d.estimated_value or "-",
                             "根拠": d.evidence[:80] if d.evidence else "-",
                         })
-                    st.dataframe(pd.DataFrame(driver_data), use_container_width=True, hide_index=True)
+                    st.dataframe(pd.DataFrame(driver_data), width="stretch", hide_index=True)
                 if seg.key_assumptions:
                     st.markdown("**前提条件:** " + " / ".join(seg.key_assumptions))
 
@@ -1211,7 +1211,7 @@ def _render_bm_results(bm: Any) -> None:
                     "推定値": c.estimated_value or "-",
                     "根拠": c.evidence[:80] if c.evidence else "-",
                 })
-            st.dataframe(pd.DataFrame(cost_data), use_container_width=True, hide_index=True)
+            st.dataframe(pd.DataFrame(cost_data), width="stretch", hide_index=True)
 
         if bm.risk_factors:
             st.markdown(f"**リスク要因:** {', '.join(bm.risk_factors)}")
@@ -1270,7 +1270,7 @@ def _render_phase_3() -> None:
             '</div></div>',
             unsafe_allow_html=True,
         )
-        if st.button("マッピングを開始", type="primary", use_container_width=True, key="btn_ts_run"):
+        if st.button("マッピングを開始", type="primary", width="stretch", key="btn_ts_run"):
             _run_template_mapping()
             st.rerun()
         return
@@ -1302,17 +1302,17 @@ def _render_phase_3() -> None:
     # --- Action buttons ---
     col1, col2, col3 = st.columns([2, 2, 1])
     with col1:
-        if st.button("再検討", use_container_width=True, key="btn_ts_rerun"):
+        if st.button("再検討", width="stretch", key="btn_ts_rerun"):
             _run_template_mapping(feedback=feedback)
             st.rerun()
     with col2:
         can_confirm = ts is not None
-        if st.button("確定 → モデル設計へ", type="primary", use_container_width=True,
+        if st.button("確定 → モデル設計へ", type="primary", width="stretch",
                       disabled=not can_confirm, key="btn_ts_confirm"):
             st.session_state["wizard_phase"] = 4
             st.rerun()
     with col3:
-        if st.button("戻る", use_container_width=True, key="btn_ts_back"):
+        if st.button("戻る", width="stretch", key="btn_ts_back"):
             st.session_state["wizard_phase"] = 2
             st.rerun()
 
@@ -1324,15 +1324,16 @@ def _run_template_mapping(feedback: str = "") -> None:
         st.session_state["ts_error"] = "BM分析結果がありません。Phase 2に戻ってください。"
         return
 
-    with st.spinner("テンプレート構造を検討中..."):
+    with st.spinner("テンプレート構造を検討中... （LLM応答を待機中）"):
         try:
             orch = _get_orchestrator()
             ts = orch.run_template_mapping(bm.raw_json, writable_items, feedback=feedback)
             st.session_state["ts_result"] = ts
             st.session_state["ts_error"] = ""
         except Exception as exc:
-            st.session_state["ts_error"] = str(exc)
-            logger.error("Template mapping failed: %s", exc)
+            tb = traceback.format_exc()
+            st.session_state["ts_error"] = f"{exc}\n\n{tb}"
+            logger.error("Template mapping failed: %s\n%s", exc, tb)
 
 
 def _render_ts_results(ts: Any) -> None:
@@ -1566,7 +1567,7 @@ def _render_phase_4() -> None:
             '</div>',
             unsafe_allow_html=True,
         )
-        if st.button("モデル設計を開始", type="primary", use_container_width=True, key="btn_md_run"):
+        if st.button("モデル設計を開始", type="primary", width="stretch", key="btn_md_run"):
             _run_model_design()
             st.rerun()
         return
@@ -1596,17 +1597,17 @@ def _render_phase_4() -> None:
 
     col1, col2, col3 = st.columns([2, 2, 1])
     with col1:
-        if st.button("再設計", use_container_width=True, key="btn_md_rerun"):
+        if st.button("再設計", width="stretch", key="btn_md_rerun"):
             _run_model_design(feedback=feedback)
             st.rerun()
     with col2:
         can_confirm = md is not None
-        if st.button("確定 → パラメーターへ", type="primary", use_container_width=True,
+        if st.button("確定 → パラメーターへ", type="primary", width="stretch",
                       disabled=not can_confirm, key="btn_md_confirm"):
             st.session_state["wizard_phase"] = 5
             st.rerun()
     with col3:
-        if st.button("戻る", use_container_width=True, key="btn_md_back"):
+        if st.button("戻る", width="stretch", key="btn_md_back"):
             st.session_state["wizard_phase"] = 3
             st.rerun()
 
@@ -1619,17 +1620,20 @@ def _run_model_design(feedback: str = "") -> None:
         st.session_state["md_error"] = "前フェーズの結果がありません。戻ってください。"
         return
 
-    with st.spinner("モデル設計中..."):
+    with st.spinner("モデル設計中... （LLM応答を待機中。30〜60秒かかる場合があります）"):
         try:
             orch = _get_orchestrator()
+            logger.info("Model design: starting with %d writable items", len(writable_items))
             md = orch.run_model_design(
                 bm.raw_json, ts.raw_json, writable_items, feedback=feedback,
             )
             st.session_state["md_result"] = md
             st.session_state["md_error"] = ""
+            logger.info("Model design: success, %d assignments", len(md.cell_assignments))
         except Exception as exc:
-            st.session_state["md_error"] = str(exc)
-            logger.error("Model design failed: %s", exc)
+            tb = traceback.format_exc()
+            st.session_state["md_error"] = f"{exc}\n\n{tb}"
+            logger.error("Model design failed: %s\n%s", exc, tb)
 
 
 def _render_md_results(md: Any) -> None:
@@ -1710,7 +1714,7 @@ def _render_md_results(md: Any) -> None:
                 edited = st.data_editor(
                     df,
                     column_config=column_config,
-                    use_container_width=True,
+                    width="stretch",
                     hide_index=True,
                     num_rows="fixed",
                     key=f"md_grid_{sheet}",
@@ -1735,7 +1739,7 @@ def _render_md_results(md: Any) -> None:
                 "ラベル": uc.get("label", ""),
                 "理由": uc.get("reason", ""),
             })
-        st.dataframe(pd.DataFrame(unmap_data), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(unmap_data), width="stretch", hide_index=True)
 
     if md.warnings:
         for w in md.warnings:
@@ -1785,7 +1789,7 @@ def _render_phase_5() -> None:
             '</div>',
             unsafe_allow_html=True,
         )
-        if st.button("パラメーター抽出開始", type="primary", use_container_width=True, key="btn_pe_run"):
+        if st.button("パラメーター抽出開始", type="primary", width="stretch", key="btn_pe_run"):
             _run_parameter_extraction()
             st.rerun()
         return
@@ -1816,18 +1820,18 @@ def _render_phase_5() -> None:
 
     col1, col2, col3 = st.columns([2, 2, 1])
     with col1:
-        if st.button("再抽出", use_container_width=True, key="btn_pe_rerun"):
+        if st.button("再抽出", width="stretch", key="btn_pe_rerun"):
             _run_parameter_extraction(feedback=feedback)
             st.rerun()
     with col2:
         can_confirm = pe is not None
-        if st.button("確定 → 最終出力へ", type="primary", use_container_width=True,
+        if st.button("確定 → 最終出力へ", type="primary", width="stretch",
                       disabled=not can_confirm, key="btn_pe_confirm"):
             _convert_extractions_to_parameters()
             st.session_state["wizard_phase"] = 6
             st.rerun()
     with col3:
-        if st.button("戻る", use_container_width=True, key="btn_pe_back"):
+        if st.button("戻る", width="stretch", key="btn_pe_back"):
             st.session_state["wizard_phase"] = 4
             st.rerun()
 
@@ -1839,7 +1843,7 @@ def _run_parameter_extraction(feedback: str = "") -> None:
         st.session_state["pe_error"] = "前フェーズの結果がありません。戻ってください。"
         return
 
-    with st.spinner("パラメーターを抽出中..."):
+    with st.spinner("パラメーターを抽出中... （LLM応答を待機中）"):
         try:
             orch = _get_orchestrator()
             pe = orch.run_parameter_extraction(
@@ -1848,8 +1852,9 @@ def _run_parameter_extraction(feedback: str = "") -> None:
             st.session_state["pe_result"] = pe
             st.session_state["pe_error"] = ""
         except Exception as exc:
-            st.session_state["pe_error"] = str(exc)
-            logger.error("Parameter extraction failed: %s", exc)
+            tb = traceback.format_exc()
+            st.session_state["pe_error"] = f"{exc}\n\n{tb}"
+            logger.error("Parameter extraction failed: %s\n%s", exc, tb)
 
 
 def _render_pe_results(pe: Any) -> None:
@@ -1948,7 +1953,7 @@ def _render_pe_results(pe: Any) -> None:
                 edited = st.data_editor(
                     df,
                     column_config=column_config,
-                    use_container_width=True,
+                    width="stretch",
                     hide_index=True,
                     num_rows="fixed",
                     key=f"pe_grid_{sheet}",
@@ -1970,7 +1975,7 @@ def _render_pe_results(pe: Any) -> None:
              "ラベル": uc.get("label", ""), "理由": uc.get("reason", "")}
             for uc in pe.unmapped_cells
         ]
-        st.dataframe(pd.DataFrame(unmap_data), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(unmap_data), width="stretch", hide_index=True)
 
     if pe.warnings:
         for w in pe.warnings:
@@ -2090,10 +2095,10 @@ def _render_phase_6() -> None:
     with col_gen:
         generate_clicked = st.button(
             "Excel を生成する",
-            type="primary", use_container_width=True, key="btn_blueprint_generate",
+            type="primary", width="stretch", key="btn_blueprint_generate",
         )
     with col_back:
-        if st.button("← パラメーターに戻る", key="b_back", use_container_width=True):
+        if st.button("← パラメーターに戻る", key="b_back", width="stretch"):
             st.session_state["wizard_phase"] = 5
             st.rerun()
 
@@ -2352,7 +2357,7 @@ def _render_detail_section(
                 kpi_count = sum(1 for k in (analysis.kpis or [])
                                 if getattr(k, "sheet", None) == sn)
                 sheet_data.append({"シート": sn, "入力セル数": items_count, "KPI数": kpi_count})
-            st.dataframe(pd.DataFrame(sheet_data), use_container_width=True, hide_index=True)
+            st.dataframe(pd.DataFrame(sheet_data), width="stretch", hide_index=True)
 
         st.markdown("**自動計算される指標:**")
         if analysis.kpis:
@@ -2417,7 +2422,7 @@ def _render_detail_section(
                     "マッピング先": mapped,
                 })
             df = pd.DataFrame(rows)
-            st.dataframe(df, use_container_width=True, hide_index=True)
+            st.dataframe(df, width="stretch", hide_index=True)
 
 
 def _render_download_section(gen_outputs: Dict[str, bytes]) -> None:
@@ -2432,7 +2437,7 @@ def _render_download_section(gen_outputs: Dict[str, bytes]) -> None:
             )
             st.download_button(
                 label=f"{fname}", data=fbytes, file_name=fname, mime=mime,
-                use_container_width=True, key=f"dl_{fname}",
+                width="stretch", key=f"dl_{fname}",
             )
 
 
@@ -2643,7 +2648,7 @@ def _render_sidebar() -> None:
                 if st.button(
                     f"✓ {pk}. {label}",
                     key=f"nav_phase_{pk}",
-                    use_container_width=True,
+                    width="stretch",
                 ):
                     st.session_state["wizard_phase"] = pk
                     st.rerun()
@@ -2738,7 +2743,7 @@ def _render_sidebar() -> None:
                 )
                 st.download_button(
                     label=f"📥 {fname}", data=fbytes, file_name=fname,
-                    mime=mime, key=f"sidebar_dl_{fname}", use_container_width=True,
+                    mime=mime, key=f"sidebar_dl_{fname}", width="stretch",
                 )
 
         # --- Tools section ---
@@ -2750,12 +2755,12 @@ def _render_sidebar() -> None:
             unsafe_allow_html=True,
         )
 
-        if st.button("⚙ プロンプト管理", key="btn_prompt_mgmt", use_container_width=True):
+        if st.button("⚙ プロンプト管理", key="btn_prompt_mgmt", width="stretch"):
             st.session_state["show_prompt_mgmt"] = not st.session_state.get("show_prompt_mgmt", False)
             st.rerun()
 
         # Quick help toggle
-        if st.button("❓ ヘルプ", key="btn_help", use_container_width=True):
+        if st.button("❓ ヘルプ", key="btn_help", width="stretch"):
             st.session_state["show_help"] = not st.session_state.get("show_help", False)
             st.rerun()
 
@@ -2817,7 +2822,7 @@ def _render_prompt_management() -> None:
         st.caption("各フェーズのLLMプロンプトを確認・編集。編集はセッション中のみ有効。")
     with col_actions:
         st.markdown("")  # spacing
-        if st.button("← ウィザードに戻る", key="btn_prompt_back", use_container_width=True):
+        if st.button("← ウィザードに戻る", key="btn_prompt_back", width="stretch"):
             st.session_state["show_prompt_mgmt"] = False
             st.rerun()
 
@@ -2867,7 +2872,7 @@ def _render_prompt_management() -> None:
                     # Action buttons — each prompt has its own save + reset
                     c_save, c_reset, c_info = st.columns([1, 1, 2])
                     with c_save:
-                        if st.button("💾 保存", key=f"btn_save_{entry.key}", use_container_width=True):
+                        if st.button("💾 保存", key=f"btn_save_{entry.key}", width="stretch"):
                             if new_content != entry.content:
                                 registry.set(entry.key, new_content)
                                 st.success("保存しました。")
@@ -2878,7 +2883,7 @@ def _render_prompt_management() -> None:
                         if st.button(
                             "↩ デフォルトに戻す",
                             key=f"btn_reset_{entry.key}",
-                            use_container_width=True,
+                            width="stretch",
                             disabled=not entry.is_customized,
                         ):
                             registry.reset(entry.key)
