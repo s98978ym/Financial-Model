@@ -1,4 +1,6 @@
 """Excel writer that preserves formulas and only modifies input cells."""
+from __future__ import annotations
+
 import shutil
 import logging
 from pathlib import Path

@@ -55,6 +55,30 @@ class BusinessSegment(BaseModel):
     key_assumptions: List[str] = Field(default_factory=list)
 
 
+class YearTarget(BaseModel):
+    """A single year's financial target value."""
+    year: str = Field(default="", description="e.g. 'FY1', 'FY26'")
+    value: Optional[float] = Field(default=None, description="Target value (normalised to yen)")
+    evidence: str = Field(default="", description="Verbatim quote from document")
+    source: str = Field(default="document", description="document / inferred / default")
+
+
+class BreakevenTarget(BaseModel):
+    """Breakeven timing target."""
+    year: str = Field(default="", description="e.g. 'FY3', '3年目'")
+    evidence: str = Field(default="", description="Verbatim quote from document")
+    source: str = Field(default="document", description="document / inferred / default")
+
+
+class FinancialTargets(BaseModel):
+    """Financial targets extracted from the business plan."""
+    horizon_years: int = Field(default=5, description="Planning horizon in years")
+    revenue_targets: List[YearTarget] = Field(default_factory=list, description="Revenue targets per year")
+    op_targets: List[YearTarget] = Field(default_factory=list, description="Operating profit targets per year")
+    single_year_breakeven: Optional[BreakevenTarget] = Field(default=None, description="Single-year breakeven target")
+    cumulative_breakeven: Optional[BreakevenTarget] = Field(default=None, description="Cumulative breakeven target")
+
+
 class BusinessModelProposal(BaseModel):
     """One possible structural interpretation of the business model."""
     label: str = Field(description="e.g. 'パターンA: SaaS型サブスクリプションモデル'")
@@ -98,6 +122,9 @@ class BusinessModelAnalysis(BaseModel):
     proposals: List[BusinessModelProposal] = Field(default_factory=list, description="3-5 structural interpretations")
     selected_index: int = Field(default=0, description="Which proposal is selected")
 
+    # --- financial targets (v2) ---
+    financial_targets: Optional[FinancialTargets] = Field(default=None, description="Revenue/OP targets and breakeven timing from document")
+
     def select_proposal(self, index: int) -> "BusinessModelAnalysis":
         """Select a proposal and populate main fields from it.
 
@@ -107,6 +134,7 @@ class BusinessModelAnalysis(BaseModel):
             return self
         p = self.proposals[index]
         # Build a raw_json that matches the old format for downstream compat
+        ft_dump = self.financial_targets.model_dump() if self.financial_targets else None
         compat_raw = {
             "company_name": self.company_name,
             "industry": p.industry,
@@ -120,6 +148,7 @@ class BusinessModelAnalysis(BaseModel):
             "currency": self.currency,
             "document_narrative": self.document_narrative,
             "key_facts": self.key_facts,
+            "financial_targets": ft_dump,
         }
         return BusinessModelAnalysis(
             company_name=self.company_name,
@@ -137,6 +166,7 @@ class BusinessModelAnalysis(BaseModel):
             key_facts=self.key_facts,
             proposals=self.proposals,
             selected_index=index,
+            financial_targets=self.financial_targets,
         )
 
 
@@ -184,6 +214,12 @@ BM_ANALYZER_SYSTEM_PROMPT = """\
   - 各解釈パターンごとに、セグメント分割・収益モデル・コスト構造を定義
   - revenue_driversのevidenceには必ず文書からの原文引用を入れる
   - 文書に記載のないドライバーは「文書に記載なし」と明記する
+
+■ STEP 5: 財務ターゲットを抽出する
+  - 文書に記載された売上目標・営業利益目標（年度別）を抽出する
+  - 黒字化時期（単年黒字・累積黒字）の記載があれば抽出する
+  - 計画期間（何年分か）を特定する
+  - 文書に記載がない場合は空配列またはnullを返す（でっち上げない）
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 【出力ルール】
@@ -270,6 +306,18 @@ BM_ANALYZER_USER_PROMPT = """\
       "...": "（同じ構造で別の解釈を提案）"
     }}
   ],
+  "financial_targets": {{
+    "horizon_years": 5,
+    "revenue_targets": [
+      {{"year": "FY1", "value": 10000000, "evidence": "「文書からの原文引用」", "source": "document"}},
+      {{"year": "FY2", "value": null, "evidence": "文書に記載なし", "source": "default"}}
+    ],
+    "op_targets": [
+      {{"year": "FY1", "value": -5000000, "evidence": "「文書からの原文引用」", "source": "document"}}
+    ],
+    "single_year_breakeven": {{"year": "FY3", "evidence": "「3年目に単月黒字化」", "source": "document"}},
+    "cumulative_breakeven": {{"year": "FY5", "evidence": "「5年目に累積黒字」", "source": "document"}}
+  }},
   "currency": "JPY"
 }}
 
@@ -279,6 +327,7 @@ BM_ANALYZER_USER_PROMPT = """\
 - confidenceの高い順に並べる。
 - document_narrativeは文書の事実に基づく。文書にない情報を補完してはいけない。
 - evidenceフィールドには必ず文書からの「原文引用」を入れること。推測の場合は「文書に記載なし・【推定】〜」と記載。
+- financial_targets: 文書に売上目標・利益目標・黒字化時期の記載があれば抽出する。なければ空配列/nullを返す。数値は円単位に正規化（億→×1億、万→×1万）。
 """
 
 
@@ -461,6 +510,9 @@ class BusinessModelAnalyzer:
         # Sort by confidence descending
         proposals.sort(key=lambda p: p.confidence, reverse=True)
 
+        # Parse financial targets
+        ft = self._parse_financial_targets(raw.get("financial_targets"))
+
         # Build initial analysis with first proposal selected
         analysis = BusinessModelAnalysis(
             company_name=raw.get("company_name", ""),
@@ -470,6 +522,7 @@ class BusinessModelAnalyzer:
             selected_index=0,
             currency=raw.get("currency", "JPY"),
             raw_json=raw,
+            financial_targets=ft,
         )
 
         # Auto-select first proposal to populate main fields
@@ -477,6 +530,61 @@ class BusinessModelAnalyzer:
             analysis = analysis.select_proposal(0)
 
         return analysis
+
+    @staticmethod
+    def _parse_financial_targets(ft_raw: Optional[Dict[str, Any]]) -> Optional[FinancialTargets]:
+        """Parse financial_targets from LLM response."""
+        if not ft_raw or not isinstance(ft_raw, dict):
+            return None
+        try:
+            rev_targets = []
+            for rt in ft_raw.get("revenue_targets", []):
+                if isinstance(rt, dict):
+                    rev_targets.append(YearTarget(
+                        year=str(rt.get("year", "")),
+                        value=rt.get("value"),
+                        evidence=str(rt.get("evidence", "")),
+                        source=str(rt.get("source", "document")),
+                    ))
+
+            op_targets = []
+            for ot in ft_raw.get("op_targets", []):
+                if isinstance(ot, dict):
+                    op_targets.append(YearTarget(
+                        year=str(ot.get("year", "")),
+                        value=ot.get("value"),
+                        evidence=str(ot.get("evidence", "")),
+                        source=str(ot.get("source", "document")),
+                    ))
+
+            sy_be = None
+            sy_raw = ft_raw.get("single_year_breakeven")
+            if isinstance(sy_raw, dict) and sy_raw.get("year"):
+                sy_be = BreakevenTarget(
+                    year=str(sy_raw.get("year", "")),
+                    evidence=str(sy_raw.get("evidence", "")),
+                    source=str(sy_raw.get("source", "document")),
+                )
+
+            cum_be = None
+            cum_raw = ft_raw.get("cumulative_breakeven")
+            if isinstance(cum_raw, dict) and cum_raw.get("year"):
+                cum_be = BreakevenTarget(
+                    year=str(cum_raw.get("year", "")),
+                    evidence=str(cum_raw.get("evidence", "")),
+                    source=str(cum_raw.get("source", "document")),
+                )
+
+            return FinancialTargets(
+                horizon_years=int(ft_raw.get("horizon_years", 5)),
+                revenue_targets=rev_targets,
+                op_targets=op_targets,
+                single_year_breakeven=sy_be,
+                cumulative_breakeven=cum_be,
+            )
+        except Exception as e:
+            logger.warning("Failed to parse financial_targets: %s", e)
+            return None
 
     @staticmethod
     def _validate_grounding(
