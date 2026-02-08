@@ -511,6 +511,155 @@ def _inject_custom_css() -> None:
         opacity: 0.4;
         margin-bottom: 0.6rem;
     }
+
+    /* ─── Phase 3: Revenue-model configurator ─── */
+    .p3-rm-section {
+        background: var(--secondary-background-color);
+        border-radius: 12px;
+        padding: 1.2rem 1.4rem;
+        margin-top: 1rem;
+        border: 1px solid rgba(99,102,241,0.15);
+    }
+    .p3-rm-title {
+        font-size: 0.95rem;
+        font-weight: 700;
+        margin-bottom: 0.8rem;
+        color: #6366f1;
+    }
+    .p3-rm-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 0.6rem 0;
+        border-bottom: 1px solid rgba(128,128,128,0.08);
+    }
+    .p3-rm-row:last-child { border-bottom: none; }
+    .p3-rm-slot {
+        font-weight: 600;
+        min-width: 100px;
+        font-size: 0.88rem;
+    }
+    .p3-rm-arrow { opacity: 0.3; }
+    .p3-rm-seg { font-size: 0.85rem; }
+
+    /* ─── Phase 4/5: Grid-based design ─── */
+    .p4-header {
+        background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+        border-radius: 16px;
+        padding: 2rem;
+        margin-bottom: 1.5rem;
+    }
+    .p4-header h2 {
+        font-size: 1.4rem; font-weight: 700;
+        color: #fff; margin: 0 0 0.4rem 0;
+    }
+    .p4-header p {
+        font-size: 0.85rem; color: rgba(255,255,255,0.78);
+        margin: 0; line-height: 1.5;
+    }
+
+    .p5-header {
+        background: linear-gradient(135deg, #d97706 0%, #f59e0b 100%);
+        border-radius: 16px;
+        padding: 2rem;
+        margin-bottom: 1.5rem;
+    }
+    .p5-header h2 {
+        font-size: 1.4rem; font-weight: 700;
+        color: #fff; margin: 0 0 0.4rem 0;
+    }
+    .p5-header p {
+        font-size: 0.85rem; color: rgba(255,255,255,0.78);
+        margin: 0; line-height: 1.5;
+    }
+
+    .grid-stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+        gap: 12px;
+        margin-bottom: 1.5rem;
+    }
+    .grid-stat {
+        background: var(--secondary-background-color);
+        border-radius: 12px;
+        padding: 1rem;
+        text-align: center;
+    }
+    .grid-stat-val {
+        font-size: 1.6rem;
+        font-weight: 800;
+        line-height: 1.2;
+    }
+    .grid-stat-val.clr-green { color: #059669; }
+    .grid-stat-val.clr-amber { color: #d97706; }
+    .grid-stat-val.clr-red { color: #ef4444; }
+    .grid-stat-val.clr-blue { color: #3b82f6; }
+    .grid-stat-lbl {
+        font-size: 0.72rem;
+        opacity: 0.5;
+        margin-top: 0.3rem;
+    }
+
+    .grid-sheet-header {
+        font-size: 0.72rem;
+        font-weight: 700;
+        opacity: 0.4;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        margin: 1rem 0 0.5rem 0;
+    }
+
+    .grid-unmapped {
+        background: rgba(239,68,68,0.06);
+        border: 1px solid rgba(239,68,68,0.15);
+        border-radius: 10px;
+        padding: 0.8rem 1rem;
+        margin-top: 0.5rem;
+    }
+    .grid-unmapped-title {
+        font-size: 0.82rem;
+        font-weight: 600;
+        color: #ef4444;
+        margin-bottom: 0.5rem;
+    }
+
+    .grid-start {
+        border: 2px dashed rgba(16,185,129,0.25);
+        border-radius: 16px;
+        padding: 3rem 2rem;
+        text-align: center;
+        margin-bottom: 1rem;
+    }
+    .grid-start-title {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: #10b981;
+        margin-bottom: 0.5rem;
+    }
+    .grid-start-desc {
+        font-size: 0.85rem;
+        opacity: 0.55;
+        line-height: 1.6;
+        max-width: 480px;
+        margin: 0 auto;
+    }
+
+    /* Source badges in Phase 5 */
+    .src-doc {
+        display: inline-block; padding: 2px 10px; border-radius: 12px;
+        font-size: 0.7rem; font-weight: 600;
+        background: #d4edda; color: #0f5132;
+    }
+    .src-inf {
+        display: inline-block; padding: 2px 10px; border-radius: 12px;
+        font-size: 0.7rem; font-weight: 600;
+        background: #fff3cd; color: #856404;
+    }
+    .src-def {
+        display: inline-block; padding: 2px 10px; border-radius: 12px;
+        font-size: 0.7rem; font-weight: 600;
+        background: #e2e3e5; color: #41464b;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -1436,9 +1585,124 @@ def _render_ts_results(ts: Any) -> None:
                 unsafe_allow_html=True,
             )
 
+    # --- Revenue model configuration ---
+    _render_revenue_model_config(ts)
+
     # --- Raw JSON (debug) ---
     with st.expander("詳細データ (JSON)", expanded=False):
         st.json(ts.raw_json)
+
+
+def _render_revenue_model_config(ts: Any) -> None:
+    """Revenue model sheet configurator: map segments to revenue model slots."""
+    mappings = ts.sheet_mappings
+
+    # Find revenue model sheets and segments
+    revenue_sheets = [
+        sm for sm in mappings
+        if sm.sheet_purpose == "revenue_model"
+    ]
+    bm = st.session_state.get("bm_result")
+    segments = []
+    if bm and hasattr(bm, "segments"):
+        segments = [s.name for s in bm.segments if hasattr(s, "name")]
+
+    if not revenue_sheets and not segments:
+        return
+
+    st.markdown(
+        '<div class="p3-section-title">収益モデル設定</div>',
+        unsafe_allow_html=True,
+    )
+
+    # Initialize active_revenue_sheets in session state
+    if "active_revenue_sheets" not in st.session_state:
+        initial_config = {}
+        for i, rs in enumerate(revenue_sheets):
+            seg_name = rs.mapped_segment or ""
+            initial_config[rs.sheet_name] = {
+                "active": bool(seg_name and "未使用" not in seg_name and "予備" not in seg_name),
+                "segment": seg_name,
+            }
+        st.session_state["active_revenue_sheets"] = initial_config
+
+    config = st.session_state["active_revenue_sheets"]
+
+    # Ensure all revenue sheets are in config
+    for rs in revenue_sheets:
+        if rs.sheet_name not in config:
+            config[rs.sheet_name] = {
+                "active": False,
+                "segment": rs.mapped_segment or "",
+            }
+
+    # Build segment options
+    seg_options = ["(未割当)"] + segments
+
+    html_parts = ['<div class="p3-rm-section">']
+    html_parts.append('<div class="p3-rm-title">事業セグメント → 収益モデルシート</div>')
+    html_parts.append('</div>')
+    st.markdown("".join(html_parts), unsafe_allow_html=True)
+
+    changed = False
+    for rs in revenue_sheets:
+        sheet_name = rs.sheet_name
+        entry = config.get(sheet_name, {"active": False, "segment": ""})
+
+        cols = st.columns([0.5, 2, 0.5, 3])
+        with cols[0]:
+            is_active = st.checkbox(
+                "有効",
+                value=entry.get("active", False),
+                key=f"rm_active_{sheet_name}",
+                label_visibility="collapsed",
+            )
+            if is_active != entry.get("active", False):
+                entry["active"] = is_active
+                changed = True
+
+        with cols[1]:
+            st.markdown(f"**{_esc(sheet_name)}**")
+
+        with cols[2]:
+            st.markdown("&rarr;", unsafe_allow_html=True)
+
+        with cols[3]:
+            current_seg = entry.get("segment", "")
+            default_idx = 0
+            for j, opt in enumerate(seg_options):
+                if opt == current_seg:
+                    default_idx = j
+                    break
+
+            selected = st.selectbox(
+                f"セグメント ({sheet_name})",
+                options=seg_options,
+                index=default_idx,
+                key=f"rm_seg_{sheet_name}",
+                label_visibility="collapsed",
+                disabled=not is_active,
+            )
+            new_seg = "" if selected == "(未割当)" else selected
+            if new_seg != entry.get("segment", ""):
+                entry["segment"] = new_seg
+                changed = True
+
+        config[sheet_name] = entry
+
+    if changed:
+        st.session_state["active_revenue_sheets"] = config
+
+    # Summary
+    active_count = sum(1 for v in config.values() if v.get("active"))
+    mapped_count = sum(
+        1 for v in config.values()
+        if v.get("active") and v.get("segment")
+    )
+    st.caption(
+        f"有効シート: {active_count} / {len(revenue_sheets)}　"
+        f"セグメント割当済み: {mapped_count}"
+    )
 
 
 # ===================================================================
@@ -1446,13 +1710,30 @@ def _render_ts_results(ts: Any) -> None:
 # ===================================================================
 
 def _render_phase_4() -> None:
-    st.markdown("### Phase 4: モデル設計（セル概念マッピング）")
-    st.caption("各入力セルが表すビジネス概念を決定します。値の抽出はまだ行いません。")
+    # --- Gradient header ---
+    st.markdown(
+        '<div class="p4-header">'
+        '<h2>モデル設計</h2>'
+        '<p>各入力セルが表すビジネス概念を決定します。'
+        'テンプレートの全セルに概念を割り当て、PLモデルの設計図を構築します</p>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
 
     md = st.session_state.get("md_result")
     md_error = st.session_state.get("md_error", "")
 
+    # --- Initial state ---
     if md is None and not md_error:
+        st.markdown(
+            '<div class="grid-start">'
+            '<div class="grid-start-title">モデル設計の準備完了</div>'
+            '<div class="grid-start-desc">'
+            'BM分析とテンプレート構造をもとに、各入力セルに'
+            'ビジネス概念を自動マッピングします</div>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
         if st.button("モデル設計を開始", type="primary", use_container_width=True, key="btn_md_run"):
             _run_model_design()
             st.rerun()
@@ -1464,10 +1745,15 @@ def _render_phase_4() -> None:
     if md is not None:
         _render_md_results(md)
 
-    st.divider()
-
-    st.markdown("**フィードバック**")
-    st.caption("セルの概念マッピングに修正が必要な場合、指示を入力してください。")
+    # --- Feedback section ---
+    st.markdown(
+        '<div class="p3-divider">'
+        '<div class="p3-fb-label">フィードバック</div>'
+        '<div class="p3-fb-hint">'
+        'セルの概念マッピングに修正が必要な場合、指示を入力してください'
+        '</div></div>',
+        unsafe_allow_html=True,
+    )
     feedback = st.text_area(
         "フィードバック",
         value="",
@@ -1478,7 +1764,7 @@ def _render_phase_4() -> None:
 
     col1, col2, col3 = st.columns([2, 2, 1])
     with col1:
-        if st.button("再設計 (フィードバック反映)", use_container_width=True, key="btn_md_rerun"):
+        if st.button("再設計", use_container_width=True, key="btn_md_rerun"):
             _run_model_design(feedback=feedback)
             st.rerun()
     with col2:
@@ -1488,7 +1774,7 @@ def _render_phase_4() -> None:
             st.session_state["wizard_phase"] = 5
             st.rerun()
     with col3:
-        if st.button("← 戻る", use_container_width=True, key="btn_md_back"):
+        if st.button("戻る", use_container_width=True, key="btn_md_back"):
             st.session_state["wizard_phase"] = 3
             st.rerun()
 
@@ -1515,49 +1801,125 @@ def _run_model_design(feedback: str = "") -> None:
 
 
 def _render_md_results(md: Any) -> None:
+    import pandas as pd
+
     n_assigned = len(md.cell_assignments)
     n_unmapped = len(md.unmapped_cells)
-    st.success(f"モデル設計完了: {n_assigned}セル割当 / {n_unmapped}未割当")
+    avg_conf = (
+        sum(ca.confidence for ca in md.cell_assignments) / max(n_assigned, 1)
+        if md.cell_assignments else 0
+    )
+    n_high = sum(1 for ca in md.cell_assignments if ca.confidence >= 0.7)
 
-    # Group by sheet
-    import pandas as pd
+    # --- Stats cards ---
+    st.markdown(
+        f'<div class="grid-stats">'
+        f'<div class="grid-stat">'
+        f'<div class="grid-stat-val clr-green">{n_assigned}</div>'
+        f'<div class="grid-stat-lbl">セル割当</div></div>'
+        f'<div class="grid-stat">'
+        f'<div class="grid-stat-val clr-blue">{avg_conf:.0%}</div>'
+        f'<div class="grid-stat-lbl">平均信頼度</div></div>'
+        f'<div class="grid-stat">'
+        f'<div class="grid-stat-val clr-amber">{n_high}</div>'
+        f'<div class="grid-stat-lbl">高信頼度</div></div>'
+        f'<div class="grid-stat">'
+        f'<div class="grid-stat-val clr-red">{n_unmapped}</div>'
+        f'<div class="grid-stat-lbl">未割当</div></div>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+
+    # --- Editable grid per sheet (using tabs) ---
     if md.cell_assignments:
-        st.markdown("**セル概念マッピング:**")
         sheets = sorted(set(ca.sheet for ca in md.cell_assignments))
-        for sheet in sheets:
-            items = [ca for ca in md.cell_assignments if ca.sheet == sheet]
-            with st.expander(f"{sheet} ({len(items)}セル)", expanded=True):
+        sheet_tabs = st.tabs([
+            f"{s} ({sum(1 for ca in md.cell_assignments if ca.sheet == s)})"
+            for s in sheets
+        ])
+
+        for idx, sheet in enumerate(sheets):
+            with sheet_tabs[idx]:
+                items = [ca for ca in md.cell_assignments if ca.sheet == sheet]
                 data = []
                 for ca in items:
                     data.append({
                         "セル": ca.cell,
                         "ラベル": ca.label,
-                        "概念": ca.assigned_concept,
+                        "割当概念": ca.assigned_concept,
                         "セグメント": ca.segment,
                         "期間": ca.period,
                         "単位": ca.unit,
-                        "信頼度": f"{ca.confidence:.0%}",
+                        "導出": ca.derivation,
+                        "信頼度": ca.confidence,
                     })
-                st.dataframe(pd.DataFrame(data), use_container_width=True, hide_index=True)
+                df = pd.DataFrame(data)
 
+                column_config = {
+                    "セル": st.column_config.TextColumn("セル", width="small", disabled=True),
+                    "ラベル": st.column_config.TextColumn("ラベル", width="medium", disabled=True),
+                    "割当概念": st.column_config.TextColumn("割当概念", width="large"),
+                    "セグメント": st.column_config.TextColumn("セグメント", width="medium"),
+                    "期間": st.column_config.TextColumn("期間", width="small"),
+                    "単位": st.column_config.TextColumn("単位", width="small"),
+                    "導出": st.column_config.SelectboxColumn(
+                        "導出", width="small",
+                        options=["direct", "calculated", "assumption"],
+                    ),
+                    "信頼度": st.column_config.ProgressColumn(
+                        "信頼度", min_value=0.0, max_value=1.0, format="%.0f%%",
+                    ),
+                }
+
+                edited = st.data_editor(
+                    df,
+                    column_config=column_config,
+                    use_container_width=True,
+                    hide_index=True,
+                    num_rows="fixed",
+                    key=f"md_grid_{sheet}",
+                )
+
+                # Store edits back to md_result
+                _sync_md_edits(md, sheet, edited)
+
+    # --- Unmapped cells ---
     if md.unmapped_cells:
-        with st.expander(f"未割当セル ({n_unmapped}件)", expanded=False):
-            data = []
-            for uc in md.unmapped_cells:
-                data.append({
-                    "シート": uc.get("sheet", ""),
-                    "セル": uc.get("cell", ""),
-                    "ラベル": uc.get("label", ""),
-                    "理由": uc.get("reason", ""),
-                })
-            st.dataframe(pd.DataFrame(data), use_container_width=True, hide_index=True)
+        st.markdown(
+            f'<div class="grid-unmapped">'
+            f'<div class="grid-unmapped-title">未割当セル ({n_unmapped}件)</div>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+        unmap_data = []
+        for uc in md.unmapped_cells:
+            unmap_data.append({
+                "シート": uc.get("sheet", ""),
+                "セル": uc.get("cell", ""),
+                "ラベル": uc.get("label", ""),
+                "理由": uc.get("reason", ""),
+            })
+        st.dataframe(pd.DataFrame(unmap_data), use_container_width=True, hide_index=True)
 
     if md.warnings:
         for w in md.warnings:
             st.warning(w)
 
-    with st.expander("Raw JSON", expanded=False):
+    with st.expander("詳細データ (JSON)", expanded=False):
         st.json(md.raw_json)
+
+
+def _sync_md_edits(md: Any, sheet: str, edited_df: Any) -> None:
+    """Sync data_editor edits back into the ModelDesignResult."""
+    sheet_items = [ca for ca in md.cell_assignments if ca.sheet == sheet]
+    for i, ca in enumerate(sheet_items):
+        if i < len(edited_df):
+            row = edited_df.iloc[i]
+            ca.assigned_concept = str(row.get("割当概念", ca.assigned_concept))
+            ca.segment = str(row.get("セグメント", ca.segment))
+            ca.period = str(row.get("期間", ca.period))
+            ca.unit = str(row.get("単位", ca.unit))
+            ca.derivation = str(row.get("導出", ca.derivation))
 
 
 # ===================================================================
@@ -1565,13 +1927,30 @@ def _render_md_results(md: Any) -> None:
 # ===================================================================
 
 def _render_phase_5() -> None:
-    st.markdown("### Phase 5: パラメーター抽出")
-    st.caption("確定したモデル設計に基づいて、事業計画書から実際の値を抽出します。")
+    # --- Gradient header ---
+    st.markdown(
+        '<div class="p5-header">'
+        '<h2>パラメーター抽出</h2>'
+        '<p>確定したモデル設計に基づいて、事業計画書から各セルの実際の値を抽出します。'
+        'グリッド上で値を直接編集できます</p>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
 
     pe = st.session_state.get("pe_result")
     pe_error = st.session_state.get("pe_error", "")
 
+    # --- Initial state ---
     if pe is None and not pe_error:
+        st.markdown(
+            '<div class="grid-start">'
+            '<div class="grid-start-title">パラメーター抽出の準備完了</div>'
+            '<div class="grid-start-desc">'
+            'モデル設計をもとに、事業計画書から各セルの具体的な値を'
+            'AIが自動抽出します</div>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
         if st.button("パラメーター抽出開始", type="primary", use_container_width=True, key="btn_pe_run"):
             _run_parameter_extraction()
             st.rerun()
@@ -1583,10 +1962,16 @@ def _render_phase_5() -> None:
     if pe is not None:
         _render_pe_results(pe)
 
-    st.divider()
-
-    st.markdown("**フィードバック**")
-    st.caption("抽出値に修正が必要な場合、指示を入力してください。値は次のフェーズでも個別編集可能です。")
+    # --- Feedback section ---
+    st.markdown(
+        '<div class="p3-divider">'
+        '<div class="p3-fb-label">フィードバック</div>'
+        '<div class="p3-fb-hint">'
+        '抽出値に修正が必要な場合、指示を入力してください。'
+        'グリッド上でも直接編集可能です'
+        '</div></div>',
+        unsafe_allow_html=True,
+    )
     feedback = st.text_area(
         "フィードバック",
         value="",
@@ -1597,19 +1982,18 @@ def _render_phase_5() -> None:
 
     col1, col2, col3 = st.columns([2, 2, 1])
     with col1:
-        if st.button("再抽出 (フィードバック反映)", use_container_width=True, key="btn_pe_rerun"):
+        if st.button("再抽出", use_container_width=True, key="btn_pe_rerun"):
             _run_parameter_extraction(feedback=feedback)
             st.rerun()
     with col2:
         can_confirm = pe is not None
         if st.button("確定 → 最終出力へ", type="primary", use_container_width=True,
                       disabled=not can_confirm, key="btn_pe_confirm"):
-            # Convert extractions to ExtractedParameter format
             _convert_extractions_to_parameters()
             st.session_state["wizard_phase"] = 6
             st.rerun()
     with col3:
-        if st.button("← 戻る", use_container_width=True, key="btn_pe_back"):
+        if st.button("戻る", use_container_width=True, key="btn_pe_back"):
             st.session_state["wizard_phase"] = 4
             st.rerun()
 
@@ -1635,62 +2019,130 @@ def _run_parameter_extraction(feedback: str = "") -> None:
 
 
 def _render_pe_results(pe: Any) -> None:
+    import pandas as pd
+
     n_ext = len(pe.extractions)
     n_unmapped = len(pe.unmapped_cells)
-    # Count by source
     n_doc = sum(1 for e in pe.extractions if e.source == "document")
     n_inf = sum(1 for e in pe.extractions if e.source == "inferred")
     n_def = sum(1 for e in pe.extractions if e.source == "default")
+    avg_conf = (
+        sum(e.confidence for e in pe.extractions) / max(n_ext, 1)
+        if pe.extractions else 0
+    )
 
-    c1, c2, c3, c4 = st.columns(4)
-    with c1:
-        st.markdown(_render_metric_card(str(n_ext), "抽出済み"), unsafe_allow_html=True)
-    with c2:
-        st.markdown(_render_metric_card(str(n_doc), "文書から直接"), unsafe_allow_html=True)
-    with c3:
-        st.markdown(_render_metric_card(str(n_inf + n_def), "推定値"), unsafe_allow_html=True)
-    with c4:
-        if n_unmapped > 0:
-            st.markdown(_render_gap_metric_card(str(n_unmapped), "未抽出"), unsafe_allow_html=True)
-        else:
-            st.markdown(_render_metric_card("0", "未抽出"), unsafe_allow_html=True)
+    # --- Stats cards ---
+    st.markdown(
+        f'<div class="grid-stats">'
+        f'<div class="grid-stat">'
+        f'<div class="grid-stat-val clr-green">{n_ext}</div>'
+        f'<div class="grid-stat-lbl">抽出済み</div></div>'
+        f'<div class="grid-stat">'
+        f'<div class="grid-stat-val clr-blue">{n_doc}</div>'
+        f'<div class="grid-stat-lbl">文書から直接</div></div>'
+        f'<div class="grid-stat">'
+        f'<div class="grid-stat-val clr-amber">{n_inf + n_def}</div>'
+        f'<div class="grid-stat-lbl">推定・デフォルト</div></div>'
+        f'<div class="grid-stat">'
+        f'<div class="grid-stat-val clr-red">{n_unmapped}</div>'
+        f'<div class="grid-stat-lbl">未抽出</div></div>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
 
-    # Show extractions grouped by sheet
-    import pandas as pd
+    # --- Editable grid per sheet (using tabs) ---
     if pe.extractions:
         sheets = sorted(set(e.sheet for e in pe.extractions))
-        for sheet in sheets:
-            items = [e for e in pe.extractions if e.sheet == sheet]
-            with st.expander(f"{sheet} ({len(items)}件)", expanded=True):
+        sheet_tabs = st.tabs([
+            f"{s} ({sum(1 for e in pe.extractions if e.sheet == s)})"
+            for s in sheets
+        ])
+
+        for idx, sheet in enumerate(sheets):
+            with sheet_tabs[idx]:
+                items = [e for e in pe.extractions if e.sheet == sheet]
                 data = []
                 for e in items:
+                    # Convert value to float if possible for better editing
+                    val = e.value
+                    if isinstance(val, str):
+                        try:
+                            val = float(val)
+                        except (ValueError, TypeError):
+                            pass
                     data.append({
                         "セル": e.cell,
-                        "ラベル": e.label,
-                        "概念": e.concept,
-                        "値": e.value,
+                        "ラベル": e.label or e.concept,
+                        "値": val,
                         "単位": e.unit,
                         "ソース": e.source,
-                        "信頼度": f"{e.confidence:.0%}",
-                        "根拠": (e.evidence[:60] + "..." if len(e.evidence) > 60 else e.evidence) if e.evidence else "-",
+                        "信頼度": e.confidence,
+                        "根拠": e.evidence or "",
                     })
-                st.dataframe(pd.DataFrame(data), use_container_width=True, hide_index=True)
+                df = pd.DataFrame(data)
 
+                column_config = {
+                    "セル": st.column_config.TextColumn("セル", width="small", disabled=True),
+                    "ラベル": st.column_config.TextColumn("ラベル", width="medium", disabled=True),
+                    "値": st.column_config.NumberColumn("値", width="medium", format="%.2f"),
+                    "単位": st.column_config.TextColumn("単位", width="small", disabled=True),
+                    "ソース": st.column_config.SelectboxColumn(
+                        "ソース", width="small",
+                        options=["document", "inferred", "default"],
+                    ),
+                    "信頼度": st.column_config.ProgressColumn(
+                        "信頼度", min_value=0.0, max_value=1.0, format="%.0f%%",
+                    ),
+                    "根拠": st.column_config.TextColumn("根拠", width="large", disabled=True),
+                }
+
+                edited = st.data_editor(
+                    df,
+                    column_config=column_config,
+                    use_container_width=True,
+                    hide_index=True,
+                    num_rows="fixed",
+                    key=f"pe_grid_{sheet}",
+                )
+
+                # Sync edits back
+                _sync_pe_edits(pe, sheet, edited)
+
+    # --- Unmapped cells ---
     if pe.unmapped_cells:
-        with st.expander(f"未抽出セル ({n_unmapped}件)", expanded=False):
-            data = [
-                {"シート": uc.get("sheet", ""), "セル": uc.get("cell", ""),
-                 "ラベル": uc.get("label", ""), "理由": uc.get("reason", "")}
-                for uc in pe.unmapped_cells
-            ]
-            st.dataframe(pd.DataFrame(data), use_container_width=True, hide_index=True)
+        st.markdown(
+            f'<div class="grid-unmapped">'
+            f'<div class="grid-unmapped-title">未抽出セル ({n_unmapped}件)</div>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+        unmap_data = [
+            {"シート": uc.get("sheet", ""), "セル": uc.get("cell", ""),
+             "ラベル": uc.get("label", ""), "理由": uc.get("reason", "")}
+            for uc in pe.unmapped_cells
+        ]
+        st.dataframe(pd.DataFrame(unmap_data), use_container_width=True, hide_index=True)
 
     if pe.warnings:
         for w in pe.warnings:
             st.warning(w)
 
-    with st.expander("Raw JSON", expanded=False):
+    with st.expander("詳細データ (JSON)", expanded=False):
         st.json(pe.raw_json)
+
+
+def _sync_pe_edits(pe: Any, sheet: str, edited_df: Any) -> None:
+    """Sync data_editor edits back into the ParameterExtractionResult."""
+    sheet_items = [e for e in pe.extractions if e.sheet == sheet]
+    for i, ext in enumerate(sheet_items):
+        if i < len(edited_df):
+            row = edited_df.iloc[i]
+            new_val = row.get("値")
+            if new_val is not None:
+                ext.value = new_val
+            new_src = row.get("ソース")
+            if new_src and new_src in ("document", "inferred", "default"):
+                ext.source = str(new_src)
 
 
 def _convert_extractions_to_parameters() -> None:
