@@ -196,469 +196,295 @@ CASE_OPTIONS: List[str] = ["Best", "Base", "Worst"]
 def _inject_custom_css() -> None:
     st.markdown("""
     <style>
-    /* Step indicator bar */
-    .step-bar {
-        display: flex; justify-content: center; gap: 0;
-        margin: 0 auto 1.5rem auto; max-width: 900px;
-    }
-    .step-item {
-        flex: 1; text-align: center; padding: 0.6rem 0.3rem;
-        font-size: 0.78rem; color: #888;
-        border-bottom: 3px solid #e0e0e0; transition: all 0.2s;
-    }
-    .step-item.active {
-        color: #0f5132; font-weight: 700;
-        border-bottom: 3px solid #198754;
-    }
-    .step-item.completed {
-        color: #198754; border-bottom: 3px solid #198754;
-    }
-    .step-num {
-        display: inline-block; width: 22px; height: 22px;
-        line-height: 22px; border-radius: 50%;
-        background: #e0e0e0; color: #666;
-        font-weight: 700; font-size: 0.75rem; margin-right: 0.3rem;
-    }
-    .step-item.active .step-num,
-    .step-item.completed .step-num {
-        background: #198754; color: white;
-    }
+    /* ══════════════════════════════════════════════════════
+       freee-inspired clean design system
+       Primary: #2563EB (blue)  Accent: #3B82F6
+       ══════════════════════════════════════════════════════ */
 
-    /* Metric cards */
-    .metric-card {
-        background: linear-gradient(135deg, #f8fffe 0%, #f0faf6 100%);
-        border: 1px solid #d4edda; border-radius: 12px;
-        padding: 1.2rem; text-align: center;
-    }
-    .metric-value {
-        font-size: 2rem; font-weight: 800;
-        color: #0f5132; line-height: 1.2;
-    }
-    .metric-label { font-size: 0.8rem; color: #666; margin-top: 0.25rem; }
-
-    .metric-card-gap {
-        background: linear-gradient(135deg, #fff8f8 0%, #fef0f0 100%);
-        border: 1px solid #f5c6cb; border-radius: 12px;
-        padding: 1.2rem; text-align: center;
-    }
-    .metric-card-gap .metric-value { color: #842029; }
-
-    /* Confidence badges */
-    .badge-high {
-        display: inline-block; padding: 2px 10px; border-radius: 12px;
-        font-size: 0.75rem; font-weight: 600;
-        background: #d4edda; color: #0f5132;
-    }
-    .badge-medium {
-        display: inline-block; padding: 2px 10px; border-radius: 12px;
-        font-size: 0.75rem; font-weight: 600;
-        background: #fff3cd; color: #856404;
-    }
-    .badge-low {
-        display: inline-block; padding: 2px 10px; border-radius: 12px;
-        font-size: 0.75rem; font-weight: 600;
-        background: #f8d7da; color: #842029;
-    }
-    .badge-gap {
-        display: inline-block; padding: 2px 10px; border-radius: 12px;
-        font-size: 0.75rem; font-weight: 600;
-        background: #e2e3e5; color: #41464b;
-    }
-
-    .file-ok {
-        background: #d4edda; border: 1px solid #c3e6cb;
-        border-radius: 8px; padding: 0.6rem 1rem;
-        color: #155724; font-size: 0.9rem; margin: 0.5rem 0;
-    }
-
-    /* Feedback card */
-    .feedback-card {
-        background: #f8f9fa; border: 1px solid #dee2e6;
-        border-radius: 12px; padding: 1rem;
-        margin: 1rem 0;
-    }
-
-    /* KPI banner */
-    .kpi-banner {
-        background: linear-gradient(135deg, #e8f4fd 0%, #f0f7ff 100%);
-        border-left: 4px solid #0d6efd; border-radius: 8px;
-        padding: 1rem; margin-bottom: 1rem;
-    }
-    .kpi-banner-title {
-        font-weight: 700; color: #0d47a1;
-        margin-bottom: 0.5rem; font-size: 0.95rem;
-    }
-    .kpi-banner ul {
-        margin: 0; padding-left: 1.2rem;
-        font-size: 0.88rem; line-height: 1.7;
-    }
-    .kpi-banner li { color: #333; }
-    .kpi-dep { color: #666; font-size: 0.78rem; }
-
-    .nav-hint {
-        text-align: center; color: #999;
-        font-size: 0.8rem; margin-top: 0.5rem;
-    }
-
+    /* ── Global resets ── */
+    .block-container { max-width: 960px; }
     section[data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #f0faf6 0%, #ffffff 100%);
+        background: #f8fafc;
+        border-right: 1px solid #e2e8f0;
     }
-
-    /* Sidebar completed-phase buttons — subtle, clickable */
     section[data-testid="stSidebar"] button {
         font-size: 0.8rem !important;
         padding: 0.3rem 0.6rem !important;
         border-radius: 6px !important;
     }
-
-    /* Section labels in sidebar */
     .sidebar-section-label {
-        font-size: 0.72rem; font-weight: 600; color: #999;
-        text-transform: uppercase; letter-spacing: 0.08em;
-        margin-bottom: 0.4rem;
+        font-size: 0.7rem; font-weight: 600; color: #94a3b8;
+        text-transform: uppercase; letter-spacing: 0.06em;
+        margin-bottom: 0.3rem;
     }
 
-    /* ─── Phase 3: Template Structure Mapping (redesign) ─── */
-    .p3-header {
-        background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
-        border-radius: 16px;
-        padding: 2rem;
+    /* ── Step indicator ── */
+    .step-bar {
+        display: flex; justify-content: center; gap: 0;
+        margin: 0 auto 1.5rem auto; max-width: 720px;
+        border-bottom: 2px solid #e2e8f0;
+    }
+    .step-item {
+        flex: 1; text-align: center; padding: 0.7rem 0.2rem;
+        font-size: 0.76rem; color: #94a3b8;
+        border-bottom: 2px solid transparent;
+        margin-bottom: -2px; transition: all 0.15s;
+    }
+    .step-item.active {
+        color: #2563eb; font-weight: 700;
+        border-bottom-color: #2563eb;
+    }
+    .step-item.completed {
+        color: #2563eb; border-bottom-color: #2563eb;
+    }
+    .step-num {
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 20px; height: 20px; border-radius: 50%;
+        background: #e2e8f0; color: #94a3b8;
+        font-weight: 700; font-size: 0.68rem; margin-right: 4px;
+    }
+    .step-item.active .step-num { background: #2563eb; color: #fff; }
+    .step-item.completed .step-num { background: #2563eb; color: #fff; }
+
+    /* ── Phase header (unified, clean card) ── */
+    .phase-header {
+        border-bottom: 2px solid #e2e8f0;
+        padding-bottom: 1rem;
         margin-bottom: 1.5rem;
     }
-    .p3-header h2 {
-        font-size: 1.4rem;
-        font-weight: 700;
-        color: #fff;
-        margin: 0 0 0.4rem 0;
+    .phase-header h2 {
+        font-size: 1.25rem; font-weight: 700; color: #1e293b;
+        margin: 0 0 0.3rem 0;
     }
-    .p3-header p {
-        font-size: 0.85rem;
-        color: rgba(255,255,255,0.78);
-        margin: 0;
-        line-height: 1.5;
-    }
-
-    .p3-stats {
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 12px;
-        margin-bottom: 1.5rem;
-    }
-    .p3-stat {
-        background: var(--secondary-background-color);
-        border-radius: 12px;
-        padding: 1.1rem 1rem;
-        text-align: center;
-    }
-    .p3-stat-val {
-        font-size: 1.8rem;
-        font-weight: 800;
-        line-height: 1.2;
-    }
-    .p3-stat-val.clr-indigo { color: #6366f1; }
-    .p3-stat-val.clr-emerald { color: #10b981; }
-    .p3-stat-val.clr-amber { color: #f59e0b; }
-    .p3-stat-lbl {
-        font-size: 0.72rem;
-        opacity: 0.5;
-        margin-top: 0.3rem;
-    }
-
-    .p3-section-title {
-        font-size: 0.72rem;
-        font-weight: 700;
-        opacity: 0.4;
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-        margin: 1.5rem 0 0.8rem 0;
-    }
-
-    .p3-overview {
-        background: rgba(16,185,129,0.07);
-        border: 1px solid rgba(16,185,129,0.18);
-        border-radius: 12px;
-        padding: 1rem 1.2rem;
-        margin-bottom: 1rem;
-        font-size: 0.85rem;
-        line-height: 1.8;
-    }
-
-    .p3-card {
-        background: var(--secondary-background-color);
-        border-radius: 12px;
-        padding: 1.2rem 1.4rem;
-        margin-bottom: 10px;
-        transition: all 0.2s ease;
-        border: 1px solid transparent;
-    }
-    .p3-card:hover {
-        border-color: rgba(99,102,241,0.3);
-        box-shadow: 0 4px 15px rgba(0,0,0,0.08);
-    }
-    .p3-card-top {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 0.5rem;
-    }
-    .p3-sheet {
-        font-size: 1.05rem;
-        font-weight: 700;
-    }
-    .p3-tag {
-        display: inline-flex;
-        padding: 3px 12px;
-        border-radius: 9999px;
-        font-size: 0.7rem;
-        font-weight: 600;
-    }
-    .p3-tag.revenue { background: rgba(99,102,241,0.12); color: #818cf8; }
-    .p3-tag.cost { background: rgba(236,72,153,0.12); color: #ec4899; }
-    .p3-tag.assumptions { background: rgba(139,92,246,0.12); color: #a78bfa; }
-    .p3-tag.summary { background: rgba(6,182,212,0.12); color: #06b6d4; }
-    .p3-tag.other { background: rgba(156,163,175,0.12); color: #9ca3af; }
-
-    .p3-seg {
-        font-size: 0.88rem;
-        margin-bottom: 0.8rem;
-        opacity: 0.85;
-    }
-    .p3-seg .arr { opacity: 0.4; margin-right: 6px; }
-
-    .p3-conf {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        margin-bottom: 0.6rem;
-    }
-    .p3-conf-bg {
-        flex: 1;
-        height: 5px;
-        background: rgba(128,128,128,0.15);
-        border-radius: 3px;
-        overflow: hidden;
-    }
-    .p3-conf-fill {
-        height: 100%;
-        border-radius: 3px;
-    }
-    .p3-conf-fill.high { background: linear-gradient(90deg, #10b981, #34d399); }
-    .p3-conf-fill.med  { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
-    .p3-conf-fill.low  { background: linear-gradient(90deg, #ef4444, #f87171); }
-    .p3-pct {
-        font-size: 0.8rem;
-        font-weight: 700;
-        min-width: 38px;
-        text-align: right;
-        font-variant-numeric: tabular-nums;
-    }
-    .p3-pct.high { color: #10b981; }
-    .p3-pct.med  { color: #f59e0b; }
-    .p3-pct.low  { color: #ef4444; }
-
-    .p3-reason {
-        font-size: 0.78rem;
-        opacity: 0.55;
-        line-height: 1.6;
-        border-top: 1px solid rgba(128,128,128,0.1);
-        padding-top: 0.6rem;
-        margin-top: 0.2rem;
-    }
-
-    .p3-suggest {
-        background: rgba(59,130,246,0.06);
-        border-left: 3px solid #3b82f6;
-        border-radius: 0 10px 10px 0;
-        padding: 0.8rem 1.2rem;
-        margin-bottom: 8px;
-        font-size: 0.85rem;
-        line-height: 1.6;
-    }
-
-    .p3-start {
-        border: 2px dashed rgba(99,102,241,0.25);
-        border-radius: 16px;
-        padding: 3rem 2rem;
-        text-align: center;
-        margin-bottom: 1rem;
-    }
-    .p3-start-title {
-        font-size: 1.1rem;
-        font-weight: 600;
-        color: #818cf8;
-        margin-bottom: 0.5rem;
-    }
-    .p3-start-desc {
-        font-size: 0.85rem;
-        opacity: 0.55;
-        line-height: 1.6;
-        max-width: 480px;
-        margin: 0 auto;
-    }
-
-    .p3-divider {
-        margin-top: 2rem;
-        padding-top: 1.5rem;
-        border-top: 1px solid rgba(128,128,128,0.1);
-    }
-    .p3-fb-label {
-        font-size: 0.85rem;
-        font-weight: 600;
-        margin-bottom: 0.15rem;
-    }
-    .p3-fb-hint {
-        font-size: 0.72rem;
-        opacity: 0.4;
-        margin-bottom: 0.6rem;
-    }
-
-    /* ─── Phase 3: Revenue-model configurator ─── */
-    .p3-rm-section {
-        background: var(--secondary-background-color);
-        border-radius: 12px;
-        padding: 1.2rem 1.4rem;
-        margin-top: 1rem;
-        border: 1px solid rgba(99,102,241,0.15);
-    }
-    .p3-rm-title {
-        font-size: 0.95rem;
-        font-weight: 700;
-        margin-bottom: 0.8rem;
-        color: #6366f1;
-    }
-    .p3-rm-row {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        padding: 0.6rem 0;
-        border-bottom: 1px solid rgba(128,128,128,0.08);
-    }
-    .p3-rm-row:last-child { border-bottom: none; }
-    .p3-rm-slot {
-        font-weight: 600;
-        min-width: 100px;
-        font-size: 0.88rem;
-    }
-    .p3-rm-arrow { opacity: 0.3; }
-    .p3-rm-seg { font-size: 0.85rem; }
-
-    /* ─── Phase 4/5: Grid-based design ─── */
-    .p4-header {
-        background: linear-gradient(135deg, #059669 0%, #10b981 100%);
-        border-radius: 16px;
-        padding: 2rem;
-        margin-bottom: 1.5rem;
-    }
-    .p4-header h2 {
-        font-size: 1.4rem; font-weight: 700;
-        color: #fff; margin: 0 0 0.4rem 0;
-    }
-    .p4-header p {
-        font-size: 0.85rem; color: rgba(255,255,255,0.78);
+    .phase-header p {
+        font-size: 0.82rem; color: #64748b;
         margin: 0; line-height: 1.5;
     }
 
-    .p5-header {
-        background: linear-gradient(135deg, #d97706 0%, #f59e0b 100%);
-        border-radius: 16px;
-        padding: 2rem;
-        margin-bottom: 1.5rem;
+    /* ── Metric / stat cards ── */
+    .metric-card {
+        background: #fff; border: 1px solid #e2e8f0;
+        border-radius: 8px; padding: 1rem; text-align: center;
+        border-top: 3px solid #2563eb;
     }
-    .p5-header h2 {
-        font-size: 1.4rem; font-weight: 700;
-        color: #fff; margin: 0 0 0.4rem 0;
+    .metric-value {
+        font-size: 1.6rem; font-weight: 700;
+        color: #1e293b; line-height: 1.2;
     }
-    .p5-header p {
-        font-size: 0.85rem; color: rgba(255,255,255,0.78);
-        margin: 0; line-height: 1.5;
+    .metric-label {
+        font-size: 0.75rem; color: #64748b; margin-top: 0.2rem;
     }
+    .metric-card-gap {
+        background: #fff; border: 1px solid #fecaca;
+        border-radius: 8px; padding: 1rem; text-align: center;
+        border-top: 3px solid #ef4444;
+    }
+    .metric-card-gap .metric-value { color: #dc2626; }
 
     .grid-stats {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-        gap: 12px;
-        margin-bottom: 1.5rem;
+        grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+        gap: 10px; margin-bottom: 1.2rem;
     }
     .grid-stat {
-        background: var(--secondary-background-color);
-        border-radius: 12px;
-        padding: 1rem;
+        background: #fff; border: 1px solid #e2e8f0;
+        border-radius: 8px; padding: 0.9rem 0.6rem;
         text-align: center;
     }
     .grid-stat-val {
-        font-size: 1.6rem;
-        font-weight: 800;
-        line-height: 1.2;
+        font-size: 1.4rem; font-weight: 700; line-height: 1.2;
+        color: #1e293b;
     }
-    .grid-stat-val.clr-green { color: #059669; }
+    .grid-stat-val.clr-green { color: #16a34a; }
     .grid-stat-val.clr-amber { color: #d97706; }
-    .grid-stat-val.clr-red { color: #ef4444; }
-    .grid-stat-val.clr-blue { color: #3b82f6; }
+    .grid-stat-val.clr-red { color: #dc2626; }
+    .grid-stat-val.clr-blue { color: #2563eb; }
     .grid-stat-lbl {
-        font-size: 0.72rem;
-        opacity: 0.5;
+        font-size: 0.7rem; color: #94a3b8; margin-top: 0.2rem;
+    }
+
+    /* ── Badges ── */
+    .badge-high {
+        display: inline-block; padding: 2px 8px; border-radius: 4px;
+        font-size: 0.72rem; font-weight: 600;
+        background: #dcfce7; color: #166534;
+    }
+    .badge-medium {
+        display: inline-block; padding: 2px 8px; border-radius: 4px;
+        font-size: 0.72rem; font-weight: 600;
+        background: #fef3c7; color: #92400e;
+    }
+    .badge-low {
+        display: inline-block; padding: 2px 8px; border-radius: 4px;
+        font-size: 0.72rem; font-weight: 600;
+        background: #fee2e2; color: #991b1b;
+    }
+    .badge-gap {
+        display: inline-block; padding: 2px 8px; border-radius: 4px;
+        font-size: 0.72rem; font-weight: 600;
+        background: #f1f5f9; color: #64748b;
+    }
+
+    /* ── File upload indicator ── */
+    .file-ok {
+        background: #f0fdf4; border: 1px solid #bbf7d0;
+        border-radius: 6px; padding: 0.5rem 0.8rem;
+        color: #166534; font-size: 0.85rem; margin: 0.5rem 0;
+    }
+
+    /* ── KPI banner ── */
+    .kpi-banner {
+        background: #f8fafc; border-left: 3px solid #2563eb;
+        border-radius: 0 6px 6px 0; padding: 0.8rem 1rem;
+        margin-bottom: 0.8rem;
+    }
+    .kpi-banner-title {
+        font-weight: 700; color: #1e40af;
+        margin-bottom: 0.3rem; font-size: 0.88rem;
+    }
+    .kpi-banner ul {
+        margin: 0; padding-left: 1rem;
+        font-size: 0.82rem; line-height: 1.6;
+    }
+    .kpi-banner li { color: #334155; }
+    .kpi-dep { color: #94a3b8; font-size: 0.75rem; }
+
+    /* ── Section titles ── */
+    .section-title {
+        font-size: 0.7rem; font-weight: 700; color: #94a3b8;
+        text-transform: uppercase; letter-spacing: 0.06em;
+        margin: 1.2rem 0 0.6rem 0;
+        padding-bottom: 0.3rem;
+        border-bottom: 1px solid #f1f5f9;
+    }
+
+    /* ── Clean card (universal) ── */
+    .clean-card {
+        background: #fff; border: 1px solid #e2e8f0;
+        border-radius: 8px; padding: 1rem 1.2rem;
+        margin-bottom: 8px; transition: border-color 0.15s;
+    }
+    .clean-card:hover { border-color: #93c5fd; }
+    .clean-card-top {
+        display: flex; justify-content: space-between;
+        align-items: center; margin-bottom: 0.4rem;
+    }
+    .clean-card-title {
+        font-size: 0.95rem; font-weight: 600; color: #1e293b;
+    }
+    .clean-tag {
+        display: inline-flex; padding: 2px 10px;
+        border-radius: 4px; font-size: 0.68rem; font-weight: 600;
+    }
+    .clean-tag.revenue { background: #eff6ff; color: #2563eb; }
+    .clean-tag.cost { background: #fef2f2; color: #dc2626; }
+    .clean-tag.assumptions { background: #f5f3ff; color: #7c3aed; }
+    .clean-tag.summary { background: #f0fdfa; color: #0d9488; }
+    .clean-tag.other { background: #f8fafc; color: #64748b; }
+
+    .clean-seg {
+        font-size: 0.82rem; color: #475569; margin-bottom: 0.5rem;
+    }
+    .clean-seg .arr { color: #94a3b8; margin-right: 4px; }
+
+    /* ── Confidence bar ── */
+    .conf-bar {
+        display: flex; align-items: center; gap: 8px;
+        margin-bottom: 0.4rem;
+    }
+    .conf-bg {
+        flex: 1; height: 4px; background: #e2e8f0;
+        border-radius: 2px; overflow: hidden;
+    }
+    .conf-fill { height: 100%; border-radius: 2px; }
+    .conf-fill.high { background: #22c55e; }
+    .conf-fill.med  { background: #f59e0b; }
+    .conf-fill.low  { background: #ef4444; }
+    .conf-pct {
+        font-size: 0.75rem; font-weight: 600; min-width: 34px;
+        text-align: right; font-variant-numeric: tabular-nums;
+    }
+    .conf-pct.high { color: #16a34a; }
+    .conf-pct.med  { color: #d97706; }
+    .conf-pct.low  { color: #dc2626; }
+
+    .clean-reason {
+        font-size: 0.75rem; color: #94a3b8; line-height: 1.5;
+        border-top: 1px solid #f1f5f9; padding-top: 0.5rem;
         margin-top: 0.3rem;
     }
 
-    .grid-sheet-header {
-        font-size: 0.72rem;
-        font-weight: 700;
-        opacity: 0.4;
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-        margin: 1rem 0 0.5rem 0;
+    /* ── Info / suggest cards ── */
+    .overview-card {
+        background: #f8fafc; border: 1px solid #e2e8f0;
+        border-radius: 6px; padding: 0.8rem 1rem;
+        margin-bottom: 0.8rem; font-size: 0.82rem;
+        line-height: 1.7; color: #334155;
+    }
+    .suggest-card {
+        background: #eff6ff; border-left: 3px solid #3b82f6;
+        border-radius: 0 6px 6px 0; padding: 0.6rem 1rem;
+        margin-bottom: 6px; font-size: 0.82rem;
+        line-height: 1.5; color: #1e40af;
     }
 
-    .grid-unmapped {
-        background: rgba(239,68,68,0.06);
-        border: 1px solid rgba(239,68,68,0.15);
-        border-radius: 10px;
-        padding: 0.8rem 1rem;
-        margin-top: 0.5rem;
+    /* ── Start card (dashed) ── */
+    .start-card {
+        border: 1px dashed #cbd5e1; border-radius: 8px;
+        padding: 2.5rem 1.5rem; text-align: center;
+        margin-bottom: 1rem; background: #fafbfc;
     }
-    .grid-unmapped-title {
-        font-size: 0.82rem;
-        font-weight: 600;
-        color: #ef4444;
-        margin-bottom: 0.5rem;
+    .start-card-title {
+        font-size: 1rem; font-weight: 600; color: #2563eb;
+        margin-bottom: 0.3rem;
     }
-
-    .grid-start {
-        border: 2px dashed rgba(16,185,129,0.25);
-        border-radius: 16px;
-        padding: 3rem 2rem;
-        text-align: center;
-        margin-bottom: 1rem;
-    }
-    .grid-start-title {
-        font-size: 1.1rem;
-        font-weight: 600;
-        color: #10b981;
-        margin-bottom: 0.5rem;
-    }
-    .grid-start-desc {
-        font-size: 0.85rem;
-        opacity: 0.55;
-        line-height: 1.6;
-        max-width: 480px;
-        margin: 0 auto;
+    .start-card-desc {
+        font-size: 0.82rem; color: #94a3b8; line-height: 1.5;
+        max-width: 440px; margin: 0 auto;
     }
 
-    /* Source badges in Phase 5 */
-    .src-doc {
-        display: inline-block; padding: 2px 10px; border-radius: 12px;
-        font-size: 0.7rem; font-weight: 600;
-        background: #d4edda; color: #0f5132;
+    /* ── Unmapped / error section ── */
+    .unmapped-section {
+        background: #fef2f2; border: 1px solid #fecaca;
+        border-radius: 6px; padding: 0.6rem 0.8rem;
+        margin-top: 0.6rem;
     }
-    .src-inf {
-        display: inline-block; padding: 2px 10px; border-radius: 12px;
-        font-size: 0.7rem; font-weight: 600;
-        background: #fff3cd; color: #856404;
+    .unmapped-title {
+        font-size: 0.78rem; font-weight: 600; color: #dc2626;
+        margin-bottom: 0.3rem;
     }
-    .src-def {
-        display: inline-block; padding: 2px 10px; border-radius: 12px;
-        font-size: 0.7rem; font-weight: 600;
-        background: #e2e3e5; color: #41464b;
+
+    /* ── Feedback area ── */
+    .feedback-section {
+        margin-top: 1.5rem; padding-top: 1rem;
+        border-top: 1px solid #e2e8f0;
+    }
+    .fb-label {
+        font-size: 0.82rem; font-weight: 600; color: #334155;
+        margin-bottom: 0.1rem;
+    }
+    .fb-hint {
+        font-size: 0.7rem; color: #94a3b8; margin-bottom: 0.5rem;
+    }
+
+    /* ── Revenue model configurator ── */
+    .rm-section {
+        background: #fff; border: 1px solid #e2e8f0;
+        border-radius: 8px; padding: 1rem 1.2rem;
+        margin-top: 0.8rem;
+    }
+    .rm-title {
+        font-size: 0.88rem; font-weight: 600; color: #2563eb;
+        margin-bottom: 0.6rem;
+    }
+
+    .nav-hint {
+        text-align: center; color: #94a3b8;
+        font-size: 0.75rem; margin-top: 0.5rem;
+    }
+    .feedback-card {
+        background: #f8fafc; border: 1px solid #e2e8f0;
+        border-radius: 8px; padding: 0.8rem; margin: 0.8rem 0;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -863,8 +689,13 @@ def _get_orchestrator() -> Any:
 # ===================================================================
 
 def _render_phase_1() -> None:
-    st.markdown("### Phase 1: アップロード & スキャン")
-    st.caption("事業計画書とExcelテンプレートをアップロードしてください。")
+    st.markdown(
+        '<div class="phase-header">'
+        '<h2>アップロード &amp; スキャン</h2>'
+        '<p>事業計画書とExcelテンプレートをアップロードしてください</p>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
 
     # --- Input method tabs: file upload or text paste ---
     input_tab1, input_tab2 = st.tabs(["ファイルアップロード", "テキスト貼り付け"])
@@ -1148,8 +979,14 @@ def _run_phase_1_scan_from_text(pasted_text: str) -> None:
 # ===================================================================
 
 def _render_phase_2() -> None:
-    st.markdown("### Phase 2: ビジネスモデル分析")
-    st.caption("事業計画書を深く読み込み、ビジネスモデルを分析します。複数の解釈パターンから最適なものを選択してください。")
+    st.markdown(
+        '<div class="phase-header">'
+        '<h2>ビジネスモデル分析</h2>'
+        '<p>事業計画書を深く読み込み、ビジネスモデルを分析します。'
+        '複数の解釈パターンから最適なものを選択してください</p>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
 
     bm = st.session_state.get("bm_result")
     bm_error = st.session_state.get("bm_error", "")
@@ -1410,9 +1247,8 @@ def _conf_cls(confidence: float) -> str:
 # ===================================================================
 
 def _render_phase_3() -> None:
-    # --- Phase header (gradient banner) ---
     st.markdown(
-        '<div class="p3-header">'
+        '<div class="phase-header">'
         '<h2>テンプレート構造マッピング</h2>'
         '<p>テンプレートの各シートをビジネスセグメントに自動マッピングし、'
         'PLモデルの構造を決定します</p>'
@@ -1426,13 +1262,12 @@ def _render_phase_3() -> None:
     # --- Initial state: no results yet ---
     if ts is None and not ts_error:
         st.markdown(
-            '<div class="p3-start">'
-            '<div class="p3-start-title">マッピング準備完了</div>'
-            '<div class="p3-start-desc">'
+            '<div class="start-card">'
+            '<div class="start-card-title">マッピング準備完了</div>'
+            '<div class="start-card-desc">'
             'BM分析の結果をもとに、テンプレートの各シートが'
             'どのビジネスセグメントに対応するかをAIが自動判定します'
-            '</div>'
-            '</div>',
+            '</div></div>',
             unsafe_allow_html=True,
         )
         if st.button("マッピングを開始", type="primary", use_container_width=True, key="btn_ts_run"):
@@ -1448,9 +1283,9 @@ def _render_phase_3() -> None:
 
     # --- Feedback section ---
     st.markdown(
-        '<div class="p3-divider">'
-        '<div class="p3-fb-label">フィードバック</div>'
-        '<div class="p3-fb-hint">'
+        '<div class="feedback-section">'
+        '<div class="fb-label">フィードバック</div>'
+        '<div class="fb-hint">'
         'マッピングの修正指示があれば入力してください'
         '</div>'
         '</div>',
@@ -1504,7 +1339,6 @@ def _render_ts_results(ts: Any) -> None:
     mappings = ts.sheet_mappings
     n_sheets = len(mappings)
 
-    # --- Compute summary stats ---
     avg_conf = sum(sm.confidence for sm in mappings) / max(n_sheets, 1)
     unique_segments = {
         sm.mapped_segment for sm in mappings
@@ -1514,16 +1348,16 @@ def _render_ts_results(ts: Any) -> None:
 
     # --- Stats row ---
     st.markdown(
-        f'<div class="p3-stats">'
-        f'<div class="p3-stat">'
-        f'<div class="p3-stat-val clr-indigo">{n_sheets}</div>'
-        f'<div class="p3-stat-lbl">シート検出</div></div>'
-        f'<div class="p3-stat">'
-        f'<div class="p3-stat-val clr-emerald">{avg_conf:.0%}</div>'
-        f'<div class="p3-stat-lbl">平均信頼度</div></div>'
-        f'<div class="p3-stat">'
-        f'<div class="p3-stat-val clr-amber">{n_active}</div>'
-        f'<div class="p3-stat-lbl">セグメント</div></div>'
+        f'<div class="grid-stats">'
+        f'<div class="grid-stat">'
+        f'<div class="grid-stat-val clr-blue">{n_sheets}</div>'
+        f'<div class="grid-stat-lbl">シート検出</div></div>'
+        f'<div class="grid-stat">'
+        f'<div class="grid-stat-val clr-green">{avg_conf:.0%}</div>'
+        f'<div class="grid-stat-lbl">平均信頼度</div></div>'
+        f'<div class="grid-stat">'
+        f'<div class="grid-stat-val clr-amber">{n_active}</div>'
+        f'<div class="grid-stat-lbl">セグメント</div></div>'
         f'</div>',
         unsafe_allow_html=True,
     )
@@ -1531,14 +1365,14 @@ def _render_ts_results(ts: Any) -> None:
     # --- Overall structure overview ---
     if ts.overall_structure:
         st.markdown(
-            '<div class="p3-section-title">全体構成</div>'
-            f'<div class="p3-overview">{_esc(ts.overall_structure)}</div>',
+            '<div class="section-title">全体構成</div>'
+            f'<div class="overview-card">{_esc(ts.overall_structure)}</div>',
             unsafe_allow_html=True,
         )
 
     # --- Sheet mapping cards ---
     st.markdown(
-        '<div class="p3-section-title">シートマッピング</div>',
+        '<div class="section-title">シートマッピング</div>',
         unsafe_allow_html=True,
     )
 
@@ -1552,23 +1386,23 @@ def _render_ts_results(ts: Any) -> None:
         width = f"{sm.confidence * 100:.0f}"
 
         card_html = (
-            f'<div class="p3-card">'
-            f'<div class="p3-card-top">'
-            f'<span class="p3-sheet">{_esc(sm.sheet_name)}</span>'
-            f'<span class="p3-tag {purpose_cls}">{_esc(purpose_label)}</span>'
+            f'<div class="clean-card">'
+            f'<div class="clean-card-top">'
+            f'<span class="clean-card-title">{_esc(sm.sheet_name)}</span>'
+            f'<span class="clean-tag {purpose_cls}">{_esc(purpose_label)}</span>'
             f'</div>'
-            f'<div class="p3-seg">'
+            f'<div class="clean-seg">'
             f'<span class="arr">&rarr;</span> {_esc(sm.mapped_segment)}'
             f'</div>'
-            f'<div class="p3-conf">'
-            f'<div class="p3-conf-bg">'
-            f'<div class="p3-conf-fill {cls}" style="width:{width}%"></div>'
+            f'<div class="conf-bar">'
+            f'<div class="conf-bg">'
+            f'<div class="conf-fill {cls}" style="width:{width}%"></div>'
             f'</div>'
-            f'<span class="p3-pct {cls}">{pct_str}</span>'
+            f'<span class="conf-pct {cls}">{pct_str}</span>'
             f'</div>'
         )
         if sm.reasoning:
-            card_html += f'<div class="p3-reason">{_esc(sm.reasoning)}</div>'
+            card_html += f'<div class="clean-reason">{_esc(sm.reasoning)}</div>'
         card_html += '</div>'
 
         st.markdown(card_html, unsafe_allow_html=True)
@@ -1576,12 +1410,12 @@ def _render_ts_results(ts: Any) -> None:
     # --- Suggestions ---
     if ts.suggestions:
         st.markdown(
-            '<div class="p3-section-title">提案</div>',
+            '<div class="section-title">提案</div>',
             unsafe_allow_html=True,
         )
         for s in ts.suggestions:
             st.markdown(
-                f'<div class="p3-suggest">{_esc(s)}</div>',
+                f'<div class="suggest-card">{_esc(s)}</div>',
                 unsafe_allow_html=True,
             )
 
@@ -1639,8 +1473,8 @@ def _render_revenue_model_config(ts: Any) -> None:
     # Build segment options
     seg_options = ["(未割当)"] + segments
 
-    html_parts = ['<div class="p3-rm-section">']
-    html_parts.append('<div class="p3-rm-title">事業セグメント → 収益モデルシート</div>')
+    html_parts = ['<div class="rm-section">']
+    html_parts.append('<div class="rm-title">事業セグメント → 収益モデルシート</div>')
     html_parts.append('</div>')
     st.markdown("".join(html_parts), unsafe_allow_html=True)
 
@@ -1710,9 +1544,8 @@ def _render_revenue_model_config(ts: Any) -> None:
 # ===================================================================
 
 def _render_phase_4() -> None:
-    # --- Gradient header ---
     st.markdown(
-        '<div class="p4-header">'
+        '<div class="phase-header">'
         '<h2>モデル設計</h2>'
         '<p>各入力セルが表すビジネス概念を決定します。'
         'テンプレートの全セルに概念を割り当て、PLモデルの設計図を構築します</p>'
@@ -1723,12 +1556,11 @@ def _render_phase_4() -> None:
     md = st.session_state.get("md_result")
     md_error = st.session_state.get("md_error", "")
 
-    # --- Initial state ---
     if md is None and not md_error:
         st.markdown(
-            '<div class="grid-start">'
-            '<div class="grid-start-title">モデル設計の準備完了</div>'
-            '<div class="grid-start-desc">'
+            '<div class="start-card">'
+            '<div class="start-card-title">モデル設計の準備完了</div>'
+            '<div class="start-card-desc">'
             'BM分析とテンプレート構造をもとに、各入力セルに'
             'ビジネス概念を自動マッピングします</div>'
             '</div>',
@@ -1747,9 +1579,9 @@ def _render_phase_4() -> None:
 
     # --- Feedback section ---
     st.markdown(
-        '<div class="p3-divider">'
-        '<div class="p3-fb-label">フィードバック</div>'
-        '<div class="p3-fb-hint">'
+        '<div class="feedback-section">'
+        '<div class="fb-label">フィードバック</div>'
+        '<div class="fb-hint">'
         'セルの概念マッピングに修正が必要な場合、指示を入力してください'
         '</div></div>',
         unsafe_allow_html=True,
@@ -1886,8 +1718,8 @@ def _render_md_results(md: Any) -> None:
     # --- Unmapped cells ---
     if md.unmapped_cells:
         st.markdown(
-            f'<div class="grid-unmapped">'
-            f'<div class="grid-unmapped-title">未割当セル ({n_unmapped}件)</div>'
+            f'<div class="unmapped-section">'
+            f'<div class="unmapped-title">未割当セル ({n_unmapped}件)</div>'
             f'</div>',
             unsafe_allow_html=True,
         )
@@ -1927,9 +1759,8 @@ def _sync_md_edits(md: Any, sheet: str, edited_df: Any) -> None:
 # ===================================================================
 
 def _render_phase_5() -> None:
-    # --- Gradient header ---
     st.markdown(
-        '<div class="p5-header">'
+        '<div class="phase-header">'
         '<h2>パラメーター抽出</h2>'
         '<p>確定したモデル設計に基づいて、事業計画書から各セルの実際の値を抽出します。'
         'グリッド上で値を直接編集できます</p>'
@@ -1940,12 +1771,11 @@ def _render_phase_5() -> None:
     pe = st.session_state.get("pe_result")
     pe_error = st.session_state.get("pe_error", "")
 
-    # --- Initial state ---
     if pe is None and not pe_error:
         st.markdown(
-            '<div class="grid-start">'
-            '<div class="grid-start-title">パラメーター抽出の準備完了</div>'
-            '<div class="grid-start-desc">'
+            '<div class="start-card">'
+            '<div class="start-card-title">パラメーター抽出の準備完了</div>'
+            '<div class="start-card-desc">'
             'モデル設計をもとに、事業計画書から各セルの具体的な値を'
             'AIが自動抽出します</div>'
             '</div>',
@@ -1964,9 +1794,9 @@ def _render_phase_5() -> None:
 
     # --- Feedback section ---
     st.markdown(
-        '<div class="p3-divider">'
-        '<div class="p3-fb-label">フィードバック</div>'
-        '<div class="p3-fb-hint">'
+        '<div class="feedback-section">'
+        '<div class="fb-label">フィードバック</div>'
+        '<div class="fb-hint">'
         '抽出値に修正が必要な場合、指示を入力してください。'
         'グリッド上でも直接編集可能です'
         '</div></div>',
@@ -2111,8 +1941,8 @@ def _render_pe_results(pe: Any) -> None:
     # --- Unmapped cells ---
     if pe.unmapped_cells:
         st.markdown(
-            f'<div class="grid-unmapped">'
-            f'<div class="grid-unmapped-title">未抽出セル ({n_unmapped}件)</div>'
+            f'<div class="unmapped-section">'
+            f'<div class="unmapped-title">未抽出セル ({n_unmapped}件)</div>'
             f'</div>',
             unsafe_allow_html=True,
         )
@@ -2184,7 +2014,13 @@ def _convert_extractions_to_parameters() -> None:
 # ===================================================================
 
 def _render_phase_6() -> None:
-    st.markdown("### Phase 6: 最終出力")
+    st.markdown(
+        '<div class="phase-header">'
+        '<h2>最終出力</h2>'
+        '<p>全フェーズの結果を確認し、Excel PLモデルを生成します</p>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
     analysis: Optional[AnalysisReport] = st.session_state.get("analysis")
     catalog: Optional[InputCatalog] = st.session_state.get("catalog")
     parameters: list = st.session_state.get("parameters", [])
@@ -2243,7 +2079,7 @@ def _render_phase_6() -> None:
     st.divider()
 
     # Blueprint: Sheet tabs
-    st.markdown("### PL 設計図")
+    st.markdown('<div class="section-title">PL 設計図</div>', unsafe_allow_html=True)
     st.caption("値を確認・編集してから「Excel を生成する」をクリックしてください。")
 
     sheets = catalog.sheets()
