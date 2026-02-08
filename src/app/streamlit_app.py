@@ -1984,6 +1984,13 @@ def _convert_extractions_to_parameters() -> None:
     parameters: List[ExtractedParameter] = []
     for ext in pe.extractions:
         if ext.value is not None:
+            # Map Phase 5 source names to ExtractedParameter Literal values
+            src = ext.source
+            if src == "default":
+                src = "template_default"
+            elif src not in ("document", "inferred", "template_default"):
+                src = "document"
+
             param = ExtractedParameter(
                 key=f"{ext.sheet}::{ext.cell}",
                 label=ext.label or ext.concept,
@@ -1991,12 +1998,12 @@ def _convert_extractions_to_parameters() -> None:
                 unit=ext.unit,
                 mapped_targets=[CellTarget(sheet=ext.sheet, cell=ext.cell)],
                 evidence=Evidence(
-                    quote=ext.evidence,
+                    quote=ext.evidence or "",
                     page_or_slide="",
                     rationale=f"segment: {ext.segment}",
                 ),
                 confidence=ext.confidence,
-                source=ext.source,
+                source=src,
             )
             parameters.append(param)
 
