@@ -106,12 +106,17 @@ MD_USER_PROMPT = """\
 
 {feedback_section}\
 ━━━ 出力形式（JSON） ━━━
+⚠ 重要: "label"にはセルの見出しテキスト（例: 顧客数/取引数、単価（円））を記載してください。
+  数値やcurrent_valueを入れないでください。テンプレートの左端（B列）やヘッダー行にある
+  項目名を使用してください。同じ行の入力セル（C列〜F列等）のlabelは、対応するB列の
+  項目名と同じにしてください。
+
 {{
   "cell_assignments": [
     {{
       "sheet": "シート名",
       "cell": "B5",
-      "label": "セルのラベル",
+      "label": "セルの見出しテキスト（数値ではなく項目名）",
       "assigned_concept": "このセルが表す概念（例: 月間顧客数）",
       "segment": "セグメント名",
       "period": "FY1",
@@ -198,15 +203,45 @@ class ModelDesigner:
             len(result.get("cell_assignments", [])),
             len(result.get("unmapped_cells", [])),
         )
-        return self._parse_result(result)
+        return self._parse_result(result, catalog_items)
 
-    def _parse_result(self, raw: Dict[str, Any]) -> ModelDesignResult:
+    def _parse_result(
+        self,
+        raw: Dict[str, Any],
+        catalog_items: Optional[List[Dict[str, Any]]] = None,
+    ) -> ModelDesignResult:
+        # Build lookup: (sheet, cell) → best label from catalog
+        catalog_label_map: Dict[str, str] = {}
+        for item in (catalog_items or []):
+            sheet = item.get("sheet", "")
+            cell = item.get("cell", "")
+            labels = item.get("label_candidates", [])
+            if sheet and cell and labels:
+                catalog_label_map[f"{sheet}!{cell}"] = labels[0]
+
         assignments = []
         for ca in raw.get("cell_assignments", []):
+            sheet = ca.get("sheet", "")
+            cell = ca.get("cell", "")
+            llm_label = ca.get("label", "")
+
+            # Fix: if LLM returned a numeric value as label, use catalog label
+            addr = f"{sheet}!{cell}"
+            actual_label = llm_label
+            if addr in catalog_label_map:
+                cat_label = catalog_label_map[addr]
+                # Prefer catalog label if LLM label looks numeric or empty
+                try:
+                    float(str(llm_label).replace(",", ""))
+                    actual_label = cat_label
+                except (ValueError, TypeError):
+                    if not llm_label:
+                        actual_label = cat_label
+
             assignments.append(CellAssignment(
-                sheet=ca.get("sheet", ""),
-                cell=ca.get("cell", ""),
-                label=ca.get("label", ""),
+                sheet=sheet,
+                cell=cell,
+                label=actual_label,
                 assigned_concept=ca.get("assigned_concept", ""),
                 segment=ca.get("segment", ""),
                 period=ca.get("period", ""),

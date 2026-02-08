@@ -189,15 +189,45 @@ class ParameterExtractorAgent:
             len(result.get("extractions", [])),
             len(result.get("unmapped_cells", [])),
         )
-        return self._parse_result(result)
+        return self._parse_result(result, model_design_json)
 
-    def _parse_result(self, raw: Dict[str, Any]) -> ParameterExtractionResult:
+    def _parse_result(
+        self,
+        raw: Dict[str, Any],
+        model_design_json: Optional[Dict[str, Any]] = None,
+    ) -> ParameterExtractionResult:
+        # Build label lookup from model design (already corrected in Phase 4)
+        design_label_map: Dict[str, str] = {}
+        if model_design_json:
+            for ca in model_design_json.get("cell_assignments", []):
+                sheet = ca.get("sheet", "")
+                cell = ca.get("cell", "")
+                label = ca.get("label", "")
+                if sheet and cell and label:
+                    design_label_map[f"{sheet}!{cell}"] = label
+
         extractions = []
         for ex in raw.get("extractions", []):
+            sheet = ex.get("sheet", "")
+            cell = ex.get("cell", "")
+            llm_label = ex.get("label", "")
+
+            # Fix numeric labels using model design's label
+            addr = f"{sheet}!{cell}"
+            actual_label = llm_label
+            if addr in design_label_map:
+                design_lbl = design_label_map[addr]
+                try:
+                    float(str(llm_label).replace(",", ""))
+                    actual_label = design_lbl
+                except (ValueError, TypeError):
+                    if not llm_label:
+                        actual_label = design_lbl
+
             extractions.append(ExtractedValue(
-                sheet=ex.get("sheet", ""),
-                cell=ex.get("cell", ""),
-                label=ex.get("label", ""),
+                sheet=sheet,
+                cell=cell,
+                label=actual_label,
                 concept=ex.get("concept", ""),
                 value=ex.get("value"),
                 unit=ex.get("unit", ""),
