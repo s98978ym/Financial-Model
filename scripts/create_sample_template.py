@@ -631,25 +631,43 @@ def create_workbook(scenario="base"):
     return wb
 
 
+def create_v2():
+    """Create V2 (investment-bank grade) templates."""
+    try:
+        from src.excel.template_v2 import save_v2_template
+    except ImportError:
+        import sys
+        sys.path.insert(0, str(ROOT_DIR))
+        from src.excel.template_v2 import save_v2_template
+
+    v2_path = TEMPLATES_DIR / "v2_base.xlsx"
+    save_v2_template(str(v2_path), num_segments=3,
+                     fy_labels=FISCAL_YEARS)
+    print(f"[OK] Created {v2_path}")
+    return v2_path
+
+
 def main():
     TEMPLATES_DIR.mkdir(parents=True, exist_ok=True)
 
-    # --- Base case ---
+    # --- V1 templates (backward compat) ---
     base_path = TEMPLATES_DIR / "base.xlsx"
     wb_base = create_workbook(scenario="base")
     wb_base.save(str(base_path))
     print(f"[OK] Created {base_path}")
 
-    # --- Worst case ---
     worst_path = TEMPLATES_DIR / "worst.xlsx"
     wb_worst = create_workbook(scenario="worst")
     wb_worst.save(str(worst_path))
     print(f"[OK] Created {worst_path}")
 
+    # --- V2 template ---
+    v2_path = create_v2()
+
     # Summary
     print()
     print("=== Template Summary ===")
-    for path in [base_path, worst_path]:
+    for path in [base_path, worst_path, v2_path]:
         print(f"  {path.name}:")
         from openpyxl import load_workbook
         wb = load_workbook(str(path))
