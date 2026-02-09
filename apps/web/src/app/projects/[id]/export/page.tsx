@@ -1,15 +1,16 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
-import { useMutation } from '@tanstack/react-query'
-import { api } from '@/lib/api'
+import { useMutation, useQuery } from '@tanstack/react-query'
+import { api, shouldPollJob } from '@/lib/api'
 import { PhaseLayout } from '@/components/ui/PhaseLayout'
 
 export default function ExportPage() {
   const params = useParams()
   const projectId = params.id as string
   const [scenarios, setScenarios] = useState(['base', 'best', 'worst'])
+  const [jobId, setJobId] = useState<string | null>(null)
 
   const exportMutation = useMutation({
     mutationFn: () =>
@@ -23,7 +24,23 @@ export default function ExportPage() {
           worst_multipliers: { revenue: 0.8, cost: 1.15 },
         },
       }),
+    onSuccess: (data) => {
+      setJobId(data.job_id)
+    },
   })
+
+  // Poll job status
+  const { data: jobData } = useQuery({
+    queryKey: ['job', jobId],
+    queryFn: () => api.getJob(jobId!),
+    enabled: !!jobId,
+    refetchInterval: (query) => shouldPollJob(query.state.data),
+  })
+
+  const isGenerating = jobId && (jobData?.status === 'queued' || jobData?.status === 'running')
+  const isComplete = jobData?.status === 'completed'
+  const isFailed = jobData?.status === 'failed'
+  const downloadUrl = isComplete ? api.downloadExcel(jobId!) : null
 
   return (
     <PhaseLayout
@@ -79,27 +96,57 @@ export default function ExportPage() {
         {/* Export Button */}
         <button
           onClick={() => exportMutation.mutate()}
-          disabled={exportMutation.isPending || scenarios.length === 0}
+          disabled={exportMutation.isPending || !!isGenerating || scenarios.length === 0}
           className="w-full bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
         >
-          {exportMutation.isPending ? 'Excel 生成中...' : 'Excel をエクスポート'}
+          {isGenerating ? `Excel 生成中... (${jobData?.progress || 0}%)` :
+           exportMutation.isPending ? 'ジョブ作成中...' :
+           'Excel をエクスポート'}
         </button>
 
-        {/* Result */}
-        {exportMutation.isSuccess && (
-          <div className="mt-6 bg-green-50 border border-green-200 rounded-lg p-4">
-            <h3 className="font-medium text-green-800 mb-2">生成完了</h3>
-            <p className="text-sm text-green-700">
-              ジョブが作成されました。ダウンロードリンクが準備でき次第、こちらに表示されます。
+        {/* Generating spinner */}
+        {isGenerating && (
+          <div className="mt-6 text-center">
+            <div className="inline-block w-6 h-6 border-4 border-green-200 border-t-green-600 rounded-full animate-spin mb-2" />
+            <p className="text-sm text-gray-500">Excel ファイルを生成しています...</p>
+          </div>
+        )}
+
+        {/* Download ready */}
+        {isComplete && downloadUrl && (
+          <div className="mt-6 bg-green-50 border border-green-200 rounded-lg p-5">
+            <h3 className="font-medium text-green-800 mb-3">生成完了</h3>
+            <a
+              href={downloadUrl}
+              download
+              className="inline-flex items-center gap-2 bg-green-600 text-white px-5 py-2.5 rounded-lg hover:bg-green-700 transition-colors font-medium"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              Excel ファイルをダウンロード
+            </a>
+            <p className="mt-2 text-xs text-green-600">
+              ファイルはブラウザのダウンロードフォルダに保存されます
             </p>
           </div>
         )}
 
-        {exportMutation.isError && (
+        {/* Error */}
+        {(isFailed || exportMutation.isError) && (
           <div className="mt-6 bg-red-50 border border-red-200 rounded-lg p-4">
             <p className="text-sm text-red-700">
-              エラー: {(exportMutation.error as Error).message}
+              エラー: {jobData?.error_msg || (exportMutation.error as Error)?.message || '不明なエラー'}
             </p>
+            <button
+              onClick={() => {
+                setJobId(null)
+                exportMutation.reset()
+              }}
+              className="mt-2 text-sm text-red-600 hover:underline"
+            >
+              再試行
+            </button>
           </div>
         )}
       </div>

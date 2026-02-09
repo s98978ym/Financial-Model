@@ -82,6 +82,9 @@ export const api = {
   exportExcel: (body: any) =>
     fetchAPI('/export/excel', { method: 'POST', body: JSON.stringify(body) }),
 
+  downloadExcel: (jobId: string) =>
+    `${BASE_URL}/v1/export/download/${jobId}`,
+
   // Jobs
   getJob: (jobId: string) => fetchAPI(`/jobs/${jobId}`),
 }

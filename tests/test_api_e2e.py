@@ -282,6 +282,96 @@ class TestProjectStateWithPhaseResults:
         assert state["documents"][0]["id"] == doc["id"]
 
 
+class TestRecalc:
+    """Test the recalculation endpoint."""
+
+    def test_recalc_with_defaults(self, client):
+        res = client.post("/v1/recalc", json={
+            "parameters": {"revenue_fy1": 100_000_000, "growth_rate": 0.3},
+            "scenario": "base",
+        })
+        assert res.status_code == 200
+        data = res.json()
+        assert "pl_summary" in data
+        assert "kpis" in data
+        assert len(data["pl_summary"]["revenue"]) == 5
+        assert data["scenario"] == "base"
+
+    def test_recalc_with_project_id(self, client):
+        project = client.post("/v1/projects", json={"name": "Recalcテスト"}).json()
+        res = client.post("/v1/recalc", json={
+            "project_id": project["id"],
+            "parameters": {},
+            "scenario": "base",
+        })
+        assert res.status_code == 200
+        assert "source_params" in res.json()
+
+    def test_recalc_best_scenario(self, client):
+        res = client.post("/v1/recalc", json={
+            "parameters": {"revenue_fy1": 100_000_000},
+            "scenario": "best",
+        })
+        assert res.status_code == 200
+        base_res = client.post("/v1/recalc", json={
+            "parameters": {"revenue_fy1": 100_000_000},
+            "scenario": "base",
+        })
+        # Best scenario should have higher revenue
+        assert res.json()["pl_summary"]["revenue"][0] >= base_res.json()["pl_summary"]["revenue"][0]
+
+    def test_recalc_worst_scenario(self, client):
+        res = client.post("/v1/recalc", json={
+            "parameters": {"revenue_fy1": 100_000_000},
+            "scenario": "worst",
+        })
+        assert res.status_code == 200
+        base_res = client.post("/v1/recalc", json={
+            "parameters": {"revenue_fy1": 100_000_000},
+            "scenario": "base",
+        })
+        # Worst scenario should have lower revenue
+        assert res.json()["pl_summary"]["revenue"][0] <= base_res.json()["pl_summary"]["revenue"][0]
+
+
+class TestExportWithDownload:
+    """Test export job creation and download endpoint."""
+
+    def test_export_creates_job_with_download_url(self, client):
+        project = client.post("/v1/projects", json={"name": "Exportテスト"}).json()
+        res = client.post("/v1/export/excel", json={
+            "project_id": project["id"],
+            "scenarios": ["base"],
+        })
+        assert res.status_code == 202
+        data = res.json()
+        assert data["job_id"]
+        assert data["phase"] == 6
+        assert "download_url" in data
+
+    def test_download_completed_job(self, client):
+        project = client.post("/v1/projects", json={"name": "DLテスト"}).json()
+        # Create export job (local dev generates synchronously)
+        res = client.post("/v1/export/excel", json={
+            "project_id": project["id"],
+        })
+        job_id = res.json()["job_id"]
+
+        # Check job status
+        job = client.get(f"/v1/jobs/{job_id}").json()
+        assert job["status"] == "completed"
+
+        # Download
+        dl_res = client.get(f"/v1/export/download/{job_id}")
+        assert dl_res.status_code == 200
+        assert "spreadsheetml" in dl_res.headers.get("content-type", "")
+        assert len(dl_res.content) > 0
+
+    def test_download_not_ready(self, client):
+        res = client.get("/v1/export/download/nonexistent-job")
+        assert res.status_code == 404
+
+
 class TestGuards:
     """Test core guards (no API, pure Python)."""
 

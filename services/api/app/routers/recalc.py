@@ -6,11 +6,63 @@ the 5-year PL summary, KPIs, and chart data.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+import logging
+from typing import Any, Dict, Optional
 
 from fastapi import APIRouter
 
+from .. import db
+
+logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+# ---------------------------------------------------------------------------
+# Parameter mapping: Phase 5 extractions → recalc driver keys
+# ---------------------------------------------------------------------------
+
+_PARAM_KEY_MAP = {
+    # Revenue keywords → revenue_fy1
+    "売上高": "revenue_fy1",
+    "売上": "revenue_fy1",
+    "revenue": "revenue_fy1",
+    # Growth keywords → growth_rate
+    "成長率": "growth_rate",
+    "growth": "growth_rate",
+    # COGS keywords → cogs_rate
+    "原価率": "cogs_rate",
+    "原価": "cogs_rate",
+    "cogs": "cogs_rate",
+    # OPEX keywords → opex_base
+    "販管費": "opex_base",
+    "opex": "opex_base",
+    "人件費": "opex_base",
+    # OPEX growth → opex_growth
+    "opex増加率": "opex_growth",
+}
+
+
+def _extract_params_from_phase5(phase5_result: dict) -> Dict[str, Any]:
+    """Convert Phase 5 extracted parameters to recalc driver keys."""
+    params: Dict[str, Any] = {}
+    extractions = phase5_result.get("extractions", [])
+
+    for ext in extractions:
+        label = (ext.get("label") or ext.get("key") or "").lower()
+        value = ext.get("value")
+        if value is None:
+            continue
+
+        # Try to map label to a known driver key
+        for keyword, driver_key in _PARAM_KEY_MAP.items():
+            if keyword.lower() in label:
+                try:
+                    params[driver_key] = float(value)
+                except (TypeError, ValueError):
+                    pass
+                break
+
+    return params
 
 
 def _apply_scenario_multipliers(
@@ -28,8 +80,6 @@ def _apply_scenario_multipliers(
         return parameters
 
     adjusted = dict(parameters)
-    # Simple heuristic: revenue-related cells get revenue multiplier,
-    # cost-related get cost multiplier
     for key, value in adjusted.items():
         if not isinstance(value, (int, float)):
             continue
@@ -43,12 +93,7 @@ def _apply_scenario_multipliers(
 
 
 def _compute_pl(parameters: Dict[str, Any]) -> Dict[str, Any]:
-    """Compute 5-year PL from parameters.
-
-    This is a simplified computation engine. In production, this wraps
-    the core Excel formula engine or a pure-Python recalculation model.
-    """
-    # Extract key parameters with defaults
+    """Compute 5-year PL from parameters."""
     revenue_fy1 = float(parameters.get("revenue_fy1", 100_000_000))
     growth_rate = float(parameters.get("growth_rate", 0.3))
     cogs_rate = float(parameters.get("cogs_rate", 0.3))
@@ -111,7 +156,7 @@ def _compute_pl(parameters: Dict[str, Any]) -> Dict[str, Any]:
             "fy5_op_margin": round(fy5_margin, 4),
         },
         "charts_data": {
-            "waterfall": [],  # Populated by frontend-specific chart logic
+            "waterfall": [],
             "revenue_stack": [],
         },
     }
@@ -123,22 +168,37 @@ async def recalc(body: dict):
 
     Fast path: no LLM, no heavy computation.
     Designed to respond in <500ms for slider interactions.
+
+    If project_id is provided, loads Phase 5 parameters as base,
+    then overlays user edits.
     """
+    project_id = body.get("project_id")
     parameters = body.get("parameters", {})
     edited_cells = body.get("edited_cells", {})
     scenario = body.get("scenario", "base")
 
-    # Merge edits over parameters
-    merged = {**parameters, **edited_cells}
+    # Load Phase 5 extracted parameters as base if project_id is given
+    base_params: Dict[str, Any] = {}
+    if project_id:
+        run = db.get_latest_run(project_id)
+        if run:
+            phase5 = db.get_phase_result(run["id"], 5)
+            if phase5 and phase5.get("raw_json"):
+                base_params = _extract_params_from_phase5(phase5["raw_json"])
+                logger.debug("Loaded %d params from Phase 5", len(base_params))
+
+    # Layer: Phase 5 base → user-provided params → edited cells
+    merged = {**base_params, **parameters, **edited_cells}
 
     # Apply scenario multipliers
     adjusted = _apply_scenario_multipliers(
         merged,
         scenario,
-        best_mult={"revenue": 1.2, "cost": 0.9},
-        worst_mult={"revenue": 0.8, "cost": 1.15},
+        best_mult=body.get("best_multipliers", {"revenue": 1.2, "cost": 0.9}),
+        worst_mult=body.get("worst_multipliers", {"revenue": 0.8, "cost": 1.15}),
     )
 
     result = _compute_pl(adjusted)
     result["scenario"] = scenario
+    result["source_params"] = merged  # Return merged params so frontend knows actual values
     return result
