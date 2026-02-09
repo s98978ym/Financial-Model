@@ -31,14 +31,39 @@ def _dispatch_celery(task_name: str, job_id: str):
     logger.info("Dispatched %s for job %s", task_name, job_id)
 
 
+TEMPLATE_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "templates")
+
+
+def _resolve_template(template_id: str) -> str:
+    """Resolve template_id to an absolute file path."""
+    # Map known IDs → filenames
+    name_map = {
+        "v2_ib_grade": "base.xlsx",
+        "base": "base.xlsx",
+        "worst": "worst.xlsx",
+    }
+    filename = name_map.get(template_id, f"{template_id}.xlsx")
+    path = os.path.normpath(os.path.join(TEMPLATE_DIR, filename))
+    if os.path.exists(path):
+        return path
+    # Fallback: try all xlsx files in templates/
+    for f in os.listdir(TEMPLATE_DIR):
+        if f.endswith(".xlsx"):
+            return os.path.join(TEMPLATE_DIR, f)
+    raise FileNotFoundError(f"Template not found: {template_id}")
+
+
 @router.post("/phase1/scan")
 async def phase1_scan(body: dict):
     """Phase 1: Scan template + extract document text.
 
-    Synchronous for now. For large PDFs, could be converted to a job.
+    Synchronous — no LLM, just file parsing.
     """
     project_id = body.get("project_id")
     document_id = body.get("document_id")
+    template_id = body.get("template_id", "v2_ib_grade")
+    colors = body.get("colors", {})
+    input_color = colors.get("input_color", "FFFFF2CC")
 
     if not project_id or not document_id:
         raise HTTPException(
@@ -46,20 +71,116 @@ async def phase1_scan(body: dict):
             detail={"code": "VALIDATION_ERROR", "message": "project_id and document_id required"},
         )
 
-    # In production: call core.catalog.scanner.scan_template()
-    # and core.ingest.reader.read_document()
-    # For now, return a stub response
+    # --- Ensure run exists ---
+    run = db.get_latest_run(project_id)
+    if not run:
+        run = db.create_run(project_id)
+
+    # ------------------------------------------------------------------
+    # 1. Template scan
+    # ------------------------------------------------------------------
+    catalog_dict: dict = {"items": [], "block_index": {}, "total_items": 0}
+    try:
+        template_path = _resolve_template(template_id)
+        from src.catalog.scanner import scan_template
+        catalog = scan_template(template_path, input_color=input_color)
+        # Serialize Pydantic model to dict
+        items_list = [item.model_dump() if hasattr(item, "model_dump") else item.dict() for item in catalog.items]
+        block_index = {}
+        for key, block_items in catalog.blocks.items():
+            block_index[key] = [
+                item.model_dump() if hasattr(item, "model_dump") else item.dict()
+                for item in block_items
+            ]
+        catalog_dict = {
+            "items": items_list,
+            "block_index": block_index,
+            "total_items": len(items_list),
+        }
+        logger.info("Template scan: %d items in %d blocks", len(items_list), len(block_index))
+    except Exception as e:
+        logger.error("Template scan failed: %s", e)
+        catalog_dict["error"] = str(e)
+
+    # ------------------------------------------------------------------
+    # 2. Document text extraction
+    # ------------------------------------------------------------------
+    doc_summary: dict = {"total_chars": 0, "pages": 0, "preview": ""}
+    document_text = ""
+
+    doc = db.get_document(document_id)
+    if not doc:
+        raise HTTPException(status_code=404, detail={"code": "DOCUMENT_NOT_FOUND"})
+
+    # For text-pasted documents, the text is already available
+    if doc.get("extracted_text"):
+        document_text = doc["extracted_text"]
+        doc_summary = {
+            "total_chars": len(document_text),
+            "pages": 1,
+            "preview": document_text[:500],
+        }
+    elif doc.get("storage_path"):
+        # File-based document — download and extract
+        try:
+            from core.storage import download_file
+            from src.ingest.reader import read_document
+            import tempfile
+
+            content = download_file(doc["storage_path"])
+            if content:
+                filename = doc.get("filename") or "upload.pdf"
+                suffix = os.path.splitext(filename)[1] or ".pdf"
+                with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+                    tmp.write(content)
+                    tmp_path = tmp.name
+
+                try:
+                    doc_content = read_document(tmp_path)
+                    document_text = doc_content.full_text
+                    doc_summary = {
+                        "total_chars": doc_content.text_char_count,
+                        "pages": doc_content.total_pages,
+                        "preview": document_text[:500],
+                    }
+                finally:
+                    os.unlink(tmp_path)
+            else:
+                doc_summary["error"] = "File content not found in storage"
+        except Exception as e:
+            logger.error("Document extraction failed: %s", e)
+            doc_summary["error"] = str(e)
+
+    # ------------------------------------------------------------------
+    # 3. Store extracted text back to document record & save phase result
+    # ------------------------------------------------------------------
+    if document_text and not doc.get("extracted_text"):
+        # Update document with extracted text for later phases
+        if db._use_pg():
+            with db.get_conn() as conn:
+                if conn:
+                    cur = conn.cursor()
+                    cur.execute(
+                        "UPDATE documents SET extracted_text = %s WHERE id = %s",
+                        (document_text, document_id),
+                    )
+        else:
+            mem_doc = db._mem_documents.get(document_id)
+            if mem_doc:
+                mem_doc["extracted_text"] = document_text
+
+    # Save Phase 1 result
+    db.save_phase_result(run_id=run["id"], phase=1, raw_json={
+        "catalog": catalog_dict,
+        "document_summary": doc_summary,
+    })
+
+    # Update project phase
+    db.update_project(project_id, current_phase=2)
+
     return {
-        "catalog": {
-            "items": [],
-            "block_index": {},
-            "total_items": 0,
-        },
-        "document_summary": {
-            "total_chars": 0,
-            "pages": 0,
-            "preview": "",
-        },
+        "catalog": catalog_dict,
+        "document_summary": doc_summary,
     }
 
 
