@@ -20,7 +20,6 @@ dependencies = [
     "python-docx>=0.8.11",
     "python-pptx>=0.6.21",
     "anthropic>=0.39.0",
-    "streamlit>=1.28.0",
     "typer>=0.9.0",
     "pyyaml>=6.0",
 ]
@@ -33,4 +32,4 @@ dev = ["pytest>=7.0", "pytest-cov"]
 plgen = "src.cli.main:main"
 
 [tool.setuptools.packages.find]
-include = ["src*"]
+include = ["src*", "core*", "shared*", "services*"]

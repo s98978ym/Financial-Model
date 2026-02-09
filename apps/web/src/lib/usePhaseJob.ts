@@ -63,15 +63,25 @@ export function usePhaseJob({ projectId, phase, autoLoad = true }: UsePhaseJobOp
   // Update state when job status changes
   useEffect(() => {
     if (!jobData) return
-    setState((prev) => ({
-      ...prev,
-      status: jobData.status,
-      progress: jobData.progress || 0,
-      error: jobData.error_msg || null,
-    }))
-    if (jobData.status === 'completed' && jobData.result) {
-      // Refetch project state to get the result
+
+    if (jobData.status === 'completed') {
+      // Job is done — refetch project state to populate result
       queryClient.invalidateQueries({ queryKey: ['projectState', projectId] })
+      // Keep status as 'running' until project state provides the result
+      // (avoids flash of "completed but no data")
+      setState((prev) => ({
+        ...prev,
+        status: prev.result ? 'completed' : 'running',
+        progress: prev.result ? 100 : 95,
+        error: null,
+      }))
+    } else {
+      setState((prev) => ({
+        ...prev,
+        status: jobData.status,
+        progress: jobData.progress || 0,
+        error: jobData.error_msg || null,
+      }))
     }
   }, [jobData, projectId, queryClient])
 

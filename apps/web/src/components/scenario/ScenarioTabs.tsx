@@ -16,7 +16,7 @@ export function ScenarioTabs({ active, onChange }: ScenarioTabsProps) {
     <div className="flex gap-2">
       {TABS.map((tab) => {
         const isActive = active === tab.key
-        const colorMap = {
+        const colorMap: Record<string, string> = {
           blue: isActive ? 'bg-blue-600 text-white' : 'bg-white text-blue-600 border-blue-200 hover:bg-blue-50',
           green: isActive ? 'bg-green-600 text-white' : 'bg-white text-green-600 border-green-200 hover:bg-green-50',
           red: isActive ? 'bg-red-600 text-white' : 'bg-white text-red-600 border-red-200 hover:bg-red-50',

@@ -49,11 +49,14 @@ async def get_project_state(project_id: str):
         phase_results = db.get_all_phase_results(run["id"])
         pending_edits = db.get_edits(run["id"])
 
+    documents = db.get_documents_by_project(project_id)
+
     return {
         "project": project,
         "current_run_id": run["id"] if run else None,
         "phase_results": phase_results,
         "pending_edits": pending_edits,
+        "documents": documents,
     }
 
 

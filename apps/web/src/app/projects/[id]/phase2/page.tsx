@@ -14,6 +14,9 @@ export default function Phase2Page() {
   const { result, isProcessing, isComplete, isFailed, trigger, progress, error, projectState } =
     usePhaseJob({ projectId, phase: 2 })
 
+  // Get document_id from project state
+  const documentId = projectState?.documents?.[0]?.id || ''
+
   // Extract proposals from result
   const proposals = result?.proposals || []
 
@@ -29,7 +32,7 @@ export default function Phase2Page() {
         <div className="text-center py-12 bg-gray-50 rounded-lg border border-dashed border-gray-300">
           <p className="text-gray-500 mb-4">Phase 2 分析を開始してください</p>
           <button
-            onClick={() => trigger({ document_id: '' })}
+            onClick={() => trigger({ document_id: documentId })}
             className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700"
           >
             ビジネスモデル分析を実行
@@ -51,7 +54,7 @@ export default function Phase2Page() {
         <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
           <p className="text-sm text-red-700">分析に失敗しました: {error}</p>
           <button
-            onClick={() => trigger({ document_id: '' })}
+            onClick={() => trigger({ document_id: documentId })}
             className="mt-2 text-sm text-red-600 hover:underline"
           >
             再試行
