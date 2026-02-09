@@ -1,5 +1,9 @@
 # Render deployment configuration for FastAPI
 # https://render.com/docs/blueprint-spec
+#
+# NOTE: Redis is hosted on Upstash (external), not Render.
+# Set REDIS_URL manually in the Render dashboard with the Upstash rediss:// URL.
+# DATABASE_URL uses Supabase PostgreSQL (set manually).
 services:
   - type: web
     name: plgen-api
@@ -10,13 +14,13 @@ services:
       - key: ANTHROPIC_API_KEY
         sync: false  # Set manually in Render dashboard
       - key: DATABASE_URL
-        fromDatabase:
-          name: plgen-db
-          property: connectionString
+        sync: false  # Supabase PostgreSQL connection string
       - key: REDIS_URL
-        fromService:
-          name: plgen-redis
-          property: connectionString
+        sync: false  # Upstash Redis TLS URL (rediss://...)
+      - key: SUPABASE_URL
+        sync: false  # Supabase project URL
+      - key: SUPABASE_SERVICE_KEY
+        sync: false  # Supabase service role key
       - key: CORS_ORIGINS
         value: "https://plgenerator.vercel.app"
     healthCheckPath: /health
@@ -31,17 +35,11 @@ services:
       - key: ANTHROPIC_API_KEY
         sync: false
       - key: DATABASE_URL
-        fromDatabase:
-          name: plgen-db
-          property: connectionString
+        sync: false  # Supabase PostgreSQL connection string
       - key: REDIS_URL
-        fromService:
-          name: plgen-redis
-          property: connectionString
+        sync: false  # Upstash Redis TLS URL (rediss://...)
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
     plan: free
-
-databases:
-  - name: plgen-db
-    plan: free
-    postgresMajorVersion: "16"
-    ipAllowList: []
