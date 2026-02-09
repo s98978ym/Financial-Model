@@ -26,7 +26,7 @@ export function ScenarioTabs({ active, onChange }: ScenarioTabsProps) {
           <button
             key={tab.key}
             onClick={() => onChange(tab.key)}
-            className={`px-4 py-2 rounded-lg border transition-colors ${colorMap[tab.color]}`}
+            className={`px-4 py-2 rounded-lg border transition-colors ${colorMap[tab.color as keyof typeof colorMap]}`}
           >
             <span className="font-medium">{tab.label}</span>
             <span className="text-xs block opacity-75">{tab.desc}</span>
