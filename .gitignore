@@ -37,3 +37,13 @@ output/
 
 # Jupyter
 .ipynb_checkpoints/
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+package-lock.json
+tsconfig.tsbuildinfo
+
+# pytest
+.pytest_cache/
