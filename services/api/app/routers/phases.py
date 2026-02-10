@@ -50,7 +50,7 @@ def _dispatch_celery(task_name: str, job_id: str):
         try:
             mod = importlib.import_module(module_path)
             fn = getattr(mod, func_name)
-            fn.apply(args=[job_id])
+            fn.apply(args=[job_id], throw=True)
         except Exception as exc:
             logger.error(
                 "Sync fallback failed for %s (job %s): %s",
