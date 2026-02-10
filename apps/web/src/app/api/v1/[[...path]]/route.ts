@@ -42,6 +42,9 @@ async function proxy(req: NextRequest) {
       body,
     })
 
+    // Buffer the full response to avoid stream truncation in Node.js runtime
+    const responseBody = await res.text()
+
     const responseHeaders = new Headers()
     res.headers.forEach((value, key) => {
       if (
@@ -51,7 +54,7 @@ async function proxy(req: NextRequest) {
       }
     })
 
-    return new NextResponse(res.body, {
+    return new NextResponse(responseBody, {
       status: res.status,
       statusText: res.statusText,
       headers: responseHeaders,
