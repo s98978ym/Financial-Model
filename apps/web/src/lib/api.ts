@@ -6,14 +6,19 @@
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
-// In production, use Next.js rewrites proxy (/api/v1/*) to avoid CORS.
+// In production, use Next.js proxy (/api/v1/*) to avoid CORS.
 // In local dev, call the backend directly.
 const isServer = typeof window === 'undefined'
+const isLocal = BASE_URL.includes('localhost')
 const API_PREFIX = isServer
   ? `${BASE_URL}/v1`                          // SSR: direct
-  : (BASE_URL.includes('localhost')
+  : (isLocal
       ? `${BASE_URL}/v1`                       // local dev: direct
-      : '/api/v1')                             // production: via Next.js rewrite proxy
+      : '/api/v1')                             // production: via Next.js proxy
+
+// Direct backend URL for large file uploads that exceed Vercel's body size limit.
+// File uploads bypass the Next.js proxy and go straight to the backend with CORS.
+const DIRECT_API = `${BASE_URL}/v1`
 
 async function fetchAPI(path: string, options: RequestInit = {}): Promise<any> {
   const url = `${API_PREFIX}${path}`
@@ -44,13 +49,13 @@ export const api = {
 
   getProjectState: (id: string) => fetchAPI(`/projects/${id}/state`),
 
-  // Documents (use API_PREFIX for proxy, no Content-Type header for FormData)
+  // Documents — file uploads go DIRECTLY to backend (bypass Vercel proxy body limit)
   uploadDocument: (projectId: string, body: { kind: string; text?: string }) => {
     const formData = new FormData()
     formData.append('project_id', projectId)
     formData.append('kind', body.kind)
     if (body.text) formData.append('text', body.text)
-    return fetch(`${API_PREFIX}/documents/upload`, {
+    return fetch(`${DIRECT_API}/documents/upload`, {
       method: 'POST',
       body: formData,
     }).then(async (r) => {
@@ -64,7 +69,7 @@ export const api = {
     formData.append('project_id', projectId)
     formData.append('kind', 'file')
     formData.append('file', file)
-    return fetch(`${API_PREFIX}/documents/upload`, {
+    return fetch(`${DIRECT_API}/documents/upload`, {
       method: 'POST',
       body: formData,
     }).then(async (r) => {

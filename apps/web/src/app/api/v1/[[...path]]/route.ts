@@ -2,39 +2,52 @@
  * Catch-all API proxy route.
  *
  * Proxies /api/v1/* requests to the FastAPI backend.
- * This avoids CORS issues and handles large file uploads
- * (Vercel rewrites have a 4.5MB body limit, but API routes support up to 50MB).
+ * Uses Node.js runtime for full body buffering support.
+ * File uploads (>4.5MB) should bypass this proxy and call the backend directly.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+const BACKEND_URL =
+  process.env.API_BACKEND_URL ||
+  process.env.NEXT_PUBLIC_API_URL ||
+  'http://localhost:8000'
 
 async function proxy(req: NextRequest) {
   const path = req.nextUrl.pathname.replace('/api/v1', '/v1')
   const url = `${BACKEND_URL}${path}${req.nextUrl.search}`
 
-  const headers = new Headers()
-  // Forward relevant headers (skip host and other hop-by-hop headers)
+  // Forward relevant headers (skip hop-by-hop headers)
+  const headers: Record<string, string> = {}
   req.headers.forEach((value, key) => {
-    if (!['host', 'connection', 'transfer-encoding'].includes(key.toLowerCase())) {
-      headers.set(key, value)
+    if (
+      !['host', 'connection', 'transfer-encoding', 'content-length'].includes(
+        key.toLowerCase()
+      )
+    ) {
+      headers[key] = value
     }
   })
+
+  // Buffer body for non-GET requests
+  let body: Buffer | undefined
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    const ab = await req.arrayBuffer()
+    body = Buffer.from(ab)
+  }
 
   try {
     const res = await fetch(url, {
       method: req.method,
       headers,
-      body: req.method !== 'GET' && req.method !== 'HEAD' ? req.body : undefined,
-      // @ts-ignore - duplex is required for streaming request body
-      duplex: 'half',
+      body,
     })
 
-    // Stream the response back
     const responseHeaders = new Headers()
     res.headers.forEach((value, key) => {
-      if (!['transfer-encoding', 'content-encoding'].includes(key.toLowerCase())) {
+      if (
+        !['transfer-encoding', 'content-encoding'].includes(key.toLowerCase())
+      ) {
         responseHeaders.set(key, value)
       }
     })
@@ -45,7 +58,7 @@ async function proxy(req: NextRequest) {
       headers: responseHeaders,
     })
   } catch (error) {
-    console.error('API proxy error:', error)
+    console.error('API proxy error:', error, '→', url)
     return NextResponse.json(
       { error: { message: 'Backend service unavailable' } },
       { status: 502 }
@@ -59,6 +72,6 @@ export const PUT = proxy
 export const PATCH = proxy
 export const DELETE = proxy
 
-// Route Segment Config for App Router
-export const runtime = 'edge'
+// Node.js runtime for full body buffering (no 4MB Edge limit)
+export const runtime = 'nodejs'
 export const maxDuration = 60
