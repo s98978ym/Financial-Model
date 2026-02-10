@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import os
+import threading
 
 from fastapi import APIRouter, HTTPException
 
@@ -20,15 +21,60 @@ router = APIRouter()
 # Celery dispatch is enabled when REDIS_URL is set
 _CELERY_ENABLED = bool(os.environ.get("REDIS_URL"))
 
+# Map Celery task names → actual task functions for sync fallback
+_TASK_FUNCTIONS = {}
+
+
+def _register_task(task_name: str):
+    """Lazily import and cache the task function."""
+    if task_name in _TASK_FUNCTIONS:
+        return _TASK_FUNCTIONS[task_name]
+    fn = None
+    try:
+        if "phase2" in task_name:
+            from services.worker.tasks.phase2 import run_bm_analysis
+            fn = run_bm_analysis
+        elif "phase3" in task_name:
+            from services.worker.tasks.phase3 import run_template_mapping
+            fn = run_template_mapping
+        elif "phase4" in task_name:
+            from services.worker.tasks.phase4 import run_model_design
+            fn = run_model_design
+        elif "phase5" in task_name:
+            from services.worker.tasks.phase5 import run_parameter_extraction
+            fn = run_parameter_extraction
+    except Exception as e:
+        logger.error("Failed to import task %s: %s", task_name, e)
+    _TASK_FUNCTIONS[task_name] = fn
+    return fn
+
 
 def _dispatch_celery(task_name: str, job_id: str):
-    """Dispatch a Celery task if enabled, otherwise log a warning."""
-    if not _CELERY_ENABLED:
-        logger.warning("Celery not enabled (no REDIS_URL) — job %s will not be processed", job_id)
+    """Dispatch a Celery task if enabled, otherwise run synchronously in background thread."""
+    if _CELERY_ENABLED:
+        from services.worker.celery_app import app as celery_app
+        celery_app.send_task(task_name, args=[job_id])
+        logger.info("Dispatched %s for job %s via Celery", task_name, job_id)
         return
-    from services.worker.celery_app import app as celery_app
-    celery_app.send_task(task_name, args=[job_id])
-    logger.info("Dispatched %s for job %s", task_name, job_id)
+
+    # Sync fallback: run task in background thread
+    fn = _register_task(task_name)
+    if fn is None:
+        logger.error("No sync fallback for %s — job %s will not be processed", task_name, job_id)
+        db.update_job(job_id, status="failed", error_msg="Worker unavailable")
+        return
+
+    def _run():
+        try:
+            logger.info("Running %s synchronously for job %s", task_name, job_id)
+            fn(job_id)
+        except Exception as e:
+            logger.error("Sync task %s failed for job %s: %s", task_name, job_id, e)
+            db.update_job(job_id, status="failed", error_msg=str(e))
+
+    thread = threading.Thread(target=_run, daemon=True)
+    thread.start()
+    logger.info("Started sync thread for %s (job %s)", task_name, job_id)
 
 
 TEMPLATE_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "templates")
