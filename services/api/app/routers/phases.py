@@ -7,7 +7,9 @@ Phases 2-5 are async (Celery jobs) since they involve LLM calls.
 from __future__ import annotations
 
 import logging
+import importlib
 import os
+import threading
 
 from fastapi import APIRouter, HTTPException
 
@@ -20,15 +22,44 @@ router = APIRouter()
 # Celery dispatch is enabled when REDIS_URL is set
 _CELERY_ENABLED = bool(os.environ.get("REDIS_URL"))
 
+_TASK_REGISTRY = {
+    "tasks.phase2.run_bm_analysis": ("services.worker.tasks.phase2", "run_bm_analysis"),
+    "tasks.phase3.run_template_mapping": ("services.worker.tasks.phase3", "run_template_mapping"),
+    "tasks.phase4.run_model_design": ("services.worker.tasks.phase4", "run_model_design"),
+    "tasks.phase5.run_parameter_extraction": ("services.worker.tasks.phase5", "run_parameter_extraction"),
+}
+
 
 def _dispatch_celery(task_name: str, job_id: str):
-    """Dispatch a Celery task if enabled, otherwise log a warning."""
-    if not _CELERY_ENABLED:
-        logger.warning("Celery not enabled (no REDIS_URL) — job %s will not be processed", job_id)
+    """Dispatch a Celery task if enabled, otherwise run in a background thread."""
+    if _CELERY_ENABLED:
+        from services.worker.celery_app import app as celery_app
+        celery_app.send_task(task_name, args=[job_id])
+        logger.info("Dispatched %s for job %s via Celery", task_name, job_id)
         return
-    from services.worker.celery_app import app as celery_app
-    celery_app.send_task(task_name, args=[job_id])
-    logger.info("Dispatched %s for job %s", task_name, job_id)
+
+    # --- Sync fallback: run task in background thread ---
+    entry = _TASK_REGISTRY.get(task_name)
+    if not entry:
+        logger.error("Unknown task for sync fallback: %s", task_name)
+        return
+
+    module_path, func_name = entry
+
+    def _run():
+        try:
+            mod = importlib.import_module(module_path)
+            fn = getattr(mod, func_name)
+            fn.apply(args=[job_id])
+        except Exception as exc:
+            logger.error(
+                "Sync fallback failed for %s (job %s): %s",
+                task_name, job_id, exc, exc_info=True,
+            )
+
+    t = threading.Thread(target=_run, daemon=True, name=f"task-{job_id[:8]}")
+    t.start()
+    logger.info("Dispatched %s for job %s (sync thread fallback)", task_name, job_id)
 
 
 TEMPLATE_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "templates")
