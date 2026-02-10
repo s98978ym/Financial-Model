@@ -71,7 +71,7 @@ def run_template_mapping(self, job_id: str):
         db.update_job(
             job_id, status="completed", progress=100,
             log_msg="Template mapping complete",
-            result_ref=f"phase_result:{run_id}:3",
+            result_ref=run_id,
         )
 
         return {"status": "completed", "job_id": job_id}
