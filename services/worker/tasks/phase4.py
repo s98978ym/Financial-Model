@@ -75,12 +75,12 @@ def run_model_design(self, job_id: str):
 
         # --- Store result ---
         result_dict = result.to_dict() if hasattr(result, "to_dict") else json.loads(json.dumps(result, default=str))
-        db.save_phase_result(run_id=run_id, phase=4, raw_json=result_dict)
+        pr = db.save_phase_result(run_id=run_id, phase=4, raw_json=result_dict)
 
         db.update_job(
             job_id, status="completed", progress=100,
             log_msg="Model design complete",
-            result_ref=run_id,
+            result_ref=pr["id"],
         )
 
         return {"status": "completed", "job_id": job_id}
