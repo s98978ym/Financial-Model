@@ -267,13 +267,13 @@ async def phase2_analyze(body: dict):
 async def phase3_map(body: dict):
     """Phase 3: Template Structure Mapping (async job)."""
     project_id = body.get("project_id")
-    selected_proposal = body.get("selected_proposal")
+    selected_proposal = body.get("selected_proposal", {})
     catalog_summary = body.get("catalog_summary", {})
 
-    if not project_id or not selected_proposal:
+    if not project_id:
         raise HTTPException(
             status_code=422,
-            detail={"code": "VALIDATION_ERROR", "message": "project_id and selected_proposal required"},
+            detail={"code": "VALIDATION_ERROR", "message": "project_id required"},
         )
 
     run = db.get_latest_run(project_id)

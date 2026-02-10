@@ -1,5 +1,6 @@
 'use client'
 
+import { useMemo } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { usePhaseJob } from '@/lib/usePhaseJob'
 import { PhaseLayout } from '@/components/ui/PhaseLayout'
@@ -9,8 +10,20 @@ export default function Phase3Page() {
   const router = useRouter()
   const projectId = params.id as string
 
-  const { result, isProcessing, isComplete, isFailed, trigger, progress, error } =
+  const { result, isProcessing, isComplete, isFailed, trigger, progress, error, projectState } =
     usePhaseJob({ projectId, phase: 3 })
+
+  // Load Phase 2 proposals from project state for proper data flow
+  const phase2Proposal = useMemo(() => {
+    const phase2Result = projectState?.phase_results?.[2]?.raw_json
+    if (!phase2Result) return null
+    const proposals = phase2Result.proposals || []
+    return proposals[0] || null
+  }, [projectState])
+
+  const handleTrigger = () => {
+    trigger({ selected_proposal: phase2Proposal || {} })
+  }
 
   const mappings = result?.sheet_mappings || result?.mappings || []
 
@@ -34,7 +47,7 @@ export default function Phase3Page() {
         <div className="text-center py-12 bg-gray-50 rounded-lg border border-dashed border-gray-300">
           <p className="text-gray-500 mb-4">Phase 3 マッピングを開始してください</p>
           <button
-            onClick={() => trigger({ selected_proposal: {} })}
+            onClick={handleTrigger}
             className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700"
           >
             テンプレートマッピングを実行
@@ -54,7 +67,7 @@ export default function Phase3Page() {
       {isFailed && (
         <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
           <p className="text-sm text-red-700">マッピングに失敗しました: {error}</p>
-          <button onClick={() => trigger({ selected_proposal: {} })} className="mt-2 text-sm text-red-600 hover:underline">再試行</button>
+          <button onClick={handleTrigger} className="mt-2 text-sm text-red-600 hover:underline">再試行</button>
         </div>
       )}
 
