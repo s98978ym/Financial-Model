@@ -45,10 +45,17 @@ async function proxy(req: NextRequest) {
     // Buffer the full response to avoid stream truncation in Node.js runtime
     const responseBody = await res.text()
 
+    // Strip headers that become stale after decompression/buffering.
+    // content-length from backend reflects compressed size; letting
+    // NextResponse recalculate it from the actual body prevents truncation.
     const responseHeaders = new Headers()
     res.headers.forEach((value, key) => {
       if (
-        !['transfer-encoding', 'content-encoding'].includes(key.toLowerCase())
+        ![
+          'transfer-encoding',
+          'content-encoding',
+          'content-length',
+        ].includes(key.toLowerCase())
       ) {
         responseHeaders.set(key, value)
       }
