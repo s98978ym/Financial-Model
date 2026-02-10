@@ -21,6 +21,7 @@ COPY services/__init__.py /app/services/__init__.py
 COPY services/api/ /app/services/api/
 COPY services/worker/__init__.py /app/services/worker/__init__.py
 COPY services/worker/celery_app.py /app/services/worker/celery_app.py
+COPY services/worker/tasks/ /app/services/worker/tasks/
 COPY templates/ /app/templates/
 COPY pyproject.toml /app/pyproject.toml
 
