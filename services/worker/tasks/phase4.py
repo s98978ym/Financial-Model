@@ -80,7 +80,7 @@ def run_model_design(self, job_id: str):
         db.update_job(
             job_id, status="completed", progress=100,
             log_msg="Model design complete",
-            result_ref=f"phase_result:{run_id}:4",
+            result_ref=run_id,
         )
 
         return {"status": "completed", "job_id": job_id}
