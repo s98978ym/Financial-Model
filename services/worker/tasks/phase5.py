@@ -82,12 +82,12 @@ def run_parameter_extraction(self, job_id: str):
 
         # --- Store result ---
         result_dict = result.to_dict() if hasattr(result, "to_dict") else json.loads(json.dumps(result, default=str))
-        db.save_phase_result(run_id=run_id, phase=5, raw_json=result_dict)
+        pr = db.save_phase_result(run_id=run_id, phase=5, raw_json=result_dict)
 
         db.update_job(
             job_id, status="completed", progress=100,
             log_msg="Parameter extraction complete",
-            result_ref=run_id,
+            result_ref=pr["id"],
         )
 
         return {"status": "completed", "job_id": job_id}
