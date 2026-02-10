@@ -6,8 +6,17 @@
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
+// In production, use Next.js rewrites proxy (/api/v1/*) to avoid CORS.
+// In local dev, call the backend directly.
+const isServer = typeof window === 'undefined'
+const API_PREFIX = isServer
+  ? `${BASE_URL}/v1`                          // SSR: direct
+  : (BASE_URL.includes('localhost')
+      ? `${BASE_URL}/v1`                       // local dev: direct
+      : '/api/v1')                             // production: via Next.js rewrite proxy
+
 async function fetchAPI(path: string, options: RequestInit = {}): Promise<any> {
-  const url = `${BASE_URL}/v1${path}`
+  const url = `${API_PREFIX}${path}`
   const res = await fetch(url, {
     headers: {
       'Content-Type': 'application/json',
@@ -35,16 +44,19 @@ export const api = {
 
   getProjectState: (id: string) => fetchAPI(`/projects/${id}/state`),
 
-  // Documents
+  // Documents (use API_PREFIX for proxy, no Content-Type header for FormData)
   uploadDocument: (projectId: string, body: { kind: string; text?: string }) => {
     const formData = new FormData()
     formData.append('project_id', projectId)
     formData.append('kind', body.kind)
     if (body.text) formData.append('text', body.text)
-    return fetch(`${BASE_URL}/v1/documents/upload`, {
+    return fetch(`${API_PREFIX}/documents/upload`, {
       method: 'POST',
       body: formData,
-    }).then((r) => r.json())
+    }).then(async (r) => {
+      if (!r.ok) throw new Error(`Upload failed: ${r.status}`)
+      return r.json()
+    })
   },
 
   uploadDocumentFile: (projectId: string, file: File) => {
@@ -52,10 +64,13 @@ export const api = {
     formData.append('project_id', projectId)
     formData.append('kind', 'file')
     formData.append('file', file)
-    return fetch(`${BASE_URL}/v1/documents/upload`, {
+    return fetch(`${API_PREFIX}/documents/upload`, {
       method: 'POST',
       body: formData,
-    }).then((r) => r.json())
+    }).then(async (r) => {
+      if (!r.ok) throw new Error(`Upload failed: ${r.status}`)
+      return r.json()
+    })
   },
 
   // Phases
@@ -83,7 +98,7 @@ export const api = {
     fetchAPI('/export/excel', { method: 'POST', body: JSON.stringify(body) }),
 
   downloadExcel: (jobId: string) =>
-    `${BASE_URL}/v1/export/download/${jobId}`,
+    `${API_PREFIX}/export/download/${jobId}`,
 
   // Jobs
   getJob: (jobId: string) => fetchAPI(`/jobs/${jobId}`),
