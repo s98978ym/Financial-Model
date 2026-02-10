@@ -93,8 +93,14 @@ export const api = {
   downloadExcel: (jobId: string) =>
     `${API_BASE}/export/download/${jobId}`,
 
-  // Jobs
-  getJob: (jobId: string) => fetchAPI(`/jobs/${jobId}`),
+  // Jobs (return failed status on 404 so polling stops gracefully)
+  getJob: (jobId: string) =>
+    fetchAPI(`/jobs/${jobId}`).catch((err) => {
+      if (err.message?.includes('404')) {
+        return { status: 'failed', error_msg: 'Job not found (server restarted?)' }
+      }
+      throw err
+    }),
 }
 
 /**
