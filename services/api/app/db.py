@@ -27,13 +27,18 @@ DATABASE_URL = os.environ.get("DATABASE_URL", "")
 # ---------------------------------------------------------------------------
 
 _pool = None
+_pool_init_done = False  # True once we've attempted to connect (success or failure)
 
 
 def _get_pool():
-    global _pool
+    global _pool, _pool_init_done
     if _pool is not None:
         return _pool
+    if _pool_init_done:
+        return None  # Already tried and failed — don't retry on every request
+    _pool_init_done = True
     if not DATABASE_URL:
+        logger.info("No DATABASE_URL set — using in-memory fallback")
         return None
     try:
         import psycopg2
@@ -41,8 +46,9 @@ def _get_pool():
 
         _pool = pg_pool.ThreadedConnectionPool(
             minconn=1,
-            maxconn=5,
+            maxconn=3,
             dsn=DATABASE_URL,
+            connect_timeout=5,
         )
         logger.info("PostgreSQL connection pool created")
         return _pool
