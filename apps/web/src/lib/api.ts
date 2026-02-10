@@ -10,13 +10,21 @@ const API_BASE = `${BASE_URL}/v1`
 
 async function fetchAPI(path: string, options: RequestInit = {}): Promise<any> {
   const url = `${API_BASE}${path}`
-  const res = await fetch(url, {
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
-    ...options,
-  })
+  let res: Response
+  try {
+    res = await fetch(url, {
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+      ...options,
+    })
+  } catch (err) {
+    // Network / CORS error — show actual URL for debugging
+    throw new Error(
+      `${err instanceof Error ? err.message : 'Network error'} → ${url}`
+    )
+  }
 
   if (!res.ok) {
     const error = await res.json().catch(() => ({ error: { message: res.statusText } }))
@@ -93,8 +101,14 @@ export const api = {
   downloadExcel: (jobId: string) =>
     `${API_BASE}/export/download/${jobId}`,
 
-  // Jobs
-  getJob: (jobId: string) => fetchAPI(`/jobs/${jobId}`),
+  // Jobs (return failed status on 404 so polling stops gracefully)
+  getJob: (jobId: string) =>
+    fetchAPI(`/jobs/${jobId}`).catch((err) => {
+      if (err.message?.includes('404')) {
+        return { status: 'failed', error_msg: 'Job not found (server restarted?)' }
+      }
+      throw err
+    }),
 }
 
 /**
