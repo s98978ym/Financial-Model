@@ -22,7 +22,7 @@ services:
       - key: SUPABASE_SERVICE_KEY
         sync: false  # Supabase service role key
       - key: CORS_ORIGINS
-        value: "https://plgenerator.vercel.app"
+        value: "https://pl-generator.vercel.app"
     healthCheckPath: /health
     plan: free
 

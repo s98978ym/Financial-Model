@@ -29,7 +29,7 @@ app = FastAPI(
 # ---------------------------------------------------------------------------
 ALLOWED_ORIGINS = os.environ.get(
     "CORS_ORIGINS",
-    "http://localhost:3000,https://plgenerator.vercel.app",
+    "http://localhost:3000,https://pl-generator.vercel.app",
 ).split(",")
 
 app.add_middleware(
