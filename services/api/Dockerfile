@@ -17,7 +17,10 @@ RUN pip install --no-cache-dir -r services/api/requirements.txt
 COPY core/ /app/core/
 COPY shared/ /app/shared/
 COPY src/ /app/src/
+COPY services/__init__.py /app/services/__init__.py
 COPY services/api/ /app/services/api/
+COPY services/worker/__init__.py /app/services/worker/__init__.py
+COPY services/worker/celery_app.py /app/services/worker/celery_app.py
 COPY templates/ /app/templates/
 COPY pyproject.toml /app/pyproject.toml
 

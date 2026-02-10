@@ -2,16 +2,15 @@
 
 from __future__ import annotations
 
-import uuid
-from datetime import datetime, timezone
-from typing import Dict, Optional
+import logging
+from typing import Optional
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
-router = APIRouter()
+from .. import db
 
-# In-memory store for MVP
-_documents: Dict[str, dict] = {}
+logger = logging.getLogger(__name__)
+router = APIRouter()
 
 
 @router.post("/documents/upload", status_code=201)
@@ -22,21 +21,14 @@ async def upload_document(
     file: Optional[UploadFile] = File(None),
 ):
     """Upload a document (file or text paste)."""
-    doc_id = f"doc_{uuid.uuid4().hex[:12]}"
-    now = datetime.now(timezone.utc).isoformat()
-
     if kind == "text" and text:
-        doc = {
-            "id": doc_id,
-            "project_id": project_id,
-            "kind": "text",
-            "filename": None,
-            "size_bytes": len(text.encode("utf-8")),
-            "status": "uploaded",
-            "extracted_chars": len(text),
-            "extracted_text": text,
-            "created_at": now,
-        }
+        doc = db.create_document(
+            project_id=project_id,
+            kind="text",
+            filename="",
+            extracted_text=text,
+            meta_json={"size_bytes": len(text.encode("utf-8"))},
+        )
     elif kind == "file" and file:
         content = await file.read()
         if len(content) > 20 * 1024 * 1024:  # 20MB limit
@@ -44,17 +36,28 @@ async def upload_document(
                 status_code=413,
                 detail={"code": "FILE_TOO_LARGE", "message": "ファイルサイズは20MB以下にしてください"},
             )
-        doc = {
-            "id": doc_id,
-            "project_id": project_id,
-            "kind": "file",
-            "filename": file.filename,
-            "size_bytes": len(content),
-            "status": "uploaded",
-            "extracted_chars": 0,
-            "raw_content": content,  # In production: save to Supabase Storage
-            "created_at": now,
-        }
+
+        # Upload to Supabase Storage (or local fallback)
+        storage_path = ""
+        try:
+            from core.storage import upload_file
+            content_type = file.content_type or "application/octet-stream"
+            storage_path = upload_file(
+                project_id=project_id,
+                filename=file.filename or "upload",
+                content=content,
+                content_type=content_type,
+            )
+        except Exception as e:
+            logger.warning("Storage upload failed: %s — continuing without storage", e)
+
+        doc = db.create_document(
+            project_id=project_id,
+            kind="file",
+            filename=file.filename or "",
+            storage_path=storage_path,
+            meta_json={"size_bytes": len(content)},
+        )
     else:
         raise HTTPException(
             status_code=422,
@@ -64,23 +67,20 @@ async def upload_document(
             },
         )
 
-    _documents[doc_id] = doc
-
-    # Return without raw_content
     return {
         "id": doc["id"],
         "project_id": doc["project_id"],
         "kind": doc["kind"],
         "filename": doc.get("filename"),
-        "size_bytes": doc["size_bytes"],
-        "status": doc["status"],
-        "extracted_chars": doc["extracted_chars"],
+        "size_bytes": doc.get("meta_json", {}).get("size_bytes", 0),
+        "status": "uploaded",
+        "extracted_chars": len(doc.get("extracted_text") or ""),
     }
 
 
 def get_document(doc_id: str) -> dict:
     """Get document by ID (internal helper)."""
-    doc = _documents.get(doc_id)
+    doc = db.get_document(doc_id)
     if not doc:
         raise HTTPException(status_code=404, detail={"code": "DOCUMENT_NOT_FOUND"})
     return doc

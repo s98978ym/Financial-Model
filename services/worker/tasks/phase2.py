@@ -1,12 +1,12 @@
 """Celery task for Phase 2: Business Model Analysis.
 
-Wraps core.agents.business_model_analyzer with job progress tracking.
+Wraps src.agents.business_model_analyzer with job progress tracking.
 """
 
 from __future__ import annotations
 
+import json
 import logging
-import time
 
 from services.worker.celery_app import app
 
@@ -15,45 +15,65 @@ logger = logging.getLogger(__name__)
 
 @app.task(bind=True, name="tasks.phase2.run_bm_analysis")
 def run_bm_analysis(self, job_id: str):
-    """Execute Phase 2 Business Model Analysis as a Celery task.
-
-    Parameters
-    ----------
-    job_id : str
-        The job ID to update progress against.
-    """
-    from core.providers import AnthropicProvider, AuditLogger
+    """Execute Phase 2 Business Model Analysis as a Celery task."""
+    from core.providers import AnthropicProvider, ProviderAdapter
     from core.providers.guards import DocumentTruncation
+    from services.api.app import db
+    from src.agents.business_model_analyzer import BusinessModelAnalyzer
 
     try:
-        # Update job status to running
-        self.update_state(state="STARTED", meta={"progress": 0, "phase": 2})
+        # --- Load job & payload ---
+        job = db.get_job(job_id)
+        if not job:
+            raise ValueError(f"Job not found: {job_id}")
 
-        # TODO: Load job payload from DB/Redis
-        # payload = load_job_payload(job_id)
-        # document_text = load_document_text(payload["document_id"])
-        # feedback = payload.get("feedback", "")
+        db.update_job(job_id, status="running", progress=5, log_msg="Loading data")
 
-        # For now, placeholder
-        logger.info("Phase 2 task started for job %s", job_id)
+        payload = job.get("payload", {})
+        if not payload and job.get("logs"):
+            for log in job["logs"]:
+                if isinstance(log, dict) and "payload" in log:
+                    payload = log["payload"]
+                    break
 
-        # Initialize provider
+        document_id = payload.get("document_id")
+        feedback = payload.get("feedback", "")
+        run_id = job["run_id"]
+
+        # --- Load document text ---
+        doc = db.get_document(document_id) if document_id else None
+        document_text = (doc.get("extracted_text") or "") if doc else ""
+        if not document_text:
+            db.update_job(job_id, status="failed", error_msg="Document text is empty")
+            return {"status": "failed", "job_id": job_id}
+
+        db.update_job(job_id, progress=10, log_msg="Document loaded")
+
+        # --- Truncate for Phase 2 (70% front + 25% back) ---
+        truncated = DocumentTruncation.for_phase2(document_text)
+        db.update_job(job_id, progress=15, log_msg="Document truncated for analysis")
+
+        # --- Run BM Analysis ---
         provider = AnthropicProvider()
-        audit = AuditLogger()
+        adapter = ProviderAdapter(provider)
+        analyzer = BusinessModelAnalyzer(llm_client=adapter)
 
-        # TODO: Wire up actual BM analysis
-        # truncated = DocumentTruncation.for_phase2(document_text)
-        # analyzer = BusinessModelAnalyzer(provider)
-        # result = analyzer.analyze(truncated, feedback=feedback)
+        db.update_job(job_id, progress=20, log_msg="Starting LLM analysis")
+        result = analyzer.analyze(truncated, feedback=feedback)
 
-        self.update_state(state="SUCCESS", meta={"progress": 100, "phase": 2})
+        # --- Store result ---
+        result_dict = result.to_dict() if hasattr(result, "to_dict") else json.loads(json.dumps(result, default=str))
+        db.save_phase_result(run_id=run_id, phase=2, raw_json=result_dict)
+
+        db.update_job(
+            job_id, status="completed", progress=100,
+            log_msg="Analysis complete",
+            result_ref=f"phase_result:{run_id}:2",
+        )
 
         return {"status": "completed", "job_id": job_id}
 
     except Exception as e:
         logger.error("Phase 2 task failed for job %s: %s", job_id, e)
-        self.update_state(
-            state="FAILURE",
-            meta={"progress": 0, "phase": 2, "error": str(e)},
-        )
+        db.update_job(job_id, status="failed", error_msg=str(e))
         raise

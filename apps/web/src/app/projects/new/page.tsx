@@ -19,10 +19,20 @@ export default function NewProjectPage() {
       const project = await api.createProject({ name: name || '新規プロジェクト' })
 
       // 2. Upload document
+      let doc: any = null
       if (uploadMode === 'text' && text) {
-        await api.uploadDocument(project.id, { kind: 'text', text })
+        doc = await api.uploadDocument(project.id, { kind: 'text', text })
       } else if (uploadMode === 'file' && file) {
-        await api.uploadDocumentFile(project.id, file)
+        doc = await api.uploadDocumentFile(project.id, file)
+      }
+
+      // 3. Run Phase 1 scan (template scan + text extraction)
+      if (doc?.id) {
+        await api.phase1Scan({
+          project_id: project.id,
+          document_id: doc.id,
+          template_id: 'v2_ib_grade',
+        })
       }
 
       return project

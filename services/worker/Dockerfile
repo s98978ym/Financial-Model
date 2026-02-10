@@ -17,7 +17,9 @@ RUN pip install --no-cache-dir -r services/worker/requirements.txt
 COPY core/ /app/core/
 COPY shared/ /app/shared/
 COPY src/ /app/src/
+COPY services/__init__.py /app/services/__init__.py
 COPY services/worker/ /app/services/worker/
+COPY services/api/ /app/services/api/
 COPY templates/ /app/templates/
 COPY pyproject.toml /app/pyproject.toml
 
