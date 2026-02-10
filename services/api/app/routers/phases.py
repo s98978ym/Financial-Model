@@ -125,15 +125,26 @@ async def phase1_scan(body: dict):
         try:
             from core.storage import download_file
             from src.ingest.reader import read_document
+            import gc
             import tempfile
 
             content = download_file(doc["storage_path"])
             if content:
+                file_size_mb = len(content) / (1024 * 1024)
+                logger.info(
+                    "Phase 1: extracting text from %.1f MB file: %s",
+                    file_size_mb, doc.get("filename", "unknown"),
+                )
+
                 filename = doc.get("filename") or "upload.pdf"
                 suffix = os.path.splitext(filename)[1] or ".pdf"
                 with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
                     tmp.write(content)
                     tmp_path = tmp.name
+
+                # Release the file content from memory before extraction
+                del content
+                gc.collect()
 
                 try:
                     doc_content = read_document(tmp_path)
@@ -145,6 +156,7 @@ async def phase1_scan(body: dict):
                     }
                 finally:
                     os.unlink(tmp_path)
+                    gc.collect()
             else:
                 doc_summary["error"] = "File content not found in storage"
         except Exception as e:
