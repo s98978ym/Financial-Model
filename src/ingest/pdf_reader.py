@@ -853,6 +853,8 @@ def _can_ocr() -> bool:
 # ---------------------------------------------------------------------------
 
 _MIN_USEFUL_CHARS_PER_PAGE = 20  # below this, extraction probably failed
+_MAX_FILE_SIZE_FOR_OCR_MB = 2  # Skip OCR for files above this size
+_MAX_BACKENDS_TO_TRY = 3  # Limit backend attempts for large files
 
 
 def extract_pdf(file_path: str) -> DocumentContent:
@@ -886,6 +888,10 @@ def extract_pdf(file_path: str) -> DocumentContent:
     if not path.is_file():
         raise ValueError(f"Path is not a file: {file_path}")
 
+    # Log file size for memory management
+    file_size_mb = path.stat().st_size / (1024 * 1024)
+    logger.info("PDF file size: %.1f MB \u2014 %s", file_size_mb, path.name)
+
     # Build ordered list of extraction backends
     backends = []
     if _HAS_PDFPLUMBER:
@@ -898,6 +904,11 @@ def extract_pdf(file_path: str) -> DocumentContent:
         backends.append(("poppler", _extract_with_poppler))
     if _HAS_PYPDF2:
         backends.append(("PyPDF2", _extract_with_pypdf2))
+
+    # Limit backends for large files to save memory
+    if file_size_mb > _MAX_FILE_SIZE_FOR_OCR_MB and len(backends) > _MAX_BACKENDS_TO_TRY:
+        logger.info("Large file (%.1f MB) \u2014 limiting to %d backends", file_size_mb, _MAX_BACKENDS_TO_TRY)
+        backends = backends[:_MAX_BACKENDS_TO_TRY]
 
     if not backends:
         raise RuntimeError(
@@ -942,6 +953,16 @@ def extract_pdf(file_path: str) -> DocumentContent:
 
     # --- OCR fallback: all text backends failed or produced very little ---
     if best_chars < _MIN_USEFUL_CHARS_PER_PAGE:
+        # Skip OCR for large files to prevent OOM on limited-memory servers
+        if file_size_mb > _MAX_FILE_SIZE_FOR_OCR_MB:
+            logger.warning("Skipping OCR for large file (%.1f MB) to prevent OOM", file_size_mb)
+            if best_result is not None:
+                return best_result
+            return DocumentContent(
+                file_path=str(file_path), file_type="pdf",
+                pages=[PageContent(page_number=1, text="", tables=[], source_type="pdf")],
+                total_pages=1, metadata={}, source_filename=path.name,
+            )
         ocr_available = _can_ocr()
         logger.info(
             "All text extraction backends produced ≤%d chars (best: %d). "
