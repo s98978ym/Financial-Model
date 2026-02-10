@@ -79,7 +79,7 @@ def run_bm_analysis(self, job_id: str):
             status="completed",
             progress=100,
             log_msg="Analysis complete",
-            result_ref=f"phase_result:{run_id}:2",
+            result_ref=run_id,
         )
 
         return {"status": "completed", "job_id": job_id}
