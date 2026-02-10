@@ -59,9 +59,6 @@ export const PUT = proxy
 export const PATCH = proxy
 export const DELETE = proxy
 
-// Allow large file uploads (up to 50MB)
-export const config = {
-  api: {
-    bodyParser: false,
-  },
-}
+// Route Segment Config for App Router
+export const runtime = 'edge'
+export const maxDuration = 60
