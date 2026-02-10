@@ -2,11 +2,11 @@
 
 Wraps src.agents.business_model_analyzer with job progress tracking.
 """
-
 from __future__ import annotations
 
 import json
 import logging
+import traceback
 
 from services.worker.celery_app import app
 
@@ -26,7 +26,6 @@ def run_bm_analysis(self, job_id: str):
         job = db.get_job(job_id)
         if not job:
             raise ValueError(f"Job not found: {job_id}")
-
         db.update_job(job_id, status="running", progress=5, log_msg="Loading data")
 
         payload = job.get("payload", {})
@@ -43,6 +42,7 @@ def run_bm_analysis(self, job_id: str):
         # --- Load document text ---
         doc = db.get_document(document_id) if document_id else None
         document_text = (doc.get("extracted_text") or "") if doc else ""
+
         if not document_text:
             db.update_job(job_id, status="failed", error_msg="Document text is empty")
             return {"status": "failed", "job_id": job_id}
@@ -59,14 +59,25 @@ def run_bm_analysis(self, job_id: str):
         analyzer = BusinessModelAnalyzer(llm_client=adapter)
 
         db.update_job(job_id, progress=20, log_msg="Starting LLM analysis")
+
         result = analyzer.analyze(truncated, feedback=feedback)
 
         # --- Store result ---
-        result_dict = result.to_dict() if hasattr(result, "to_dict") else json.loads(json.dumps(result, default=str))
-        db.save_phase_result(run_id=run_id, phase=2, raw_json=result_dict)
+        # Use Pydantic v2 model_dump() for proper serialization
+        if hasattr(result, "model_dump"):
+            result_dict = result.model_dump()
+        elif hasattr(result, "dict"):
+            result_dict = result.dict()
+        elif hasattr(result, "to_dict"):
+            result_dict = result.to_dict()
+        else:
+            result_dict = json.loads(json.dumps(result, default=str))
 
+        db.save_phase_result(run_id=run_id, phase=2, raw_json=result_dict)
         db.update_job(
-            job_id, status="completed", progress=100,
+            job_id,
+            status="completed",
+            progress=100,
             log_msg="Analysis complete",
             result_ref=f"phase_result:{run_id}:2",
         )
@@ -74,6 +85,10 @@ def run_bm_analysis(self, job_id: str):
         return {"status": "completed", "job_id": job_id}
 
     except Exception as e:
-        logger.error("Phase 2 task failed for job %s: %s", job_id, e)
-        db.update_job(job_id, status="failed", error_msg=str(e))
+        tb = traceback.format_exc()
+        logger.error(
+            "Phase 2 task failed for job %s: %s\nException type: %s\nTraceback:\n%s",
+            job_id, e, type(e).__name__, tb,
+        )
+        db.update_job(job_id, status="failed", error_msg=f"{type(e).__name__}: {e}")
         raise
