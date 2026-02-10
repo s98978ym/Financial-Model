@@ -2,29 +2,43 @@
  * API client for PL Generator FastAPI backend.
  *
  * All requests go directly to the backend (CORS configured).
- * No server-side proxy — simplest and most reliable approach.
+ * Includes retry logic for Render free-tier cold starts (30-60s wake-up).
  */
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 const API_BASE = `${BASE_URL}/v1`
 
+/** Retry fetch up to `retries` times with exponential backoff. */
+async function fetchWithRetry(
+  url: string,
+  init: RequestInit,
+  retries = 2,
+  delayMs = 3000,
+): Promise<Response> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await fetch(url, init)
+    } catch (err) {
+      if (attempt >= retries) {
+        throw new Error(
+          `${err instanceof Error ? err.message : 'Network error'} → ${url}`
+        )
+      }
+      // Wait before retry (handles Render cold start)
+      await new Promise((r) => setTimeout(r, delayMs * (attempt + 1)))
+    }
+  }
+}
+
 async function fetchAPI(path: string, options: RequestInit = {}): Promise<any> {
   const url = `${API_BASE}${path}`
-  let res: Response
-  try {
-    res = await fetch(url, {
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
-      ...options,
-    })
-  } catch (err) {
-    // Network / CORS error — show actual URL for debugging
-    throw new Error(
-      `${err instanceof Error ? err.message : 'Network error'} → ${url}`
-    )
-  }
+  const res = await fetchWithRetry(url, {
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+    ...options,
+  })
 
   if (!res.ok) {
     const error = await res.json().catch(() => ({ error: { message: res.statusText } }))
@@ -51,7 +65,7 @@ export const api = {
     formData.append('project_id', projectId)
     formData.append('kind', body.kind)
     if (body.text) formData.append('text', body.text)
-    return fetch(`${API_BASE}/documents/upload`, {
+    return fetchWithRetry(`${API_BASE}/documents/upload`, {
       method: 'POST',
       body: formData,
     }).then(async (r) => {
@@ -65,7 +79,7 @@ export const api = {
     formData.append('project_id', projectId)
     formData.append('kind', 'file')
     formData.append('file', file)
-    return fetch(`${API_BASE}/documents/upload`, {
+    return fetchWithRetry(`${API_BASE}/documents/upload`, {
       method: 'POST',
       body: formData,
     }).then(async (r) => {
