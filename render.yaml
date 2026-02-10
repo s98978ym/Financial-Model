@@ -1,0 +1,45 @@
+# Render Blueprint — deploy from repo root
+# https://render.com/docs/blueprint-spec
+#
+# Usage: Connect this repo in Render dashboard → it auto-detects render.yaml
+# Then manually set environment variables marked sync: false
+
+services:
+  - type: web
+    name: plgen-api
+    runtime: docker
+    dockerfilePath: services/api/Dockerfile
+    dockerContext: .
+    envVars:
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+    healthCheckPath: /health
+    plan: free
+
+  - type: worker
+    name: plgen-worker
+    runtime: docker
+    dockerfilePath: services/worker/Dockerfile
+    dockerContext: .
+    envVars:
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+    plan: free
