@@ -94,6 +94,7 @@ export function usePhaseJob({ projectId, phase, autoLoad = true }: UsePhaseJobOp
 
   // Common error handler for mutations
   const onMutationError = (err: Error) => {
+    console.error(`[usePhaseJob] Phase ${phase} mutation error:`, err.message)
     setState((prev) => ({
       ...prev,
       status: 'failed',
