@@ -93,6 +93,6 @@ def run_parameter_extraction(self, job_id: str):
         return {"status": "completed", "job_id": job_id}
 
     except Exception as e:
-        logger.error("Phase 5 task failed for job %s: %s", job_id, e)
+        logger.exception("Phase 5 task failed for job %s", job_id)
         db.update_job(job_id, status="failed", error_msg=str(e))
         raise

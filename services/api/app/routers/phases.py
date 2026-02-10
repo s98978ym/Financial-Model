@@ -52,10 +52,14 @@ def _register_task(task_name: str):
 def _dispatch_celery(task_name: str, job_id: str):
     """Dispatch a Celery task if enabled, otherwise run synchronously in background thread."""
     if _CELERY_ENABLED:
-        from services.worker.celery_app import app as celery_app
-        celery_app.send_task(task_name, args=[job_id])
-        logger.info("Dispatched %s for job %s via Celery", task_name, job_id)
-        return
+        try:
+            from services.worker.celery_app import app as celery_app
+            celery_app.send_task(task_name, args=[job_id])
+            logger.info("Dispatched %s for job %s via Celery", task_name, job_id)
+            return
+        except Exception as e:
+            logger.exception("Celery dispatch failed for %s (job %s), falling back to sync", task_name, job_id)
+            # Fall through to sync fallback instead of leaving job stuck in "queued"
 
     # Sync fallback: run task in background thread
     fn = _register_task(task_name)

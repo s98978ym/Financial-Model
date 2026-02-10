@@ -115,13 +115,11 @@ export const api = {
   downloadExcel: (jobId: string) =>
     `${API_BASE}/export/download/${jobId}`,
 
-  // Jobs (return failed status on 404 so polling stops gracefully)
+  // Jobs (return failed status on errors so polling stops gracefully)
   getJob: (jobId: string) =>
     fetchAPI(`/jobs/${jobId}`).catch((err) => {
-      if (err.message?.includes('404')) {
-        return { status: 'failed', error_msg: 'Job not found (server restarted?)' }
-      }
-      throw err
+      // Treat 404 and transient 5xx errors as failed so polling stops
+      return { status: 'failed', error_msg: err.message || 'Job fetch failed' }
     }),
 }
 
@@ -130,7 +128,7 @@ export const api = {
  * Use with TanStack Query's refetchInterval.
  */
 export function shouldPollJob(data: any): number | false {
-  if (!data) return 2000
+  if (!data) return false // No data yet (initial load) — don't poll
   if (data.status === 'queued' || data.status === 'running') return 2000
   return false // Stop polling when completed/failed
 }

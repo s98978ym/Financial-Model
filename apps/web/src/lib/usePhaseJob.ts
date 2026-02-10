@@ -4,7 +4,7 @@
  * Handles: trigger phase → poll job → return result.
  */
 
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api, shouldPollJob } from './api'
 
@@ -60,22 +60,29 @@ export function usePhaseJob({ projectId, phase, autoLoad = true }: UsePhaseJobOp
     refetchInterval: (query) => shouldPollJob(query.state.data),
   })
 
+  // Track whether we've already invalidated for this job completion
+  const completionInvalidated = useRef(false)
+
   // Update state when job status changes
   useEffect(() => {
     if (!jobData) return
 
     if (jobData.status === 'completed') {
-      // Job is done — refetch project state to populate result
-      queryClient.invalidateQueries({ queryKey: ['projectState', projectId] })
-      // Keep status as 'running' until project state provides the result
-      // (avoids flash of "completed but no data")
+      // Job is done — refetch project state to populate result (only once)
+      if (!completionInvalidated.current) {
+        completionInvalidated.current = true
+        queryClient.invalidateQueries({ queryKey: ['projectState', projectId] })
+      }
+      // Keep as 'running' briefly while waiting for projectState to arrive with result
+      // But set a maximum wait — after projectState refetch, the autoLoad effect will set 'completed'
       setState((prev) => ({
         ...prev,
-        status: prev.result ? 'completed' : 'running',
-        progress: prev.result ? 100 : 95,
+        status: prev.result != null ? 'completed' : 'running',
+        progress: prev.result != null ? 100 : 95,
         error: null,
       }))
     } else {
+      completionInvalidated.current = false
       setState((prev) => ({
         ...prev,
         status: jobData.status,
