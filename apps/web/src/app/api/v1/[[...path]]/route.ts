@@ -30,10 +30,9 @@ async function proxy(req: NextRequest) {
   })
 
   // Buffer body for non-GET requests
-  let body: Buffer | undefined
+  let body: BodyInit | undefined
   if (req.method !== 'GET' && req.method !== 'HEAD') {
-    const ab = await req.arrayBuffer()
-    body = Buffer.from(ab)
+    body = await req.text()
   }
 
   try {
