@@ -97,10 +97,17 @@ class AnthropicProvider(LLMProvider):
                     "messages": [{"role": "user", "content": user_prompt}],
                 }
 
-                with self.client.messages.stream(**kwargs) as stream:
-                    response = stream.get_final_message()
+                # Use non-streaming for reliability (background tasks don't need streaming)
+                response = self.client.messages.create(**kwargs)
 
                 latency_ms = int((time.time() - t0) * 1000)
+
+                if not response.content:
+                    raise LLMError(
+                        "Claude API returned empty content",
+                        provider=self.provider_name,
+                        retryable=True,
+                    )
                 raw_text = response.content[0].text
                 stop_reason = getattr(response, "stop_reason", "unknown")
 

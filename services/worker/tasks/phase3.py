@@ -34,12 +34,11 @@ def run_template_mapping(self, job_id: str):
 
         run_id = job["run_id"]
         selected_proposal = payload.get("selected_proposal", {})
-        catalog_summary = payload.get("catalog_summary", {})
 
         # --- Load Phase 2 result (BM Analysis) ---
         phase2_result = db.get_phase_result(run_id, phase=2)
         if not phase2_result:
-            db.update_job(job_id, status="failed", error_msg="Phase 2 result not found")
+            db.update_job(job_id, status="failed", error_msg="Phase 2 result not found — run Phase 2 first")
             return {"status": "failed", "job_id": job_id}
 
         analysis_json = phase2_result.get("raw_json", {})
@@ -48,24 +47,39 @@ def run_template_mapping(self, job_id: str):
             proposals = analysis_json.get("proposals", [])
             selected_proposal = proposals[0] if proposals else {}
 
-        catalog_items = catalog_summary.get("items", [])
+        # --- Load Phase 1 catalog (template cells) ---
+        phase1_result = db.get_phase_result(run_id, phase=1)
+        catalog_items = []
+        if phase1_result:
+            p1_json = phase1_result.get("raw_json", {})
+            catalog_items = p1_json.get("catalog", {}).get("items", [])
+        logger.info("Phase 3: loaded %d catalog items from Phase 1", len(catalog_items))
 
-        db.update_job(job_id, progress=15, log_msg="Phase 2 data loaded")
+        db.update_job(job_id, progress=15, log_msg=f"Data loaded: {len(catalog_items)} catalog items")
 
         # --- Run Template Mapping ---
         provider = AnthropicProvider()
         adapter = ProviderAdapter(provider)
         mapper = TemplateMapper(llm_client=adapter)
 
-        db.update_job(job_id, progress=20, log_msg="Starting template mapping")
+        db.update_job(job_id, progress=20, log_msg="Starting template mapping (calling Claude API)")
+
+        # Pass selected_proposal as dict (NOT json.dumps — mapper handles serialization)
         result = mapper.map_structure(
-            analysis_json=json.dumps(selected_proposal) if isinstance(selected_proposal, dict) else selected_proposal,
+            analysis_json=selected_proposal,
             catalog_items=catalog_items,
             feedback="",
         )
 
         # --- Store result ---
-        result_dict = result.to_dict() if hasattr(result, "to_dict") else json.loads(json.dumps(result, default=str))
+        # Pydantic v2 uses model_dump(), not to_dict()
+        if hasattr(result, "model_dump"):
+            result_dict = result.model_dump()
+        elif hasattr(result, "dict"):
+            result_dict = result.dict()
+        else:
+            result_dict = json.loads(json.dumps(result, default=str))
+
         pr = db.save_phase_result(run_id=run_id, phase=3, raw_json=result_dict)
 
         db.update_job(
@@ -78,5 +92,6 @@ def run_template_mapping(self, job_id: str):
 
     except Exception as e:
         logger.exception("Phase 3 task failed for job %s", job_id)
-        db.update_job(job_id, status="failed", error_msg=str(e))
+        error_detail = f"{type(e).__name__}: {e}"
+        db.update_job(job_id, status="failed", error_msg=error_detail)
         raise

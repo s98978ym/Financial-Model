@@ -74,14 +74,20 @@ def run_parameter_extraction(self, job_id: str):
         extractor = ParameterExtractorAgent(llm_client=adapter)
 
         db.update_job(job_id, progress=20, log_msg="Starting parameter extraction")
+        # Pass dict directly (agent handles serialization internally)
         result = extractor.extract_values(
-            model_design_json=json.dumps(model_design_json),
+            model_design_json=model_design_json,
             document_text=truncated,
             feedback="",
         )
 
         # --- Store result ---
-        result_dict = result.to_dict() if hasattr(result, "to_dict") else json.loads(json.dumps(result, default=str))
+        if hasattr(result, "model_dump"):
+            result_dict = result.model_dump()
+        elif hasattr(result, "dict"):
+            result_dict = result.dict()
+        else:
+            result_dict = json.loads(json.dumps(result, default=str))
         pr = db.save_phase_result(run_id=run_id, phase=5, raw_json=result_dict)
 
         db.update_job(
@@ -94,5 +100,5 @@ def run_parameter_extraction(self, job_id: str):
 
     except Exception as e:
         logger.exception("Phase 5 task failed for job %s", job_id)
-        db.update_job(job_id, status="failed", error_msg=str(e))
+        db.update_job(job_id, status="failed", error_msg=f"{type(e).__name__}: {e}")
         raise
