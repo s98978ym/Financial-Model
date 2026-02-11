@@ -97,8 +97,9 @@ class AnthropicProvider(LLMProvider):
                     "messages": [{"role": "user", "content": user_prompt}],
                 }
 
-                # Use non-streaming for reliability (background tasks don't need streaming)
-                response = self.client.messages.create(**kwargs)
+                # Use streaming (required by Anthropic SDK for long requests)
+                with self.client.messages.stream(**kwargs) as stream:
+                    response = stream.get_final_message()
 
                 latency_ms = int((time.time() - t0) * 1000)
 
