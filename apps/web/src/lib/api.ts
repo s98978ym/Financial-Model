@@ -12,8 +12,8 @@ const API_BASE = `${BASE_URL}/v1`
 async function fetchWithRetry(
   url: string,
   init: RequestInit,
-  retries = 2,
-  delayMs = 3000,
+  retries = 4,
+  delayMs = 5000,
 ): Promise<Response> {
   for (let attempt = 0; ; attempt++) {
     try {
@@ -24,10 +24,19 @@ async function fetchWithRetry(
           `${err instanceof Error ? err.message : 'Network error'} → ${url}`
         )
       }
-      // Wait before retry (handles Render cold start)
+      console.log(`[API] Retry ${attempt + 1}/${retries} after ${delayMs * (attempt + 1)}ms: ${url}`)
+      // Wait before retry (handles Render cold start: 30-60s)
       await new Promise((r) => setTimeout(r, delayMs * (attempt + 1)))
     }
   }
+}
+
+/** Warm up the Render backend on page load (fire-and-forget). */
+let _warmedUp = false
+export function warmUpBackend() {
+  if (_warmedUp) return
+  _warmedUp = true
+  fetch(`${BASE_URL}/health`).catch(() => {})
 }
 
 async function fetchAPI(path: string, options: RequestInit = {}): Promise<any> {
