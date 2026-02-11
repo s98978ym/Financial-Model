@@ -6,6 +6,7 @@ import io
 import logging
 import os
 import tempfile
+import threading
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
@@ -47,12 +48,15 @@ async def export_excel(body: dict):
     })
 
     if _CELERY_ENABLED:
-        from services.worker.celery_app import app as celery_app
-        celery_app.send_task("tasks.export.generate_excel", args=[job["id"]])
-        logger.info("Dispatched export task for job %s", job["id"])
+        try:
+            from services.worker.celery_app import app as celery_app
+            celery_app.send_task("tasks.export.generate_excel", args=[job["id"]])
+            logger.info("Dispatched export task for job %s", job["id"])
+        except Exception as e:
+            logger.exception("Celery dispatch failed for export (job %s), falling back to sync", job["id"])
+            _dispatch_export_sync(job["id"], run["id"], body)
     else:
-        # Local dev: generate synchronously using recalc engine
-        _generate_local_excel(job["id"], run["id"], body)
+        _dispatch_export_sync(job["id"], run["id"], body)
 
     return {
         "job_id": job["id"],
@@ -124,6 +128,19 @@ async def download_excel(job_id: str):
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": disposition},
     )
+
+
+def _dispatch_export_sync(job_id: str, run_id: str, body: dict):
+    """Run Excel generation in a background thread (non-blocking)."""
+    def _run():
+        try:
+            _generate_local_excel(job_id, run_id, body)
+        except Exception as e:
+            logger.exception("Sync export failed for job %s", job_id)
+            db.update_job(job_id, status="failed", error_msg=str(e))
+
+    thread = threading.Thread(target=_run, daemon=True)
+    thread.start()
 
 
 def _generate_local_excel(job_id: str, run_id: str, body: dict):

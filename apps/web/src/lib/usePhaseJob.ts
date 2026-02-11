@@ -4,7 +4,7 @@
  * Handles: trigger phase → poll job → return result.
  */
 
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api, shouldPollJob } from './api'
 
@@ -60,22 +60,29 @@ export function usePhaseJob({ projectId, phase, autoLoad = true }: UsePhaseJobOp
     refetchInterval: (query) => shouldPollJob(query.state.data),
   })
 
+  // Track whether we've already invalidated for this job completion
+  const completionInvalidated = useRef(false)
+
   // Update state when job status changes
   useEffect(() => {
     if (!jobData) return
 
     if (jobData.status === 'completed') {
-      // Job is done — refetch project state to populate result
-      queryClient.invalidateQueries({ queryKey: ['projectState', projectId] })
-      // Keep status as 'running' until project state provides the result
-      // (avoids flash of "completed but no data")
+      // Job is done — refetch project state to populate result (only once)
+      if (!completionInvalidated.current) {
+        completionInvalidated.current = true
+        queryClient.invalidateQueries({ queryKey: ['projectState', projectId] })
+      }
+      // Keep as 'running' briefly while waiting for projectState to arrive with result
+      // But set a maximum wait — after projectState refetch, the autoLoad effect will set 'completed'
       setState((prev) => ({
         ...prev,
-        status: prev.result ? 'completed' : 'running',
-        progress: prev.result ? 100 : 95,
+        status: prev.result != null ? 'completed' : 'running',
+        progress: prev.result != null ? 100 : 95,
         error: null,
       }))
     } else {
+      completionInvalidated.current = false
       setState((prev) => ({
         ...prev,
         status: jobData.status,
@@ -85,41 +92,57 @@ export function usePhaseJob({ projectId, phase, autoLoad = true }: UsePhaseJobOp
     }
   }, [jobData, projectId, queryClient])
 
+  // Common error handler for mutations
+  const onMutationError = (err: Error) => {
+    console.error(`[usePhaseJob] Phase ${phase} mutation error:`, err.message)
+    setState((prev) => ({
+      ...prev,
+      status: 'failed',
+      error: err.message || 'API call failed',
+    }))
+  }
+
   // Trigger functions for each phase
   const triggerPhase2 = useMutation({
     mutationFn: (body: { document_id: string; feedback?: string }) =>
       api.phase2Analyze({ project_id: projectId, ...body }),
     onSuccess: (data) => {
-      setState((prev) => ({ ...prev, jobId: data.job_id, status: 'queued', progress: 0 }))
+      setState((prev) => ({ ...prev, jobId: data.job_id, status: 'queued', progress: 0, error: null }))
     },
+    onError: onMutationError,
   })
 
   const triggerPhase3 = useMutation({
     mutationFn: (body: { selected_proposal: any; catalog_summary?: any }) =>
       api.phase3Map({ project_id: projectId, ...body }),
     onSuccess: (data) => {
-      setState((prev) => ({ ...prev, jobId: data.job_id, status: 'queued', progress: 0 }))
+      setState((prev) => ({ ...prev, jobId: data.job_id, status: 'queued', progress: 0, error: null }))
     },
+    onError: onMutationError,
   })
 
   const triggerPhase4 = useMutation({
     mutationFn: (body?: { edits?: any[] }) =>
       api.phase4Design({ project_id: projectId, ...(body || {}) }),
     onSuccess: (data) => {
-      setState((prev) => ({ ...prev, jobId: data.job_id, status: 'queued', progress: 0 }))
+      setState((prev) => ({ ...prev, jobId: data.job_id, status: 'queued', progress: 0, error: null }))
     },
+    onError: onMutationError,
   })
 
   const triggerPhase5 = useMutation({
     mutationFn: (body?: { edits?: any[]; document_excerpt_chars?: number }) =>
       api.phase5Extract({ project_id: projectId, ...(body || {}) }),
     onSuccess: (data) => {
-      setState((prev) => ({ ...prev, jobId: data.job_id, status: 'queued', progress: 0 }))
+      setState((prev) => ({ ...prev, jobId: data.job_id, status: 'queued', progress: 0, error: null }))
     },
+    onError: onMutationError,
   })
 
   const trigger = useCallback(
     (body?: any) => {
+      // Immediately show loading state
+      setState((prev) => ({ ...prev, status: 'running', progress: 0, error: null }))
       switch (phase) {
         case 2:
           return triggerPhase2.mutate(body)

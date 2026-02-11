@@ -22,44 +22,64 @@ router = APIRouter()
 # Celery dispatch is enabled when REDIS_URL is set
 _CELERY_ENABLED = bool(os.environ.get("REDIS_URL"))
 
-_TASK_REGISTRY = {
-    "tasks.phase2.run_bm_analysis": ("services.worker.tasks.phase2", "run_bm_analysis"),
-    "tasks.phase3.run_template_mapping": ("services.worker.tasks.phase3", "run_template_mapping"),
-    "tasks.phase4.run_model_design": ("services.worker.tasks.phase4", "run_model_design"),
-    "tasks.phase5.run_parameter_extraction": ("services.worker.tasks.phase5", "run_parameter_extraction"),
-}
+# Map Celery task names → actual task functions for sync fallback
+_TASK_FUNCTIONS = {}
+
+
+def _register_task(task_name: str):
+    """Lazily import and cache the task function."""
+    if task_name in _TASK_FUNCTIONS:
+        return _TASK_FUNCTIONS[task_name]
+    fn = None
+    try:
+        if "phase2" in task_name:
+            from services.worker.tasks.phase2 import run_bm_analysis
+            fn = run_bm_analysis
+        elif "phase3" in task_name:
+            from services.worker.tasks.phase3 import run_template_mapping
+            fn = run_template_mapping
+        elif "phase4" in task_name:
+            from services.worker.tasks.phase4 import run_model_design
+            fn = run_model_design
+        elif "phase5" in task_name:
+            from services.worker.tasks.phase5 import run_parameter_extraction
+            fn = run_parameter_extraction
+    except Exception as e:
+        logger.error("Failed to import task %s: %s", task_name, e)
+    _TASK_FUNCTIONS[task_name] = fn
+    return fn
 
 
 def _dispatch_celery(task_name: str, job_id: str):
-    """Dispatch a Celery task if enabled, otherwise run in a background thread."""
+    """Dispatch a Celery task if enabled, otherwise run synchronously in background thread."""
     if _CELERY_ENABLED:
-        from services.worker.celery_app import app as celery_app
-        celery_app.send_task(task_name, args=[job_id])
-        logger.info("Dispatched %s for job %s via Celery", task_name, job_id)
-        return
+        try:
+            from services.worker.celery_app import app as celery_app
+            celery_app.send_task(task_name, args=[job_id])
+            logger.info("Dispatched %s for job %s via Celery", task_name, job_id)
+            return
+        except Exception as e:
+            logger.exception("Celery dispatch failed for %s (job %s), falling back to sync", task_name, job_id)
+            # Fall through to sync fallback instead of leaving job stuck in "queued"
 
-    # --- Sync fallback: run task in background thread ---
-    entry = _TASK_REGISTRY.get(task_name)
-    if not entry:
-        logger.error("Unknown task for sync fallback: %s", task_name)
+    # Sync fallback: run task in background thread
+    fn = _register_task(task_name)
+    if fn is None:
+        logger.error("No sync fallback for %s — job %s will not be processed", task_name, job_id)
+        db.update_job(job_id, status="failed", error_msg="Worker unavailable")
         return
-
-    module_path, func_name = entry
 
     def _run():
         try:
-            mod = importlib.import_module(module_path)
-            fn = getattr(mod, func_name)
-            fn.apply(args=[job_id], throw=True)
-        except Exception as exc:
-            logger.error(
-                "Sync fallback failed for %s (job %s): %s",
-                task_name, job_id, exc, exc_info=True,
-            )
+            logger.info("Running %s synchronously for job %s", task_name, job_id)
+            fn(job_id)
+        except Exception as e:
+            logger.error("Sync task %s failed for job %s: %s", task_name, job_id, e)
+            db.update_job(job_id, status="failed", error_msg=str(e))
 
-    t = threading.Thread(target=_run, daemon=True, name=f"task-{job_id[:8]}")
-    t.start()
-    logger.info("Dispatched %s for job %s (sync thread fallback)", task_name, job_id)
+    thread = threading.Thread(target=_run, daemon=True)
+    thread.start()
+    logger.info("Started sync thread for %s (job %s)", task_name, job_id)
 
 
 TEMPLATE_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "templates")
@@ -264,13 +284,13 @@ async def phase2_analyze(body: dict):
 async def phase3_map(body: dict):
     """Phase 3: Template Structure Mapping (async job)."""
     project_id = body.get("project_id")
-    selected_proposal = body.get("selected_proposal")
+    selected_proposal = body.get("selected_proposal", {})
     catalog_summary = body.get("catalog_summary", {})
 
-    if not project_id or not selected_proposal:
+    if not project_id:
         raise HTTPException(
             status_code=422,
-            detail={"code": "VALIDATION_ERROR", "message": "project_id and selected_proposal required"},
+            detail={"code": "VALIDATION_ERROR", "message": "project_id required"},
         )
 
     run = db.get_latest_run(project_id)

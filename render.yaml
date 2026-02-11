@@ -1,9 +1,9 @@
-# Render Blueprint — deploy from repo root
+# Render deployment configuration for FastAPI
 # https://render.com/docs/blueprint-spec
 #
-# Usage: Connect this repo in Render dashboard → it auto-detects render.yaml
-# Then manually set environment variables marked sync: false
-
+# NOTE: Redis is hosted on Upstash (external), not Render.
+# Set REDIS_URL manually in the Render dashboard with the Upstash rediss:// URL.
+# DATABASE_URL uses Supabase PostgreSQL (set manually).
 services:
   - type: web
     name: plgen-api
@@ -12,17 +12,17 @@ services:
     dockerContext: .
     envVars:
       - key: ANTHROPIC_API_KEY
-        sync: false
+        sync: false  # Set manually in Render dashboard
       - key: DATABASE_URL
-        sync: false
+        sync: false  # Supabase PostgreSQL connection string
       - key: REDIS_URL
-        sync: false
+        sync: false  # Upstash Redis TLS URL (rediss://...)
       - key: SUPABASE_URL
-        sync: false
+        sync: false  # Supabase project URL
       - key: SUPABASE_SERVICE_KEY
-        sync: false
+        sync: false  # Supabase service role key
       - key: CORS_ORIGINS
-        sync: false
+        value: "https://pl-generator.vercel.app"
     healthCheckPath: /health
     plan: free
 
@@ -35,9 +35,9 @@ services:
       - key: ANTHROPIC_API_KEY
         sync: false
       - key: DATABASE_URL
-        sync: false
+        sync: false  # Supabase PostgreSQL connection string
       - key: REDIS_URL
-        sync: false
+        sync: false  # Upstash Redis TLS URL (rediss://...)
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_SERVICE_KEY

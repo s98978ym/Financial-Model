@@ -85,10 +85,6 @@ def run_bm_analysis(self, job_id: str):
         return {"status": "completed", "job_id": job_id}
 
     except Exception as e:
-        tb = traceback.format_exc()
-        logger.error(
-            "Phase 2 task failed for job %s: %s\nException type: %s\nTraceback:\n%s",
-            job_id, e, type(e).__name__, tb,
-        )
-        db.update_job(job_id, status="failed", error_msg=f"{type(e).__name__}: {e}")
+        logger.exception("Phase 2 task failed for job %s", job_id)
+        db.update_job(job_id, status="failed", error_msg=str(e))
         raise

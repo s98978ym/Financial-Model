@@ -1,9 +1,13 @@
 'use client'
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { warmUpBackend } from '@/lib/api'
 
 export function Providers({ children }: { children: React.ReactNode }) {
+  // Wake up Render backend on first page load (fire-and-forget)
+  useEffect(() => { warmUpBackend() }, [])
+
   const [queryClient] = useState(
     () =>
       new QueryClient({

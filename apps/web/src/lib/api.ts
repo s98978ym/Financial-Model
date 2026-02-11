@@ -2,29 +2,52 @@
  * API client for PL Generator FastAPI backend.
  *
  * All requests go directly to the backend (CORS configured).
- * No server-side proxy — simplest and most reliable approach.
+ * Includes retry logic for Render free-tier cold starts (30-60s wake-up).
  */
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 const API_BASE = `${BASE_URL}/v1`
 
+/** Retry fetch up to `retries` times with exponential backoff. */
+async function fetchWithRetry(
+  url: string,
+  init: RequestInit,
+  retries = 4,
+  delayMs = 5000,
+): Promise<Response> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await fetch(url, init)
+    } catch (err) {
+      if (attempt >= retries) {
+        throw new Error(
+          `${err instanceof Error ? err.message : 'Network error'} → ${url}`
+        )
+      }
+      console.log(`[API] Retry ${attempt + 1}/${retries} after ${delayMs * (attempt + 1)}ms: ${url}`)
+      // Wait before retry (handles Render cold start: 30-60s)
+      await new Promise((r) => setTimeout(r, delayMs * (attempt + 1)))
+    }
+  }
+}
+
+/** Warm up the Render backend on page load (fire-and-forget). */
+let _warmedUp = false
+export function warmUpBackend() {
+  if (_warmedUp) return
+  _warmedUp = true
+  fetch(`${BASE_URL}/health`).catch(() => {})
+}
+
 async function fetchAPI(path: string, options: RequestInit = {}): Promise<any> {
   const url = `${API_BASE}${path}`
-  let res: Response
-  try {
-    res = await fetch(url, {
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
-      ...options,
-    })
-  } catch (err) {
-    // Network / CORS error — show actual URL for debugging
-    throw new Error(
-      `${err instanceof Error ? err.message : 'Network error'} → ${url}`
-    )
-  }
+  const res = await fetchWithRetry(url, {
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+    ...options,
+  })
 
   if (!res.ok) {
     const error = await res.json().catch(() => ({ error: { message: res.statusText } }))
@@ -51,7 +74,7 @@ export const api = {
     formData.append('project_id', projectId)
     formData.append('kind', body.kind)
     if (body.text) formData.append('text', body.text)
-    return fetch(`${API_BASE}/documents/upload`, {
+    return fetchWithRetry(`${API_BASE}/documents/upload`, {
       method: 'POST',
       body: formData,
     }).then(async (r) => {
@@ -65,7 +88,7 @@ export const api = {
     formData.append('project_id', projectId)
     formData.append('kind', 'file')
     formData.append('file', file)
-    return fetch(`${API_BASE}/documents/upload`, {
+    return fetchWithRetry(`${API_BASE}/documents/upload`, {
       method: 'POST',
       body: formData,
     }).then(async (r) => {
@@ -101,13 +124,11 @@ export const api = {
   downloadExcel: (jobId: string) =>
     `${API_BASE}/export/download/${jobId}`,
 
-  // Jobs (return failed status on 404 so polling stops gracefully)
+  // Jobs (return failed status on errors so polling stops gracefully)
   getJob: (jobId: string) =>
     fetchAPI(`/jobs/${jobId}`).catch((err) => {
-      if (err.message?.includes('404')) {
-        return { status: 'failed', error_msg: 'Job not found (server restarted?)' }
-      }
-      throw err
+      // Treat 404 and transient 5xx errors as failed so polling stops
+      return { status: 'failed', error_msg: err.message || 'Job fetch failed' }
     }),
 }
 
@@ -116,7 +137,7 @@ export const api = {
  * Use with TanStack Query's refetchInterval.
  */
 export function shouldPollJob(data: any): number | false {
-  if (!data) return 2000
+  if (!data) return false // No data yet (initial load) — don't poll
   if (data.status === 'queued' || data.status === 'running') return 2000
   return false // Stop polling when completed/failed
 }
