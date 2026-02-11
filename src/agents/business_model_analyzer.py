@@ -576,7 +576,7 @@ class BusinessModelAnalyzer:
                 )
 
             return FinancialTargets(
-                horizon_years=int(ft_raw.get("horizon_years", 5)),
+                horizon_years=int(ft_raw.get("horizon_years") or 5),
                 revenue_targets=rev_targets,
                 op_targets=op_targets,
                 single_year_breakeven=sy_be,

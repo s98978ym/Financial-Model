@@ -28,9 +28,10 @@ Thumbs.db
 output/
 *.xlsx.bak
 
-# Environment
+# Environment / Secrets
 .env
 .env.local
+.streamlit/secrets.toml
 
 # Logs
 *.log

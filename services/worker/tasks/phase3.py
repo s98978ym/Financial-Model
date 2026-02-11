@@ -66,12 +66,12 @@ def run_template_mapping(self, job_id: str):
 
         # --- Store result ---
         result_dict = result.to_dict() if hasattr(result, "to_dict") else json.loads(json.dumps(result, default=str))
-        db.save_phase_result(run_id=run_id, phase=3, raw_json=result_dict)
+        pr = db.save_phase_result(run_id=run_id, phase=3, raw_json=result_dict)
 
         db.update_job(
             job_id, status="completed", progress=100,
             log_msg="Template mapping complete",
-            result_ref=f"phase_result:{run_id}:3",
+            result_ref=pr["id"],
         )
 
         return {"status": "completed", "job_id": job_id}

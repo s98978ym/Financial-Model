@@ -1,0 +1,22 @@
+{
+  "name": "int-cm-video",
+  "version": "1.0.0",
+  "description": "int. AI-Native Incubation Partner - 30sec CM Video",
+  "scripts": {
+    "start": "npx remotion studio",
+    "build": "npx remotion render IntCM out/int-cm.mp4",
+    "render": "npx remotion render IntCM out/int-cm.mp4",
+    "preview": "npx remotion preview"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.242",
+    "@remotion/player": "4.0.242",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "remotion": "4.0.242"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.1",
+    "typescript": "^5.4.5"
+  }
+}

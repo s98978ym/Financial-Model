@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PL Generator - Financial Model</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+      color: #f1f5f9;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .container {
+      text-align: center;
+      max-width: 600px;
+      padding: 3rem 2rem;
+    }
+    .logo { font-size: 3rem; margin-bottom: 1rem; }
+    h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      margin-bottom: 0.5rem;
+      background: linear-gradient(90deg, #25C997, #38bdf8);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .subtitle {
+      color: #94a3b8;
+      font-size: 1.1rem;
+      margin-bottom: 2rem;
+      line-height: 1.6;
+    }
+    .btn {
+      display: inline-block;
+      padding: 0.9rem 2.5rem;
+      background: linear-gradient(135deg, #25C997, #20b2aa);
+      color: #fff;
+      text-decoration: none;
+      border-radius: 8px;
+      font-size: 1.1rem;
+      font-weight: 600;
+      transition: transform 0.2s, box-shadow 0.2s;
+      box-shadow: 0 4px 15px rgba(37, 201, 151, 0.3);
+    }
+    .btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(37, 201, 151, 0.4);
+    }
+    .features {
+      margin-top: 3rem;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.2rem;
+      text-align: left;
+    }
+    .feature {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 8px;
+      padding: 1rem;
+    }
+    .feature-title {
+      font-weight: 600;
+      font-size: 0.9rem;
+      color: #25C997;
+      margin-bottom: 0.3rem;
+    }
+    .feature-desc {
+      font-size: 0.8rem;
+      color: #94a3b8;
+      line-height: 1.4;
+    }
+    .note {
+      margin-top: 2rem;
+      font-size: 0.8rem;
+      color: #64748b;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo">📊</div>
+    <h1>PL Generator</h1>
+    <p class="subtitle">
+      事業計画書から投資銀行グレードの<br>
+      P&amp;L（損益計算書）を自動生成
+    </p>
+    <a href="#" id="app-link" class="btn">アプリを開く →</a>
+    <div class="features">
+      <div class="feature">
+        <div class="feature-title">AI分析</div>
+        <div class="feature-desc">Claude APIによるビジネスモデル自動解析</div>
+      </div>
+      <div class="feature">
+        <div class="feature-title">6フェーズ</div>
+        <div class="feature-desc">対話式ウィザードで段階的に精緻化</div>
+      </div>
+      <div class="feature">
+        <div class="feature-title">Excel出力</div>
+        <div class="feature-desc">数式保持・シナリオ分析付きExcel</div>
+      </div>
+      <div class="feature">
+        <div class="feature-title">汎用設計</div>
+        <div class="feature-desc">業種を問わず対応可能な汎用テンプレート</div>
+      </div>
+    </div>
+    <p class="note">
+      Streamlit Community Cloud でホストされています
+    </p>
+  </div>
+  <script>
+    // Update this URL after deploying to Streamlit Community Cloud
+    var STREAMLIT_URL = "https://financial-model.streamlit.app/";
+    document.getElementById("app-link").href = STREAMLIT_URL;
+  </script>
+</body>
+</html>
