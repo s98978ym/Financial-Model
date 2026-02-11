@@ -31,12 +31,21 @@ export default function Phase2Page() {
       {!isProcessing && !isComplete && !isFailed && (
         <div className="text-center py-12 bg-gray-50 rounded-lg border border-dashed border-gray-300">
           <p className="text-gray-500 mb-4">Phase 2 分析を開始してください</p>
-          <button
-            onClick={() => trigger({ document_id: documentId })}
-            className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700"
-          >
-            ビジネスモデル分析を実行
-          </button>
+          {!projectState ? (
+            <p className="text-sm text-gray-400">プロジェクト情報を読み込み中...</p>
+          ) : (
+            <button
+              onClick={() => trigger({ document_id: documentId })}
+              className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700"
+            >
+              ビジネスモデル分析を実行
+            </button>
+          )}
+          {projectState && !documentId && (
+            <p className="text-sm text-amber-600 mt-3">
+              ドキュメントが見つかりません。Phase 1でアップロードしてください。
+            </p>
+          )}
         </div>
       )}
 

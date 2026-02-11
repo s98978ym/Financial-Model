@@ -254,10 +254,23 @@ async def phase2_analyze(body: dict):
     document_id = body.get("document_id")
     feedback = body.get("feedback", "")
 
-    if not project_id or not document_id:
+    if not project_id:
         raise HTTPException(
             status_code=422,
-            detail={"code": "VALIDATION_ERROR", "message": "project_id and document_id required"},
+            detail={"code": "VALIDATION_ERROR", "message": "project_id required"},
+        )
+
+    # Auto-resolve document_id from project's documents if not provided
+    if not document_id:
+        docs = db.get_documents_by_project(project_id)
+        if docs:
+            document_id = docs[0]["id"]
+            logger.info("Auto-resolved document_id=%s for project %s", document_id, project_id)
+
+    if not document_id:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "VALIDATION_ERROR", "message": "document_id required — upload a document in Phase 1 first"},
         )
 
     run = db.get_latest_run(project_id)
