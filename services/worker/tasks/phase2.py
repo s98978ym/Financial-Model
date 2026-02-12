@@ -63,15 +63,7 @@ def run_bm_analysis(self, job_id: str):
         result = analyzer.analyze(truncated, feedback=feedback)
 
         # --- Store result ---
-        # Use Pydantic v2 model_dump() for proper serialization
-        if hasattr(result, "model_dump"):
-            result_dict = result.model_dump()
-        elif hasattr(result, "dict"):
-            result_dict = result.dict()
-        elif hasattr(result, "to_dict"):
-            result_dict = result.to_dict()
-        else:
-            result_dict = json.loads(json.dumps(result, default=str))
+        result_dict = result.model_dump()
 
         pr = db.save_phase_result(run_id=run_id, phase=2, raw_json=result_dict)
         db.update_job(

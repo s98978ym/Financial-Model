@@ -233,5 +233,5 @@ def _generate_local_excel(job_id: str, run_id: str, body: dict):
         )
 
     except Exception as e:
-        logger.error("Local Excel generation failed: %s", e)
+        logger.exception("Local Excel generation failed")
         db.update_job(job_id, status="failed", error_msg=str(e))
