@@ -72,13 +72,7 @@ def run_template_mapping(self, job_id: str):
         )
 
         # --- Store result ---
-        # Pydantic v2 uses model_dump(), not to_dict()
-        if hasattr(result, "model_dump"):
-            result_dict = result.model_dump()
-        elif hasattr(result, "dict"):
-            result_dict = result.dict()
-        else:
-            result_dict = json.loads(json.dumps(result, default=str))
+        result_dict = result.model_dump()
 
         pr = db.save_phase_result(run_id=run_id, phase=3, raw_json=result_dict)
 

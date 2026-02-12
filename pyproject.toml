@@ -33,3 +33,7 @@ plgen = "src.cli.main:main"
 
 [tool.setuptools.packages.find]
 include = ["src*", "core*", "shared*", "services*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "services/api/tests"]
+addopts = "-v --tb=short"

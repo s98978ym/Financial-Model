@@ -136,11 +136,11 @@ async def phase1_scan(body: dict):
         from src.catalog.scanner import scan_template
         catalog = scan_template(template_path, input_color=input_color)
         # Serialize Pydantic model to dict
-        items_list = [item.model_dump() if hasattr(item, "model_dump") else item.dict() for item in catalog.items]
+        items_list = [item.model_dump() for item in catalog.items]
         block_index = {}
         for key, block_items in catalog.blocks.items():
             block_index[key] = [
-                item.model_dump() if hasattr(item, "model_dump") else item.dict()
+                item.model_dump()
                 for item in block_items
             ]
         catalog_dict = {
