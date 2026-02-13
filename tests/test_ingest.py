@@ -292,8 +292,14 @@ class TestOcrFallback:
         from src.ingest.pdf_reader import _can_ocr
         assert isinstance(_can_ocr(), bool)
 
-    def test_can_ocr_is_true_when_deps_available(self):
-        """In this test environment, OCR deps should be installed."""
-        from src.ingest.pdf_reader import _can_ocr
-        # pytesseract, Pillow, PyMuPDF should all be available
-        assert _can_ocr() is True
+    def test_can_ocr_matches_deps(self):
+        """_can_ocr() returns True only when tesseract + renderer are available."""
+        from src.ingest.pdf_reader import _can_ocr, _HAS_PYMUPDF, _HAS_PYPDFIUM2
+        result = _can_ocr()
+        if not (_HAS_PYMUPDF or _HAS_PYPDFIUM2):
+            assert result is False
+        else:
+            # If renderer is available, result depends on tesseract binary
+            import shutil
+            has_tesseract = shutil.which("tesseract") is not None
+            assert result == has_tesseract
