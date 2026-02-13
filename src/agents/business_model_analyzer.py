@@ -17,7 +17,7 @@ import logging
 import re
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +35,13 @@ class RevenueDriver(BaseModel):
     evidence: str = Field(default="", description="Verbatim quote from document")
     is_from_document: bool = Field(default=False, description="True if value is directly from document text")
 
+    @field_validator("estimated_value", mode="before")
+    @classmethod
+    def coerce_estimated_value(cls, v: Any) -> Optional[str]:
+        if v is not None and not isinstance(v, str):
+            return str(v)
+        return v
+
 
 class CostItem(BaseModel):
     """A cost element with fixed/variable classification."""
@@ -44,6 +51,13 @@ class CostItem(BaseModel):
     estimated_value: Optional[str] = Field(default=None)
     evidence: str = Field(default="", description="Verbatim quote from document")
     is_from_document: bool = Field(default=False, description="True if value is directly from document text")
+
+    @field_validator("estimated_value", mode="before")
+    @classmethod
+    def coerce_estimated_value(cls, v: Any) -> Optional[str]:
+        if v is not None and not isinstance(v, str):
+            return str(v)
+        return v
 
 
 class BusinessSegment(BaseModel):
