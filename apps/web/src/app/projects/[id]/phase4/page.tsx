@@ -19,6 +19,8 @@ export default function Phase4Page() {
 
   const assignments = result?.cell_assignments || result?.assignments || []
   const unmapped = result?.unmapped_cells || []
+  const warnings = result?.warnings || []
+  const hasEstimated = assignments.some((a: any) => a.derivation === 'estimated')
 
   const stats = {
     total: assignments.length + unmapped.length,
@@ -65,6 +67,20 @@ export default function Phase4Page() {
         </div>
       )}
 
+      {/* Warnings banner */}
+      {isComplete && warnings.length > 0 && (
+        <div className={`rounded-lg border p-4 mb-6 ${hasEstimated ? 'bg-amber-50 border-amber-200' : 'bg-blue-50 border-blue-200'}`}>
+          <p className={`text-sm font-medium mb-2 ${hasEstimated ? 'text-amber-800' : 'text-blue-800'}`}>
+            {hasEstimated ? '推定モード' : '注意事項'}
+          </p>
+          <ul className="text-sm space-y-1">
+            {warnings.map((w: string, idx: number) => (
+              <li key={idx} className={hasEstimated ? 'text-amber-700' : 'text-blue-700'}>{w}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {/* Results */}
       {isComplete && assignments.length > 0 && (
         <>
@@ -75,8 +91,8 @@ export default function Phase4Page() {
                 columns={[
                   { field: 'sheet', headerName: 'シート', width: 120 },
                   { field: 'cell', headerName: 'セル', width: 70 },
-                  { field: 'label_match', headerName: 'ラベル', width: 120 },
-                  { field: 'concept', headerName: 'コンセプト', width: 150, editable: true },
+                  { field: 'label', headerName: 'ラベル', width: 120 },
+                  { field: 'assigned_concept', headerName: 'コンセプト', width: 150, editable: true },
                   { field: 'category', headerName: 'カテゴリ', width: 100 },
                   { field: 'segment', headerName: 'セグメント', width: 130 },
                   { field: 'period', headerName: '期間', width: 70 },
@@ -94,6 +110,7 @@ export default function Phase4Page() {
             <CompletionChecklist
               stats={stats}
               nextActions={[
+                hasEstimated ? 'テンプレートの入力セルを確認し、推定値を調整' : null,
                 unmapped.length > 0 ? `未マッピング ${unmapped.length} セルを確認` : null,
                 stats.lowConf > 0 ? `低確信度 ${stats.lowConf} セルのエビデンスを補完` : null,
                 'Phase 5 (パラメータ抽出) へ進む',
@@ -112,13 +129,18 @@ export default function Phase4Page() {
         </>
       )}
 
-      {/* Raw JSON fallback */}
+      {/* Empty results with no assignments */}
       {isComplete && assignments.length === 0 && result && (
         <div className="bg-gray-50 rounded-lg border border-gray-200 p-4">
-          <p className="text-sm text-gray-500 mb-2">設計結果（生データ）</p>
-          <pre className="text-xs bg-white p-4 rounded max-h-64 overflow-auto">
-            {JSON.stringify(result, null, 2)}
-          </pre>
+          <p className="text-sm text-gray-600 mb-3">
+            マッピング対象のセルが見つかりませんでした。以下をご確認ください:
+          </p>
+          <ul className="text-sm text-gray-500 space-y-1 list-disc list-inside mb-4">
+            <li>テンプレートExcelの入力セルが正しくハイライトされているか</li>
+            <li>Phase 1（テンプレートスキャン）で入力セルが検出されているか</li>
+            <li>Phase 2（事業分析）でセグメント・コスト情報が抽出されているか</li>
+          </ul>
+          <button onClick={() => trigger()} className="text-sm text-blue-600 hover:underline">再試行</button>
         </div>
       )}
     </PhaseLayout>

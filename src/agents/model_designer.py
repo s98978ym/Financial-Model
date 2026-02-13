@@ -183,6 +183,11 @@ class ModelDesigner:
         feedback : str
             Optional user feedback.
         """
+        # Fallback: generate estimated assignments when no input cells found
+        if not catalog_items:
+            logger.info("ModelDesigner: catalog_items is empty, generating estimated assignments")
+            return self._generate_fallback_assignments(analysis_json, template_structure_json)
+
         analysis_str = json.dumps(analysis_json, ensure_ascii=False, indent=2)
         structure_str = json.dumps(template_structure_json, ensure_ascii=False, indent=2)
         catalog_str = json.dumps(catalog_items, ensure_ascii=False, indent=2)
@@ -279,5 +284,166 @@ class ModelDesigner:
             cell_assignments=assignments,
             unmapped_cells=raw.get("unmapped_cells", []),
             warnings=raw.get("warnings", []),
+            raw_json=raw,
+        )
+
+    def _generate_fallback_assignments(
+        self,
+        analysis_json: Dict[str, Any],
+        template_structure_json: Dict[str, Any],
+    ) -> ModelDesignResult:
+        """Generate estimated cell assignments from business analysis when catalog is empty.
+
+        When no input cells are detected from the template, this method creates
+        recommended concept mappings based on the business model analysis so
+        the user can see what should be configured.
+        """
+        assignments: List[CellAssignment] = []
+        warnings = [
+            "【推定モード】テンプレートの入力セルが検出されなかったため、事業分析結果から推定マッピングを生成しました。",
+            "各項目は推定値です。ユーザー側でテンプレートの入力セルを確認し、値を設定してください。",
+        ]
+
+        # --- Determine sheet names from Phase 3 structure ---
+        revenue_sheets: List[str] = []
+        cost_sheet = "費用リスト"
+        assumption_sheet = "前提条件"
+
+        for sm in template_structure_json.get("sheet_mappings", []):
+            purpose = sm.get("sheet_purpose", "other")
+            name = sm.get("sheet_name", "")
+            if not name:
+                continue
+            if purpose == "revenue_model":
+                revenue_sheets.append(name)
+            elif purpose == "cost_detail":
+                cost_sheet = name
+            elif purpose == "assumptions":
+                assumption_sheet = name
+
+        # --- Extract business data ---
+        segments = analysis_json.get("segments", [])
+        shared_costs = analysis_json.get("shared_costs", [])
+        ft = analysis_json.get("financial_targets") or {}
+        horizon = ft.get("horizon_years", 5)
+
+        # Period range label
+        rev_targets = ft.get("revenue_targets", [])
+        if rev_targets and len(rev_targets) >= 2:
+            first_yr = rev_targets[0].get("year", "FY1")
+            last_yr = rev_targets[-1].get("year", f"FY{horizon}")
+            period_label = f"{first_yr}-{last_yr}"
+        else:
+            period_label = f"FY1-FY{horizon}"
+
+        # --- Revenue drivers per segment ---
+        for seg_idx, seg in enumerate(segments):
+            seg_name = seg.get("name", f"セグメント{seg_idx + 1}")
+            sheet = revenue_sheets[seg_idx] if seg_idx < len(revenue_sheets) else f"収益モデル{seg_idx + 1}"
+            row = 3
+
+            for drv in seg.get("revenue_drivers", []):
+                drv_name = drv.get("name", "")
+                est_value = drv.get("estimated_value")
+                unit = drv.get("unit", "")
+                ref_text = f" 文書参考値: {est_value}{unit}" if est_value else ""
+
+                assignments.append(CellAssignment(
+                    sheet=sheet,
+                    cell=f"C{row}",
+                    category="売上",
+                    label=drv_name,
+                    assigned_concept=f"{drv_name}【推定】",
+                    segment=seg_name,
+                    period=period_label,
+                    unit=unit,
+                    derivation="estimated",
+                    confidence=0.3,
+                    reasoning=f"【推定】事業分析の{seg_name}から推定。ユーザー設定推奨。{ref_text}",
+                ))
+                row += 1
+
+            # Revenue formula summary
+            formula = seg.get("revenue_formula", "")
+            if formula:
+                assignments.append(CellAssignment(
+                    sheet=sheet,
+                    cell=f"C{row}",
+                    category="売上",
+                    label="売上高",
+                    assigned_concept=f"売上高（{formula}）【推定】",
+                    segment=seg_name,
+                    period=period_label,
+                    unit="円",
+                    derivation="estimated",
+                    confidence=0.3,
+                    reasoning=f"【推定】算式: {formula}",
+                ))
+
+        # --- Shared costs ---
+        row = 3
+        for cost in shared_costs:
+            cost_name = cost.get("name", "")
+            est_value = cost.get("estimated_value")
+            cost_cat = "変動費" if cost.get("category") == "variable" else "固定費"
+            ref_text = f" 文書参考値: {est_value}" if est_value else ""
+
+            assignments.append(CellAssignment(
+                sheet=cost_sheet,
+                cell=f"C{row}",
+                category=cost_cat,
+                label=cost_name,
+                assigned_concept=f"{cost_name}（{cost_cat}）【推定】",
+                segment="共通",
+                period=period_label,
+                unit="円",
+                derivation="estimated",
+                confidence=0.3,
+                reasoning=f"【推定】事業分析のコスト項目から推定。ユーザー設定推奨。{ref_text}",
+            ))
+            row += 1
+
+        # --- Financial targets as assumptions ---
+        row = 3
+        for rt in rev_targets:
+            year = rt.get("year", "")
+            value = rt.get("value")
+            source = rt.get("source", "")
+            evidence = rt.get("evidence", "")
+            val_text = f"{value:,.0f}円" if value else "未設定"
+
+            assignments.append(CellAssignment(
+                sheet=assumption_sheet,
+                cell=f"C{row}",
+                category="前提条件",
+                label=f"売上目標（{year}）",
+                assigned_concept=f"売上目標 {year}: {val_text}【推定】",
+                segment="全体",
+                period=year,
+                unit="円",
+                derivation="estimated",
+                confidence=0.4 if source == "document" else 0.2,
+                reasoning=f"【推定】{evidence or '事業分析から推定'}。ユーザー設定推奨。",
+            ))
+            row += 1
+
+        if not assignments:
+            warnings.append("事業分析からも推定可能な項目が見つかりませんでした。事業分析（Phase 2）を再実行してください。")
+
+        raw = {
+            "cell_assignments": [a.model_dump() for a in assignments],
+            "unmapped_cells": [],
+            "warnings": warnings,
+        }
+
+        logger.info(
+            "ModelDesigner: generated %d fallback assignments from business analysis",
+            len(assignments),
+        )
+
+        return ModelDesignResult(
+            cell_assignments=assignments,
+            unmapped_cells=[],
+            warnings=warnings,
             raw_json=raw,
         )
