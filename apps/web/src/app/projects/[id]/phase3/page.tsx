@@ -91,10 +91,10 @@ export default function Phase3Page() {
                     <td className="px-4 py-3 font-medium text-gray-900">{m.sheet || m.sheet_name}</td>
                     <td className="px-4 py-3">
                       <span className="bg-blue-100 text-blue-700 text-xs px-2 py-0.5 rounded">
-                        {purposeLabels[m.purpose] || m.purpose || '—'}
+                        {purposeLabels[m.sheet_purpose] || purposeLabels[m.purpose] || m.sheet_purpose || m.purpose || '—'}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-gray-600">{m.segment || '—'}</td>
+                    <td className="px-4 py-3 text-gray-600">{m.mapped_segment || m.segment || '—'}</td>
                     <td className="px-4 py-3 text-right">
                       <span className={`text-xs font-medium px-2 py-0.5 rounded ${
                         (m.confidence || 0) >= 0.8 ? 'bg-green-100 text-green-700' :
@@ -120,14 +120,37 @@ export default function Phase3Page() {
         </>
       )}
 
-      {/* Raw JSON fallback */}
+      {/* Overall structure description */}
+      {isComplete && result?.overall_structure && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+          <p className="text-sm text-blue-800">{result.overall_structure}</p>
+        </div>
+      )}
+
+      {/* Suggestions */}
+      {isComplete && result?.suggestions?.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6">
+          <p className="text-sm font-medium text-amber-800 mb-2">提案</p>
+          <ul className="text-sm text-amber-700 space-y-1 list-disc list-inside">
+            {result.suggestions.map((s: string, idx: number) => (
+              <li key={idx}>{s}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Empty result fallback */}
       {isComplete && mappings.length === 0 && result && (
         <div className="bg-gray-50 rounded-lg border border-gray-200 p-4">
-          <p className="text-sm text-gray-500 mb-2">マッピング結果（生データ）</p>
-          <pre className="text-xs bg-white p-4 rounded max-h-64 overflow-auto">
-            {JSON.stringify(result, null, 2)}
-          </pre>
-          <div className="mt-4 flex justify-end">
+          <p className="text-sm text-gray-600 mb-3">
+            シートマッピングが生成されませんでした。以下をご確認ください:
+          </p>
+          <ul className="text-sm text-gray-500 space-y-1 list-disc list-inside mb-4">
+            <li>Phase 1 でテンプレートのシート構造が正しく読み取られているか</li>
+            <li>Phase 2 で事業セグメントが正しく分析されているか</li>
+          </ul>
+          <div className="flex gap-3">
+            <button onClick={() => trigger({ selected_proposal: phase2Proposal || {} })} className="text-sm text-blue-600 hover:underline">再試行</button>
             <button
               onClick={() => router.push(`/projects/${projectId}/phase4`)}
               className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm"
