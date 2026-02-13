@@ -28,8 +28,13 @@ export function EvidencePanel({ cell }: EvidencePanelProps) {
           {cell.sheet} / {cell.cell}
         </h3>
         <p className="text-gray-500 text-xs mt-0.5">
-          {cell.label_match || cell.concept}
+          {cell.label || cell.label_match || cell.assigned_concept || cell.concept || ''}
         </p>
+        {cell.category && (
+          <span className="inline-flex mt-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-600">
+            {cell.category}
+          </span>
+        )}
       </div>
 
       {/* Confidence */}
@@ -98,10 +103,31 @@ export function EvidencePanel({ cell }: EvidencePanelProps) {
       )}
 
       {/* Rationale */}
-      {evidence?.rationale && (
+      {(evidence?.rationale || cell.reasoning) && (
         <div>
           <span className="text-xs text-gray-500 block mb-1">根拠:</span>
-          <p className="text-sm text-gray-600">{evidence.rationale}</p>
+          <p className="text-sm text-gray-600">{evidence?.rationale || cell.reasoning}</p>
+        </div>
+      )}
+
+      {/* Value (if Phase 5 extraction) */}
+      {cell.value != null && (
+        <div>
+          <span className="text-xs text-gray-500 block mb-1">抽出値:</span>
+          <p className="text-lg font-mono font-bold text-blue-700">
+            {typeof cell.value === 'number' ? cell.value.toLocaleString() : cell.value}
+          </p>
+          {cell.original_text && (
+            <p className="text-xs text-gray-400 mt-0.5">原文: {cell.original_text}</p>
+          )}
+        </div>
+      )}
+
+      {/* Segment info */}
+      {cell.segment && (
+        <div>
+          <span className="text-xs text-gray-500">セグメント: </span>
+          <span className="text-xs text-gray-700">{cell.segment}</span>
         </div>
       )}
 

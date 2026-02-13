@@ -32,9 +32,11 @@ ALLOWED_ORIGINS = os.environ.get(
     "http://localhost:3000,https://pl-generator.vercel.app",
 ).split(",")
 
+# Allow Vercel preview deployments (*.vercel.app) in addition to explicit origins
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[o.strip() for o in ALLOWED_ORIGINS],
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

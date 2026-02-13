@@ -350,15 +350,23 @@ class TestExportWithDownload:
         assert "download_url" in data
 
     def test_download_completed_job(self, client):
+        import time
+
         project = client.post("/v1/projects", json={"name": "DLテスト"}).json()
-        # Create export job (local dev generates synchronously)
+        # Create export job (runs in background thread)
         res = client.post("/v1/export/excel", json={
             "project_id": project["id"],
         })
         job_id = res.json()["job_id"]
 
-        # Check job status
-        job = client.get(f"/v1/jobs/{job_id}").json()
+        # Poll until the background thread completes (up to 10s)
+        job = None
+        for _ in range(20):
+            job = client.get(f"/v1/jobs/{job_id}").json()
+            if job["status"] in ("completed", "failed"):
+                break
+            time.sleep(0.5)
+
         assert job["status"] == "completed"
 
         # Download

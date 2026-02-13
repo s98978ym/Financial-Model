@@ -8,12 +8,16 @@
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 const API_BASE = `${BASE_URL}/v1`
 
-/** Retry fetch up to `retries` times with exponential backoff. */
+/**
+ * Retry fetch up to `retries` times with exponential backoff.
+ * Tuned for Render free-tier cold starts (30-60s wake-up).
+ * Schedule: 0s → 8s → 16s → 32s → 64s  (total ~120s window)
+ */
 async function fetchWithRetry(
   url: string,
   init: RequestInit,
   retries = 4,
-  delayMs = 5000,
+  baseDelayMs = 8000,
 ): Promise<Response> {
   for (let attempt = 0; ; attempt++) {
     try {
@@ -21,22 +25,27 @@ async function fetchWithRetry(
     } catch (err) {
       if (attempt >= retries) {
         throw new Error(
-          `${err instanceof Error ? err.message : 'Network error'} → ${url}`
+          `サーバーに接続できません。しばらく待ってからリロードしてください → ${url}`
         )
       }
-      console.log(`[API] Retry ${attempt + 1}/${retries} after ${delayMs * (attempt + 1)}ms: ${url}`)
+      var delay = baseDelayMs * Math.pow(2, attempt)
+      console.log('[API] Retry ' + (attempt + 1) + '/' + retries + ' after ' + delay + 'ms: ' + url)
       // Wait before retry (handles Render cold start: 30-60s)
-      await new Promise((r) => setTimeout(r, delayMs * (attempt + 1)))
+      await new Promise(function(r) { setTimeout(r, delay) })
     }
   }
 }
 
-/** Warm up the Render backend on page load (fire-and-forget). */
+/** Warm up the Render backend on page load (fire-and-forget with retry). */
 let _warmedUp = false
 export function warmUpBackend() {
   if (_warmedUp) return
   _warmedUp = true
-  fetch(`${BASE_URL}/health`).catch(() => {})
+  // First ping — may fail if cold-starting
+  fetch(BASE_URL + '/health').catch(function() {
+    // Retry after 5s to ensure backend is awake before user interacts
+    setTimeout(function() { fetch(BASE_URL + '/health').catch(function() {}) }, 5000)
+  })
 }
 
 async function fetchAPI(path: string, options: RequestInit = {}): Promise<any> {

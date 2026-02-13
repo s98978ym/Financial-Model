@@ -11,62 +11,94 @@ interface PhaseLayoutProps {
 }
 
 const PHASES = [
-  { num: 1, label: 'アップロード', path: 'new' },
-  { num: 2, label: 'BM分析', path: 'phase2' },
-  { num: 3, label: 'テンプレマップ', path: 'phase3' },
-  { num: 4, label: 'モデル設計', path: 'phase4' },
-  { num: 5, label: 'パラメータ抽出', path: 'phase5' },
-  { num: 6, label: 'シナリオ', path: 'scenarios' },
+  { num: 1, label: 'アップロード', icon: '📤', desc: 'テンプレート・事業計画書を取り込み', path: 'new' },
+  { num: 2, label: 'BM分析', icon: '🔍', desc: '事業モデルを解析', path: 'phase2' },
+  { num: 3, label: 'テンプレマップ', icon: '🗺️', desc: 'シートとセグメントを紐づけ', path: 'phase3' },
+  { num: 4, label: 'モデル設計', icon: '🏗️', desc: 'セルにコンセプトを割当', path: 'phase4' },
+  { num: 5, label: 'パラメータ抽出', icon: '📊', desc: '数値を自動抽出・確認', path: 'phase5' },
+  { num: 6, label: 'シナリオ', icon: '🎮', desc: 'PLをシミュレーション', path: 'scenarios' },
 ]
 
 export function PhaseLayout({ phase, title, subtitle, projectId, children }: PhaseLayoutProps) {
   return (
-    <div>
+    <div className="max-w-[1200px] mx-auto">
       {/* Phase Stepper */}
-      <div className="flex items-center gap-1 mb-6 overflow-x-auto">
-        {PHASES.map((p, i) => {
-          const isActive = p.num === phase
-          const isComplete = p.num < phase
-          const href = p.num === 1
-            ? `/projects/new`
-            : `/projects/${projectId}/${p.path}`
+      <div className="mb-8">
+        <div className="flex items-center gap-0 overflow-x-auto pb-2">
+          {PHASES.map((p, i) => {
+            const isActive = p.num === phase
+            const isComplete = p.num < phase
+            const href = p.num === 1
+              ? `/projects/new`
+              : `/projects/${projectId}/${p.path}`
 
-          return (
-            <div key={p.num} className="flex items-center">
-              <Link
-                href={href}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm transition-colors ${
-                  isActive
-                    ? 'bg-blue-600 text-white'
-                    : isComplete
-                      ? 'bg-green-100 text-green-700 hover:bg-green-200'
-                      : 'bg-gray-100 text-gray-400'
-                }`}
-              >
-                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold ${
-                  isActive ? 'bg-white text-blue-600' :
-                  isComplete ? 'bg-green-500 text-white' :
-                  'bg-gray-300 text-white'
-                }`}>
-                  {isComplete ? '✓' : p.num}
-                </span>
-                <span className="hidden sm:inline whitespace-nowrap">{p.label}</span>
-              </Link>
-              {i < PHASES.length - 1 && (
-                <div className={`w-6 h-0.5 mx-1 ${
-                  isComplete ? 'bg-green-400' : 'bg-gray-200'
-                }`} />
-              )}
-            </div>
-          )
-        })}
+            return (
+              <div key={p.num} className="flex items-center flex-shrink-0">
+                <Link
+                  href={href}
+                  className={`group relative flex items-center gap-2.5 px-4 py-2.5 rounded-xl text-sm transition-all ${
+                    isActive
+                      ? 'bg-blue-600 text-white shadow-lg shadow-blue-200'
+                      : isComplete
+                        ? 'bg-green-50 text-green-700 hover:bg-green-100'
+                        : 'bg-gray-50 text-gray-400 hover:bg-gray-100'
+                  }`}
+                  title={p.desc}
+                >
+                  <span className={`w-7 h-7 rounded-lg flex items-center justify-center text-sm ${
+                    isActive ? 'bg-white/20' :
+                    isComplete ? 'bg-green-100' :
+                    'bg-gray-100'
+                  }`}>
+                    {isComplete ? (
+                      <svg className="w-4 h-4 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                      </svg>
+                    ) : (
+                      <span>{p.icon}</span>
+                    )}
+                  </span>
+                  <div className="hidden sm:block">
+                    <div className={`text-xs font-semibold ${isActive ? 'text-white' : ''}`}>
+                      {p.label}
+                    </div>
+                    {isActive && (
+                      <div className="text-[10px] text-blue-100 whitespace-nowrap">{p.desc}</div>
+                    )}
+                  </div>
+
+                  {/* Tooltip for non-active phases */}
+                  {!isActive && (
+                    <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 hidden group-hover:block z-10">
+                      <div className="bg-gray-800 text-white text-[10px] px-2 py-1 rounded whitespace-nowrap shadow-lg">
+                        {p.desc}
+                      </div>
+                    </div>
+                  )}
+                </Link>
+
+                {/* Connector */}
+                {i < PHASES.length - 1 && (
+                  <div className={`w-8 h-0.5 mx-0.5 flex-shrink-0 ${
+                    isComplete ? 'bg-green-300' :
+                    isActive ? 'bg-blue-200' :
+                    'bg-gray-200'
+                  }`} />
+                )}
+              </div>
+            )
+          })}
+        </div>
       </div>
 
       {/* Page Header */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">{title}</h1>
+      <div className="mb-8">
+        <div className="flex items-center gap-3 mb-2">
+          <span className="text-2xl">{PHASES[phase - 1]?.icon}</span>
+          <h1 className="text-2xl font-bold text-gray-900">{title}</h1>
+        </div>
         {subtitle && (
-          <p className="text-gray-500 mt-1">{subtitle}</p>
+          <p className="text-gray-500 ml-11">{subtitle}</p>
         )}
       </div>
 
@@ -74,34 +106,40 @@ export function PhaseLayout({ phase, title, subtitle, projectId, children }: Pha
       {children}
 
       {/* Navigation Footer */}
-      <div className="mt-8 flex justify-between items-center pt-6 border-t border-gray-200">
+      <div className="mt-10 flex justify-between items-center pt-6 border-t border-gray-100">
         {phase > 1 ? (
           <Link
             href={`/projects/${projectId}/${PHASES[phase - 2]?.path || ''}`}
-            className="text-gray-600 hover:text-gray-800 text-sm"
+            className="flex items-center gap-2 text-gray-500 hover:text-gray-700 text-sm transition-colors"
           >
-            &larr; 前のフェーズ
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+            {PHASES[phase - 2]?.label}
           </Link>
         ) : <div />}
 
         <div className="flex gap-3">
-          <button className="px-4 py-2 text-sm border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50">
-            下書き保存
-          </button>
           {phase < 6 && (
             <Link
               href={`/projects/${projectId}/${PHASES[phase]?.path || 'export'}`}
-              className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              className="flex items-center gap-2 px-5 py-2.5 text-sm bg-blue-600 text-white rounded-xl hover:bg-blue-700 font-medium transition-colors shadow-sm"
             >
-              次のフェーズ &rarr;
+              {PHASES[phase]?.label}
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
             </Link>
           )}
           {phase === 6 && (
             <Link
               href={`/projects/${projectId}/export`}
-              className="px-4 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700"
+              className="flex items-center gap-2 px-5 py-2.5 text-sm bg-green-600 text-white rounded-xl hover:bg-green-700 font-medium transition-colors shadow-sm"
             >
               Excel エクスポート
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
             </Link>
           )}
         </div>
