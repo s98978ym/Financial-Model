@@ -31,8 +31,9 @@ export default function Phase4Page() {
     const total = assignments.length + unmapped.length
     const highConf = assignments.filter((a: any) => (a.confidence || 0) >= 0.8).length
     const lowConf = assignments.filter((a: any) => (a.confidence || 0) < 0.5).length
-    const categories = new Set(assignments.map((a: any) => a.category).filter(Boolean))
-    return { total, mapped: assignments.length, highConf, lowConf, categories: categories.size }
+    const catObj: Record<string, boolean> = {}
+    assignments.forEach(function(a: any) { if (a.category) catObj[a.category] = true })
+    return { total, mapped: assignments.length, highConf, lowConf, categories: Object.keys(catObj).length }
   }, [assignments, unmapped])
 
   return (

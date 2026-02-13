@@ -46,11 +46,11 @@ export default function ScenarioPlaygroundPage() {
       // If source_params came back, use them (includes Phase 5 data)
       if (!initialized && data.source_params) {
         const merged = { ...DEFAULT_PARAMS }
-        for (const key of Object.keys(DEFAULT_PARAMS)) {
+        Object.keys(DEFAULT_PARAMS).forEach(function(key) {
           if (data.source_params[key] != null) {
             merged[key as keyof typeof DEFAULT_PARAMS] = data.source_params[key]
           }
-        }
+        })
         setParameters(merged)
         setInitialized(true)
       }

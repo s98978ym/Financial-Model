@@ -22,36 +22,33 @@ export function KPISummaryCards({ extractions, assignments, sheetMappings }: KPI
     const result: KPICard[] = []
 
     // Build assignment lookup for categories
-    const assignmentMap = new Map<string, any>()
-    for (const a of (assignments || [])) {
-      assignmentMap.set(`${a.sheet}:${a.cell}`, a)
-    }
+    const assignmentLookup: Record<string, any> = {};
+    (assignments || []).forEach(function(a: any) {
+      assignmentLookup[a.sheet + ':' + a.cell] = a
+    })
 
     // Build sheet purpose lookup
-    const sheetPurposeMap = new Map<string, string>()
-    for (const sm of (sheetMappings || [])) {
-      sheetPurposeMap.set(
-        sm.sheet_name || sm.sheet || '',
-        sm.sheet_purpose || sm.purpose || ''
-      )
-    }
+    const sheetPurposeLookup: Record<string, string> = {};
+    (sheetMappings || []).forEach(function(sm: any) {
+      sheetPurposeLookup[sm.sheet_name || sm.sheet || ''] = sm.sheet_purpose || sm.purpose || ''
+    })
 
     // Categorize extractions
-    let revenueItems: number[] = []
-    let costItems: number[] = []
+    const revenueItems: number[] = []
+    const costItems: number[] = []
     let docSourceCount = 0
-    let totalCount = extractions.length
+    const totalCount = extractions.length
     let highConfCount = 0
-    let segmentSet = new Set<string>()
+    const segmentNames: Record<string, boolean> = {}
 
-    for (const ext of extractions) {
-      const key = `${ext.sheet}:${ext.cell}`
-      const assignment = assignmentMap.get(key)
-      const sheetPurpose = sheetPurposeMap.get(ext.sheet) || ''
+    extractions.forEach(function(ext: any) {
+      const key = ext.sheet + ':' + ext.cell
+      const assignment = assignmentLookup[key]
+      const sheetPurpose = sheetPurposeLookup[ext.sheet] || ''
 
-      const category = assignment?.category || ''
-      const segment = assignment?.segment || ''
-      if (segment) segmentSet.add(segment)
+      const category = (assignment && assignment.category) || ''
+      const segment = (assignment && assignment.segment) || ''
+      if (segment) segmentNames[segment] = true
 
       const val = typeof ext.value === 'number' ? ext.value : parseFloat(String(ext.value || '0').replace(/,/g, ''))
 
@@ -64,13 +61,15 @@ export function KPISummaryCards({ extractions, assignments, sheetMappings }: KPI
 
       if (ext.source === 'document') docSourceCount++
       if ((ext.confidence || 0) >= 0.8) highConfCount++
-    }
+    })
+
+    const segmentCount = Object.keys(segmentNames).length
 
     // Card 1: Total Parameters
     result.push({
       label: 'パラメータ数',
-      value: `${totalCount}`,
-      subtext: `${segmentSet.size} セグメント`,
+      value: '' + totalCount,
+      subtext: segmentCount + ' セグメント',
       color: 'blue',
       icon: '📊',
     })

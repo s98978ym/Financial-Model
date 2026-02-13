@@ -63,50 +63,49 @@ export function PLPreviewTable({
   onRowClick,
   selectedItem,
 }: PLPreviewTableProps) {
-  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set())
+  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({})
 
   // Build lookups
   const { sections, totalItems } = useMemo(() => {
     // Phase 4 assignment lookup: sheet:cell → assignment
-    const assignmentMap = new Map<string, any>()
-    for (const a of (assignments || [])) {
-      const key = `${a.sheet}:${a.cell}`
-      assignmentMap.set(key, a)
-    }
+    const assignmentLookup: Record<string, any> = {};
+    (assignments || []).forEach(function(a: any) {
+      assignmentLookup[a.sheet + ':' + a.cell] = a
+    })
 
     // Phase 3 sheet purpose lookup: sheetName → { purpose, segment }
-    const sheetInfoMap = new Map<string, { purpose: string; segment: string }>()
-    for (const sm of (sheetMappings || [])) {
+    const sheetInfoLookup: Record<string, { purpose: string; segment: string }> = {};
+    (sheetMappings || []).forEach(function(sm: any) {
       const name = sm.sheet_name || sm.sheet || ''
-      sheetInfoMap.set(name, {
+      sheetInfoLookup[name] = {
         purpose: sm.sheet_purpose || sm.purpose || 'other',
         segment: sm.mapped_segment || sm.segment || '',
-      })
-    }
+      }
+    })
 
     // Enrich items
-    const enriched: EnrichedItem[] = items.map((item) => {
+    const enriched: EnrichedItem[] = items.map(function(item: any) {
       const sheet = item.sheet || ''
       const cell = item.cell || ''
-      const key = `${sheet}:${cell}`
-      const assignment = assignmentMap.get(key)
-      const sheetInfo = sheetInfoMap.get(sheet)
+      const key = sheet + ':' + cell
+      const assignment = assignmentLookup[key]
+      const sheetInfo = sheetInfoLookup[sheet]
 
-      const label = item.label || assignment?.label || assignment?.assigned_concept || ''
-      const category = item.category || assignment?.category || ''
-      const segment = item.segment || assignment?.segment || sheetInfo?.segment || ''
-      const period = item.period || assignment?.period || ''
-      const unit = item.unit || assignment?.unit || ''
+      const label = item.label || (assignment && assignment.label) || (assignment && assignment.assigned_concept) || ''
+      const category = item.category || (assignment && assignment.category) || ''
+      const segment = item.segment || (assignment && assignment.segment) || (sheetInfo && sheetInfo.segment) || ''
+      const period = item.period || (assignment && assignment.period) || ''
+      const unit = item.unit || (assignment && assignment.unit) || ''
 
       return {
         raw: item,
-        sheet,
-        cell,
-        label,
-        category,
-        segment,
-        period,
-        unit,
+        sheet: sheet,
+        cell: cell,
+        label: label,
+        category: category,
+        segment: segment,
+        period: period,
+        unit: unit,
         value: item.value,
         formattedValue: mode === 'extraction'
           ? formatValue(item.value, unit)
@@ -114,59 +113,64 @@ export function PLPreviewTable({
         originalText: item.original_text || '',
         source: item.source || item.derivation || '',
         confidence: item.confidence || 0,
-        assignedConcept: item.assigned_concept || assignment?.assigned_concept || '',
-        derivation: item.derivation || assignment?.derivation || '',
-        reasoning: item.reasoning || assignment?.reasoning || '',
+        assignedConcept: item.assigned_concept || (assignment && assignment.assigned_concept) || '',
+        derivation: item.derivation || (assignment && assignment.derivation) || '',
+        reasoning: item.reasoning || (assignment && assignment.reasoning) || '',
       }
     })
 
     // Group by sheet
-    const sheetGroups = new Map<string, EnrichedItem[]>()
-    for (const item of enriched) {
-      const group = sheetGroups.get(item.sheet) || []
-      group.push(item)
-      sheetGroups.set(item.sheet, group)
-    }
+    const sheetGroupsObj: Record<string, EnrichedItem[]> = {}
+    enriched.forEach(function(item) {
+      if (!sheetGroupsObj[item.sheet]) {
+        sheetGroupsObj[item.sheet] = []
+      }
+      sheetGroupsObj[item.sheet].push(item)
+    })
 
     // Sort and categorize sections
     const sections: GroupedSection[] = []
     const categoryOrder: PLCategory[] = ['revenue', 'cogs', 'opex', 'assumption', 'profit', 'other']
 
-    for (const [sheetName, sheetItems] of sheetGroups) {
-      const sheetInfo = sheetInfoMap.get(sheetName)
-      const purpose = sheetInfo?.purpose || 'other'
-      const segment = sheetInfo?.segment || ''
+    Object.keys(sheetGroupsObj).forEach(function(sheetName) {
+      const sheetItems = sheetGroupsObj[sheetName]
+      const sheetInfo = sheetInfoLookup[sheetName]
+      const purpose = (sheetInfo && sheetInfo.purpose) || 'other'
+      const segment = (sheetInfo && sheetInfo.segment) || ''
 
       // Determine PL category from first item or sheet purpose
-      const firstCategory = sheetItems[0]?.category || ''
+      const firstCategory = (sheetItems[0] && sheetItems[0].category) || ''
       const plCategory = categorizePL(firstCategory, purpose)
 
       // Sort items by cell address
-      sheetItems.sort((a, b) => {
+      sheetItems.sort(function(a, b) {
         const aRow = parseInt(a.cell.replace(/[A-Z]/g, '')) || 0
         const bRow = parseInt(b.cell.replace(/[A-Z]/g, '')) || 0
         if (aRow !== bRow) return aRow - bRow
         return a.cell.localeCompare(b.cell)
       })
 
-      sections.push({ sheetName, purpose, segment, plCategory, items: sheetItems })
-    }
+      sections.push({ sheetName: sheetName, purpose: purpose, segment: segment, plCategory: plCategory, items: sheetItems })
+    })
 
     // Sort sections by P&L order
-    sections.sort((a, b) => {
+    sections.sort(function(a, b) {
       const aIdx = categoryOrder.indexOf(a.plCategory)
       const bIdx = categoryOrder.indexOf(b.plCategory)
       return aIdx - bIdx
     })
 
-    return { sections, totalItems: enriched.length }
+    return { sections: sections, totalItems: enriched.length }
   }, [items, assignments, sheetMappings, mode])
 
   const toggleSection = (sheetName: string) => {
-    setCollapsedSections(prev => {
-      const next = new Set(prev)
-      if (next.has(sheetName)) next.delete(sheetName)
-      else next.add(sheetName)
+    setCollapsedSections(function(prev) {
+      const next = Object.assign({}, prev)
+      if (next[sheetName]) {
+        delete next[sheetName]
+      } else {
+        next[sheetName] = true
+      }
       return next
     })
   }
@@ -183,7 +187,7 @@ export function PLPreviewTable({
     <div className="space-y-4">
       {sections.map((section) => {
         const colors = PL_COLORS[section.plCategory]
-        const isCollapsed = collapsedSections.has(section.sheetName)
+        const isCollapsed = collapsedSections[section.sheetName]
         const purposeLabel = PURPOSE_LABELS[section.purpose] || section.purpose
 
         return (
