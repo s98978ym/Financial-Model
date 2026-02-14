@@ -37,6 +37,14 @@ export interface IndustryKPI {
   description: string
 }
 
+export interface Competitor {
+  name: string
+  features: string
+  strengths: string
+  revenue: string
+  operatingProfit: string
+}
+
 export interface IndustryInfo {
   label: string
   description: string
@@ -52,6 +60,12 @@ export interface IndustryInfo {
   kpis: IndustryKPI[]
   /** Typical business model */
   businessModel: string
+  /** Competitive landscape overview */
+  competitiveEnvironment: string
+  /** Industry trends (3-5 items) */
+  trends: string[]
+  /** Major competitors (3-5 companies) */
+  competitors: Competitor[]
 }
 
 export const SCALE_LABELS: Record<ScaleKey, string> = {
@@ -88,6 +102,20 @@ export const INDUSTRY_BENCHMARKS: Record<IndustryKey, IndustryInfo> = {
       { key: 'payback', label: 'CAC回収期間', value: '12-18ヶ月', description: '顧客獲得コストの回収にかかる期間' },
     ],
     businessModel: 'B2B / B2C サブスクリプション',
+    competitiveEnvironment: '大手クラウドベンダーと多数のスタートアップが混在する競争激化市場。Vertical SaaSへの特化と、AI機能統合による差別化が主戦場。ARR $1B超のメガSaaSが市場を寡占する一方、ニッチ領域では新興勢力が台頭。PLG（Product-Led Growth）の浸透により、販売サイクルの短縮が業界全体のトレンド。',
+    trends: [
+      'AI/LLM統合 — Copilot機能の搭載が標準化、生成AIによる自動化・アシスト機能が差別化要素に',
+      'Vertical SaaS — 業界特化型SaaSの台頭。汎用ツールから業種別ソリューションへの移行',
+      'PLG（Product-Led Growth） — セルフサーブ型の導入モデルが主流化、営業主導からプロダクト主導へ',
+      'コンポーザブルアーキテクチャ — API連携・マーケットプレイス型エコシステムの構築',
+      'Usage-Based Pricing — 従量課金モデルの採用増加、サブスクとのハイブリッド',
+    ],
+    competitors: [
+      { name: 'Salesforce', features: 'CRM/SFA/MAの統合プラットフォーム', strengths: '圧倒的な市場シェアとエコシステム', revenue: '約5兆円（$34.9B）', operatingProfit: '約8,500億円（営業利益率17.2%）' },
+      { name: 'ServiceNow', features: 'IT運用・ワークフロー自動化プラットフォーム', strengths: 'エンタープライズ向け強固な基盤とNRR 125%超', revenue: '約1.3兆円（$8.9B）', operatingProfit: '約3,500億円（営業利益率27%）' },
+      { name: 'Datadog', features: 'クラウド監視・オブザーバビリティ', strengths: '統合プラットフォーム戦略とDevOps市場の成長', revenue: '約3,500億円（$2.1B）', operatingProfit: '約700億円（営業利益率22%）' },
+      { name: 'HubSpot', features: 'SMB向けCRM・マーケティング統合', strengths: 'PLGモデルの成功事例、フリーミアム戦略', revenue: '約3,200億円（$2.2B）', operatingProfit: '約370億円（営業利益率12%）' },
+    ],
   },
 
   教育: {
@@ -107,6 +135,19 @@ export const INDUSTRY_BENCHMARKS: Record<IndustryKey, IndustryInfo> = {
       { key: 'tuition', label: '年間授業料', value: '30-120万円', description: '生徒1人あたり年間受講料' },
     ],
     businessModel: 'B2C / B2B2C',
+    competitiveEnvironment: '少子化による市場縮小圧力の中、オンライン教育・EdTechが急成長。大手学習塾チェーンとEdTechスタートアップの二極化が進行。リスキリング需要の高まりにより社会人教育市場が拡大中。コンテンツの質と学習成果の可視化が競争優位の鍵。',
+    trends: [
+      'オンライン/ハイブリッド学習 — コロナ後も定着、対面×オンラインの併用モデルが主流に',
+      'AI個別最適化 — アダプティブラーニングによる一人一人に合わせた学習体験の提供',
+      'リスキリング/社会人教育 — 政府補助金も追い風に、企業向け研修・生涯学習市場が急拡大',
+      'マイクロラーニング — 短時間コンテンツ・モバイルファーストの学習形態',
+    ],
+    competitors: [
+      { name: 'ベネッセHD', features: '通信教育「進研ゼミ」、学校ICT支援', strengths: '圧倒的な顧客基盤と教材開発力', revenue: '約4,200億円', operatingProfit: '約200億円（営業利益率4.8%）' },
+      { name: 'リクルート（スタディサプリ）', features: 'オンライン学習プラットフォーム', strengths: '低価格×高品質な映像授業、B2B2C展開', revenue: '教育事業 約1,200億円', operatingProfit: '約180億円（営業利益率15%）' },
+      { name: 'ナガセ（東進）', features: '映像授業予備校、全国FC展開', strengths: 'トップ講師陣と合格実績ブランド', revenue: '約500億円', operatingProfit: '約70億円（営業利益率14%）' },
+      { name: 'atama plus', features: 'AI学習プラットフォーム（塾向け）', strengths: 'AI個別最適化技術、大手塾との提携網', revenue: '約50億円（推定）', operatingProfit: '成長投資フェーズ' },
+    ],
   },
 
   人材: {
@@ -126,6 +167,19 @@ export const INDUSTRY_BENCHMARKS: Record<IndustryKey, IndustryInfo> = {
       { key: 'time_to_fill', label: '充足期間', value: '30-60日', description: '求人開始から成約までの平均日数' },
     ],
     businessModel: 'B2B (成功報酬型)',
+    competitiveEnvironment: '大手人材サービス会社が市場の過半を占める寡占市場。ダイレクトリクルーティングの台頭で従来型紹介モデルが変化。IT/DXエンジニア特化型や副業マッチングなどニッチ領域での新規参入が活発。人手不足を背景に市場全体は堅調に成長。',
+    trends: [
+      'ダイレクトリクルーティング — 企業が候補者に直接アプローチするスカウト型採用の主流化',
+      'フリーランス/副業マッチング — 雇用形態の多様化に伴いギグワーク・副業プラットフォームが成長',
+      'AI選考・マッチング — AIによるスクリーニング、最適人材マッチングの自動化',
+      'リファラル採用 — 社員紹介経由の採用が増加、専用ツールの普及',
+    ],
+    competitors: [
+      { name: 'リクルートHD', features: '総合人材サービス（Indeed, リクナビ, リクルートエージェント）', strengths: '国内最大の求人データベースとグローバル展開', revenue: '約3.4兆円（HR Technology含む）', operatingProfit: '約4,500億円（営業利益率13%）' },
+      { name: 'パーソルHD', features: '人材派遣・紹介・BPO（doda, テンプスタッフ）', strengths: '派遣×紹介の複合サービスと規模の経済', revenue: '約1.3兆円', operatingProfit: '約580億円（営業利益率4.5%）' },
+      { name: 'ビズリーチ（Visional）', features: 'ハイクラス向けダイレクトリクルーティング', strengths: '管理職・専門職特化のDB、企業スカウトモデル', revenue: '約600億円', operatingProfit: '約120億円（営業利益率20%）' },
+      { name: 'エン・ジャパン', features: '求人サイト・転職エージェント', strengths: '口コミ情報の充実とアジア展開', revenue: '約700億円', operatingProfit: '約80億円（営業利益率11%）' },
+    ],
   },
 
   EC: {
@@ -145,6 +199,20 @@ export const INDUSTRY_BENCHMARKS: Record<IndustryKey, IndustryInfo> = {
       { key: 'take_rate', label: 'テイクレート', value: '10-25%', description: 'マーケットプレイスの手数料率' },
     ],
     businessModel: 'B2C / マーケットプレイス',
+    competitiveEnvironment: 'Amazon・楽天の二大プラットフォームが市場を支配する中、D2Cブランドの台頭が顕著。Shopify等のEC基盤ツールの普及により参入障壁は低下。一方で物流・CS品質が差別化要素に。ソーシャルコマースやライブコマースの新チャネルも急成長中。',
+    trends: [
+      'D2C/ブランドEC — メーカー直販モデルの拡大、SNS活用したブランド構築',
+      'ソーシャルコマース — Instagram/TikTok経由の購買導線が急拡大',
+      'ライブコマース — ライブ配信での販売が中国に続き日本でも成長',
+      'サステナブルEC — 環境配慮型商品・包装への需要増、リコマース（二次流通）',
+      'クイックコマース — 即配達（30分以内）サービスの台頭',
+    ],
+    competitors: [
+      { name: 'Amazon Japan', features: '総合ECプラットフォーム + Prime会員サービス', strengths: '物流インフラ（FBA）と圧倒的な品揃え', revenue: '約3.5兆円（日本事業推定）', operatingProfit: '非開示（全社営業利益率6%）' },
+      { name: '楽天グループ（楽天市場）', features: 'モール型EC + ポイントエコシステム', strengths: '楽天経済圏1億ID、ポイント還元の集客力', revenue: 'EC事業 約1.2兆円', operatingProfit: 'EC事業 約700億円（推定）' },
+      { name: 'ZOZO（ZOZOTOWN）', features: 'ファッション特化型ECモール', strengths: '圧倒的なファッションEC認知度、計測技術', revenue: '約1,800億円', operatingProfit: '約500億円（営業利益率28%）' },
+      { name: 'メルカリ', features: 'C2Cフリマ + メルカリShops', strengths: '月間2,300万人利用の二次流通プラットフォーム', revenue: '約1,900億円', operatingProfit: '約140億円（営業利益率7%）' },
+    ],
   },
 
   小売: {
@@ -164,6 +232,19 @@ export const INDUSTRY_BENCHMARKS: Record<IndustryKey, IndustryInfo> = {
       { key: 'rent_ratio', label: '賃料比率', value: '8-15%', description: '売上に対する賃料の比率' },
     ],
     businessModel: 'B2C (店舗型)',
+    competitiveEnvironment: 'コンビニ3社（セブン、ローソン、ファミマ）がインフラ化し、専門小売・ドラッグストアが成長。人口減少による市場縮小を、インバウンド需要とPB商品強化で補う構造。DX推進（セルフレジ・無人店舗）とオムニチャネル化が競争の焦点。',
+    trends: [
+      'オムニチャネル — 店舗×EC×アプリの統合購買体験の構築',
+      'DX・無人店舗 — セルフレジ、AI需要予測、無人決済店舗の実験',
+      'PB（プライベートブランド）強化 — 高利益率PB商品の拡充による粗利改善',
+      'ドラッグストア躍進 — 食品・日用品の取扱い拡大で総合小売化',
+    ],
+    competitors: [
+      { name: 'セブン&アイHD', features: 'コンビニ（セブン-イレブン）、スーパー（イトーヨーカドー）', strengths: '国内21,000店超の圧倒的店舗網とPB「セブンプレミアム」', revenue: '約11兆円', operatingProfit: '約4,700億円（営業利益率4.2%）' },
+      { name: 'イオン', features: '総合スーパー・モール・金融・ヘルスケア', strengths: '国内最大の小売グループ、モール集客力', revenue: '約9.5兆円', operatingProfit: '約2,500億円（営業利益率2.6%）' },
+      { name: 'ファーストリテイリング（ユニクロ）', features: 'SPA型アパレル小売', strengths: 'グローバル展開と製販一体のコスト競争力', revenue: '約3兆円', operatingProfit: '約4,500億円（営業利益率15%）' },
+      { name: 'ウエルシアHD', features: 'ドラッグストアチェーン', strengths: '調剤併設型店舗と食品取扱い拡大', revenue: '約1.2兆円', operatingProfit: '約430億円（営業利益率3.6%）' },
+    ],
   },
 
   飲食: {
@@ -183,6 +264,20 @@ export const INDUSTRY_BENCHMARKS: Record<IndustryKey, IndustryInfo> = {
       { key: 'occupancy', label: '座席稼働率', value: '60-85%', description: '座席の稼働率。ランチ・ディナーで異なる' },
     ],
     businessModel: 'B2C (店舗型)',
+    competitiveEnvironment: '大手チェーンのFC展開による寡占化と、個人店・新興ブランドの二極化。原材料費・人件費の高騰が業界全体の課題。デリバリー/テイクアウト需要の定着で「店舗外売上」の比率が増加。高付加価値路線とコスト効率化の両立が求められる。',
+    trends: [
+      'デリバリー/テイクアウト常態化 — UberEats・出前館による店舗外売上が全体の15-30%に',
+      'ゴーストキッチン — 客席なしのデリバリー専用キッチンで固定費削減',
+      'DX推進 — モバイルオーダー、セルフレジ、AI需要予測による省人化',
+      '原価高騰対応 — 食材価格上昇に対するメニュー改定・ポーションコントロール',
+      '体験価値重視 — SNS映え、コト消費としての飲食体験の差別化',
+    ],
+    competitors: [
+      { name: 'すかいらーくHD', features: 'ファミレスチェーン（ガスト、バーミヤン等）', strengths: '約3,000店の店舗網とセントラルキッチン', revenue: '約3,700億円', operatingProfit: '約150億円（営業利益率4%）' },
+      { name: 'ゼンショーHD', features: '牛丼（すき家）、回転寿司（はま寿司）等', strengths: '国内最大の外食チェーン、多業態展開', revenue: '約8,500億円', operatingProfit: '約450億円（営業利益率5.3%）' },
+      { name: '日本マクドナルドHD', features: 'ハンバーガーチェーン', strengths: '圧倒的ブランド力とFC model、デジタル戦略', revenue: '約3,800億円', operatingProfit: '約380億円（営業利益率10%）' },
+      { name: 'スターバックス コーヒー ジャパン', features: 'スペシャルティコーヒーチェーン', strengths: 'ブランド・空間価値と高単価戦略', revenue: '約2,500億円', operatingProfit: '約250億円（営業利益率10%）' },
+    ],
   },
 
   メーカー: {
@@ -202,6 +297,19 @@ export const INDUSTRY_BENCHMARKS: Record<IndustryKey, IndustryInfo> = {
       { key: 'gross_margin', label: '粗利率', value: '20-50%', description: '業種により大きく異なる' },
     ],
     businessModel: 'B2B / B2C',
+    competitiveEnvironment: '素材・部品メーカーは技術力で寡占、完成品メーカーは価格競争が激化。グローバルサプライチェーンの再編（国内回帰、チャイナ+1）が進行中。カーボンニュートラル対応のための設備投資が必須となり、ESG経営が競争力の新基準に。',
+    trends: [
+      'スマートファクトリー — IoT/AI活用の工場自動化、予知保全、品質管理の高度化',
+      'サプライチェーン再編 — 地政学リスクを踏まえた生産拠点の分散・国内回帰',
+      'カーボンニュートラル — CO2排出削減、再エネ導入、Scope3対応',
+      'アフターサービス収益 — 製品販売からサービス（保守・サブスク）への収益モデル転換',
+    ],
+    competitors: [
+      { name: 'キーエンス', features: 'FA用センサー・計測機器・画像処理', strengths: '直販モデルと55%超の営業利益率', revenue: '約9,200億円', operatingProfit: '約5,100億円（営業利益率55%）' },
+      { name: 'ダイキン工業', features: '空調機器のグローバルメーカー', strengths: '世界シェア1位の空調技術とグローバル展開', revenue: '約4.2兆円', operatingProfit: '約4,400億円（営業利益率10%）' },
+      { name: '村田製作所', features: '電子部品（セラミックコンデンサ等）', strengths: 'MLCC世界シェア40%、EV/5G需要取込み', revenue: '約1.7兆円', operatingProfit: '約3,200億円（営業利益率19%）' },
+      { name: 'SMC', features: '空圧機器の世界トップメーカー', strengths: '工場自動化のFA需要を独占、世界シェア38%', revenue: '約8,200億円', operatingProfit: '約2,900億円（営業利益率35%）' },
+    ],
   },
 
   ヘルスケア: {
@@ -221,6 +329,20 @@ export const INDUSTRY_BENCHMARKS: Record<IndustryKey, IndustryInfo> = {
       { key: 'regulatory', label: '許認可コスト', value: '500-5,000万円', description: '薬事・認可取得にかかる費用' },
     ],
     businessModel: 'B2C / B2B2C',
+    competitiveEnvironment: '医療DXが国策として推進される中、電子カルテ・オンライン診療・PHR（個人健康記録）が急成長。規制産業のため参入障壁は高いが、デジタルヘルスへの投資が活発。薬事承認プロセスのDX化（SaMD=プログラム医療機器）が新市場を創出。大手製薬・医療機器メーカーとデジタルヘルススタートアップの提携が加速。',
+    trends: [
+      'オンライン診療 — 規制緩和により恒久化、初診からのオンライン対応が可能に',
+      'SaMD（プログラム医療機器） — AIによる診断支援ソフトの薬事承認が増加',
+      'PHR/ウェアラブル — Apple Watch等によるバイタル記録、予防医療データの活用',
+      'バイオテック — mRNA技術、遺伝子治療、個別化医療の発展',
+      '医療DX政策 — マイナ保険証、電子処方箋、医療データ連携基盤の整備',
+    ],
+    competitors: [
+      { name: 'エムスリー', features: '医療従事者向けプラットフォーム（m3.com）', strengths: '国内医師の90%が登録、製薬MR代替のデジタルマーケ', revenue: '約2,300億円', operatingProfit: '約600億円（営業利益率26%）' },
+      { name: 'メドレー', features: 'オンライン診療（CLINICS）、人材（ジョブメドレー）', strengths: 'SaaS×人材の複合モデルで医療機関を包括支援', revenue: '約200億円', operatingProfit: '約30億円（営業利益率15%）' },
+      { name: 'PHCホールディングス', features: '診療所向け電子カルテ・検査機器', strengths: '国内電子カルテシェアトップクラス', revenue: '約3,500億円', operatingProfit: '約250億円（営業利益率7%）' },
+      { name: 'テルモ', features: '医療機器（カテーテル、輸液等）', strengths: 'グローバル展開と高シェアのカテーテル事業', revenue: '約8,600億円', operatingProfit: '約1,400億円（営業利益率16%）' },
+    ],
   },
 
   その他: {
@@ -240,6 +362,18 @@ export const INDUSTRY_BENCHMARKS: Record<IndustryKey, IndustryInfo> = {
       { key: 'runway', label: 'ランウェイ', value: '12-24ヶ月', description: '現金が持続する月数' },
     ],
     businessModel: '多様',
+    competitiveEnvironment: '業種により競争環境は大きく異なる。一般的に、デジタル化の進展により業界の垣根が低下し、異業種参入が増加傾向。スタートアップによるディスラプションと、大企業によるデジタル変革の両面で競争が激化。',
+    trends: [
+      'DX推進 — あらゆる業界でデジタルトランスフォーメーションが加速',
+      'サステナビリティ経営 — ESG/SDGsへの対応が投資家・消費者双方から要求',
+      'AI/自動化 — 業務プロセスの自動化・効率化による生産性向上',
+      '人材不足対応 — 少子高齢化に伴う人手不足への技術的・組織的対応',
+    ],
+    competitors: [
+      { name: '（業界により異なる）', features: '業界リーダー企業', strengths: '市場シェアとブランド力', revenue: '業界により異なる', operatingProfit: '業界平均 営業利益率5-15%' },
+      { name: '（業界により異なる）', features: 'チャレンジャー企業', strengths: '差別化戦略とイノベーション', revenue: '業界により異なる', operatingProfit: '業界平均 営業利益率3-10%' },
+      { name: '（業界により異なる）', features: 'ニッチプレイヤー', strengths: '特定セグメントでの専門性', revenue: '業界により異なる', operatingProfit: '業界平均 営業利益率5-20%' },
+    ],
   },
 }
 
