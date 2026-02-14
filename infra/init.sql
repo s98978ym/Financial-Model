@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS projects (
     status      TEXT NOT NULL DEFAULT 'created'
                 CHECK (status IN ('created','active','completed','archived')),
     current_phase INT NOT NULL DEFAULT 1,
+    memo        TEXT NOT NULL DEFAULT '',
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );

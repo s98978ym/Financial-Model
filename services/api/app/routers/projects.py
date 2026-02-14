@@ -35,6 +35,35 @@ async def get_project(project_id: str):
     return project
 
 
+@router.patch("/projects/{project_id}")
+async def update_project(project_id: str, body: dict):
+    """Update project fields (name, memo, status)."""
+    project = db.get_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail={"code": "PROJECT_NOT_FOUND"})
+
+    allowed = {}
+    for key in ("name", "memo", "status"):
+        if key in body:
+            allowed[key] = body[key]
+    if not allowed:
+        return project
+
+    updated = db.update_project(project_id, **allowed)
+    return updated
+
+
+@router.delete("/projects/{project_id}")
+async def delete_project(project_id: str):
+    """Delete a project and all related data."""
+    project = db.get_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail={"code": "PROJECT_NOT_FOUND"})
+
+    db.delete_project(project_id)
+    return {"status": "deleted", "project_id": project_id}
+
+
 @router.get("/projects/{project_id}/state")
 async def get_project_state(project_id: str):
     """Get full project state for resuming."""

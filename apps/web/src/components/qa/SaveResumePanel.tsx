@@ -97,7 +97,7 @@ export function SaveResumePanel({ projectId, projectState }: SaveResumePanelProp
         var snapshot: SavedSnapshot = {
           id: 'snap_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
           projectId: data.project?.id || projectId,
-          name: (data.project?.name || file.name) + ' (インポート)',
+          name: (data.project?.name || (file && file.name) || 'import') + ' (インポート)',
           timestamp: new Date().toISOString(),
           data: data,
         }
