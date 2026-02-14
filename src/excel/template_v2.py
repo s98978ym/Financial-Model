@@ -104,6 +104,10 @@ PL_ROWS = {
     "system":       15,
     "other_opex":   16,
     "opex_total":   17,
+    # SGA/R&D summary (used when sga_rd_mode="separate")
+    "sga_ref":      12,   # row for SGA合計 (formula → detail sheet)
+    "rd_ref":       13,   # row for 開発費合計 (formula → detail sheet)
+    "opex_total_sep": 14, # row for OPEX合計 when separate mode
     # Depreciation
     "depr_header":  19,
     "depreciation": 20,
@@ -121,6 +125,26 @@ PL_ROWS = {
     # Funding
     "fund_header":  33,
     "funding_need": 34,
+}
+
+# SGA detail sheet row positions
+SGA_ROWS = {
+    "header_fy": 3,
+    "payroll":   4,
+    "marketing": 5,
+    "office":    6,
+    "other":     7,
+    "total":     8,
+}
+
+# R&D detail sheet row positions
+RD_ROWS = {
+    "header_fy":   3,
+    "internal":    4,
+    "outsource":   5,
+    "cloud_infra": 6,
+    "other":       7,
+    "total":       8,
 }
 
 # Simulation sheet row positions
@@ -337,11 +361,15 @@ def build_pl_sheet(
     wb: Workbook,
     num_segments: int = 3,
     fy_labels: Optional[List[str]] = None,
+    sga_rd_mode: str = "inline",
 ) -> None:
     """Build PL設計 sheet (Layer B).
 
     Revenue = SUM of all segment total rows.
     Includes OPEX, CAPEX, depreciation, FCF, cumulative FCF, funding need.
+
+    sga_rd_mode: "inline" = OPEX items directly in PL sheet (default)
+                 "separate" = SGA/R&D totals reference detail sheets
     """
     fy = fy_labels or DEFAULT_FY_LABELS
     ws = wb.active
@@ -395,16 +423,33 @@ def build_pl_sheet(
     # ---------- 【OPEX】 ----------
     _write_section_header(ws, r["opex_header"], "【OPEX（事業運営費）】")
 
-    _write_input_row(ws, r["payroll"], "人件費", [0] * 5, indent=1)
-    _write_input_row(ws, r["marketing"], "マーケティング費", [0] * 5, indent=1)
-    _write_input_row(ws, r["office"], "オフィス・一般管理費", [0] * 5, indent=1)
-    _write_input_row(ws, r["system"], "システム・開発費", [0] * 5, indent=1)
-    _write_input_row(ws, r["other_opex"], "その他OPEX", [0] * 5, indent=1)
+    if sga_rd_mode == "separate":
+        # Separate mode: SGA and R&D reference their detail sheets
+        sga_total_f = [f"='販管費明細'!{_col(c)}{SGA_ROWS['total']}" for c in FY_COLS]
+        _write_formula_row(ws, r["sga_ref"], "販管費合計（→明細）", sga_total_f, bold=True)
 
-    # Row 17: OPEX合計
-    opex_f = [f"=SUM({_col(c)}{r['payroll']}:{_col(c)}{r['other_opex']})" for c in FY_COLS]
-    _write_formula_row(ws, r["opex_total"], "OPEX合計", opex_f, bold=True)
-    _apply_border_row(ws, r["opex_total"], BOTTOM_DOUBLE)
+        rd_total_f = [f"='開発費明細'!{_col(c)}{RD_ROWS['total']}" for c in FY_COLS]
+        _write_formula_row(ws, r["rd_ref"], "開発費合計（→明細）", rd_total_f, bold=True)
+
+        opex_f = [f"={_col(c)}{r['sga_ref']}+{_col(c)}{r['rd_ref']}" for c in FY_COLS]
+        _write_formula_row(ws, r["opex_total_sep"], "OPEX合計", opex_f, bold=True)
+        _apply_border_row(ws, r["opex_total_sep"], BOTTOM_DOUBLE)
+
+        # Blank rows 15-17 (unused in separate mode)
+        for blank_row in range(15, 18):
+            _separator_row(ws, blank_row)
+    else:
+        # Inline mode: OPEX items directly in PL sheet (original behavior)
+        _write_input_row(ws, r["payroll"], "人件費", [0] * 5, indent=1)
+        _write_input_row(ws, r["marketing"], "マーケティング費", [0] * 5, indent=1)
+        _write_input_row(ws, r["office"], "オフィス・一般管理費", [0] * 5, indent=1)
+        _write_input_row(ws, r["system"], "システム・開発費", [0] * 5, indent=1)
+        _write_input_row(ws, r["other_opex"], "その他OPEX", [0] * 5, indent=1)
+
+        # Row 17: OPEX合計
+        opex_f = [f"=SUM({_col(c)}{r['payroll']}:{_col(c)}{r['other_opex']})" for c in FY_COLS]
+        _write_formula_row(ws, r["opex_total"], "OPEX合計", opex_f, bold=True)
+        _apply_border_row(ws, r["opex_total"], BOTTOM_DOUBLE)
 
     # Row 18: separator
     _separator_row(ws, 18)
@@ -427,7 +472,8 @@ def build_pl_sheet(
     _write_section_header(ws, r["pl_header"], "【損益】")
 
     # Row 26: 営業利益 = 粗利 - OPEX合計 - 減価償却
-    op_f = [f"={_col(c)}{r['gross_profit']}-{_col(c)}{r['opex_total']}-{_col(c)}{r['depreciation']}" for c in FY_COLS]
+    opex_row = r["opex_total_sep"] if sga_rd_mode == "separate" else r["opex_total"]
+    op_f = [f"={_col(c)}{r['gross_profit']}-{_col(c)}{opex_row}-{_col(c)}{r['depreciation']}" for c in FY_COLS]
     _write_formula_row(ws, r["op"], "営業利益", op_f, bold=True)
     _apply_border_row(ws, r["op"], BOTTOM_DOUBLE)
 
@@ -581,6 +627,7 @@ def _build_segment_summary(ws, start_row: int, fy: List[str]) -> None:
 def build_simulation_sheet(
     wb: Workbook,
     fy_labels: Optional[List[str]] = None,
+    sga_rd_mode: str = "inline",
 ) -> None:
     """Build シミュレーション分析 sheet (Layer A).
 
@@ -732,8 +779,9 @@ def build_simulation_sheet(
     # Simplified: GP × revenue_multiplier × (1 - cogs_adj) where cogs_adj is relative
     _sr_gp_row(ws, R["sr_sim_gp"], "シミュ後粗利", R)
 
-    _sr_row(ws, R["sr_base_opex"], "Base OPEX", PL_ROWS["opex_total"], pl, None, None)
-    _sr_opex_row(ws, R["sr_sim_opex"], "シミュ後OPEX", R)
+    effective_opex_row = PL_ROWS["opex_total_sep"] if sga_rd_mode == "separate" else PL_ROWS["opex_total"]
+    _sr_row(ws, R["sr_base_opex"], "Base OPEX", effective_opex_row, pl, None, None)
+    _sr_opex_row(ws, R["sr_sim_opex"], "シミュ後OPEX", R, sga_rd_mode=sga_rd_mode)
 
     _sr_row(ws, R["sr_base_depr"], "Base償却費", PL_ROWS["depreciation"], pl, None, None)
     _sr_row(ws, R["sr_sim_depr"], "シミュ後償却費", PL_ROWS["depreciation"], pl, None, None)  # depr unchanged
@@ -907,13 +955,13 @@ def _sr_gp_row(ws, row: int, label: str, R: dict) -> None:
     _write_formula_row(ws, row, label, formulas, bold=True)
 
 
-def _sr_opex_row(ws, row: int, label: str, R: dict) -> None:
+def _sr_opex_row(ws, row: int, label: str, R: dict, sga_rd_mode: str = "inline") -> None:
     """Simulated OPEX: each component × its scenario multiplier.
 
-    payroll × var4, marketing × var5, (office+system+other) × var6
+    Inline mode:  payroll × var4, marketing × var5, (office+system+other) × var6
+    Separate mode: SGA detail components × multipliers + R&D × var6
     """
     formulas = []
-    pl = "PL設計"
     for c in FY_COLS:
         cl = _col(c)
 
@@ -926,14 +974,28 @@ def _sr_opex_row(ws, row: int, label: str, R: dict) -> None:
                 f'IF($D${R["scenario_select"]}="Best",{cl}{t},{cl}{b}))'
             )
 
-        payroll = f"'{pl}'!{cl}{PL_ROWS['payroll']}*{_mult(4)}"
-        marketing = f"'{pl}'!{cl}{PL_ROWS['marketing']}*{_mult(5)}"
-        rest = (
-            f"('{pl}'!{cl}{PL_ROWS['office']}"
-            f"+'{pl}'!{cl}{PL_ROWS['system']}"
-            f"+'{pl}'!{cl}{PL_ROWS['other_opex']})*{_mult(6)}"
-        )
-        formulas.append(f"={payroll}+{marketing}+{rest}")
+        if sga_rd_mode == "separate":
+            # Reference detail sheets
+            sga_sheet = "販管費明細"
+            rd_sheet = "開発費明細"
+            payroll = f"'{sga_sheet}'!{cl}{SGA_ROWS['payroll']}*{_mult(4)}"
+            marketing = f"'{sga_sheet}'!{cl}{SGA_ROWS['marketing']}*{_mult(5)}"
+            rest_sga = (
+                f"('{sga_sheet}'!{cl}{SGA_ROWS['office']}"
+                f"+'{sga_sheet}'!{cl}{SGA_ROWS['other']})*{_mult(6)}"
+            )
+            rd = f"'{rd_sheet}'!{cl}{RD_ROWS['total']}*{_mult(6)}"
+            formulas.append(f"={payroll}+{marketing}+{rest_sga}+{rd}")
+        else:
+            pl = "PL設計"
+            payroll = f"'{pl}'!{cl}{PL_ROWS['payroll']}*{_mult(4)}"
+            marketing = f"'{pl}'!{cl}{PL_ROWS['marketing']}*{_mult(5)}"
+            rest = (
+                f"('{pl}'!{cl}{PL_ROWS['office']}"
+                f"+'{pl}'!{cl}{PL_ROWS['system']}"
+                f"+'{pl}'!{cl}{PL_ROWS['other_opex']})*{_mult(6)}"
+            )
+            formulas.append(f"={payroll}+{marketing}+{rest}")
     _write_formula_row(ws, row, label, formulas, bold=True)
 
 
@@ -1115,11 +1177,82 @@ def build_sensitivity_sheet(
         ws.cell(row=row, column=6, value=mitigation).font = LABEL_FONT
 
 
+def build_sga_detail_sheet(
+    wb: Workbook,
+    fy_labels: Optional[List[str]] = None,
+) -> None:
+    """Build 販管費明細 (SGA detail) sheet.
+
+    Breaks down SGA into: 人件費, マーケティング費, オフィス・一般管理費, その他.
+    Total row is referenced by PL設計 sheet.
+    """
+    fy = fy_labels or DEFAULT_FY_LABELS
+    ws = wb.create_sheet("販管費明細")
+    _set_col_widths(ws, {1: 26, 2: 16, 3: 16, 4: 16, 5: 16, 6: 16})
+
+    # Title
+    _write_title(ws, 1, "販管費明細（SGA）")
+    _separator_row(ws, 2)
+
+    # FY headers
+    _write_fy_headers(ws, SGA_ROWS["header_fy"], fy, label="費目")
+
+    # Input rows
+    _write_input_row(ws, SGA_ROWS["payroll"], "人件費", [0] * 5, indent=1)
+    _write_input_row(ws, SGA_ROWS["marketing"], "マーケティング費", [0] * 5, indent=1)
+    _write_input_row(ws, SGA_ROWS["office"], "オフィス・一般管理費", [0] * 5, indent=1)
+    _write_input_row(ws, SGA_ROWS["other"], "その他販管費", [0] * 5, indent=1)
+
+    # Total
+    total_f = [
+        f"=SUM({_col(c)}{SGA_ROWS['payroll']}:{_col(c)}{SGA_ROWS['other']})"
+        for c in FY_COLS
+    ]
+    _write_formula_row(ws, SGA_ROWS["total"], "販管費合計", total_f, bold=True)
+    _apply_border_row(ws, SGA_ROWS["total"], BOTTOM_DOUBLE)
+
+
+def build_rd_detail_sheet(
+    wb: Workbook,
+    fy_labels: Optional[List[str]] = None,
+) -> None:
+    """Build 開発費明細 (R&D detail) sheet.
+
+    Breaks down R&D into: 社内開発, 外注開発, クラウド/インフラ, その他.
+    Total row is referenced by PL設計 sheet.
+    """
+    fy = fy_labels or DEFAULT_FY_LABELS
+    ws = wb.create_sheet("開発費明細")
+    _set_col_widths(ws, {1: 26, 2: 16, 3: 16, 4: 16, 5: 16, 6: 16})
+
+    # Title
+    _write_title(ws, 1, "開発費明細（R&D）")
+    _separator_row(ws, 2)
+
+    # FY headers
+    _write_fy_headers(ws, RD_ROWS["header_fy"], fy, label="費目")
+
+    # Input rows
+    _write_input_row(ws, RD_ROWS["internal"], "社内開発人件費", [0] * 5, indent=1)
+    _write_input_row(ws, RD_ROWS["outsource"], "外注開発費", [0] * 5, indent=1)
+    _write_input_row(ws, RD_ROWS["cloud_infra"], "クラウド・インフラ費", [0] * 5, indent=1)
+    _write_input_row(ws, RD_ROWS["other"], "その他開発費", [0] * 5, indent=1)
+
+    # Total
+    total_f = [
+        f"=SUM({_col(c)}{RD_ROWS['internal']}:{_col(c)}{RD_ROWS['other']})"
+        for c in FY_COLS
+    ]
+    _write_formula_row(ws, RD_ROWS["total"], "開発費合計", total_f, bold=True)
+    _apply_border_row(ws, RD_ROWS["total"], BOTTOM_DOUBLE)
+
+
 def create_v2_workbook(
     num_segments: int = 3,
     fy_labels: Optional[List[str]] = None,
     segment_model_types: Optional[List[str]] = None,
     extra_sheets: Optional[List[str]] = None,
+    sga_rd_mode: str = "inline",
 ) -> Workbook:
     """Create a complete v2 workbook with 3-layer structure.
 
@@ -1134,6 +1267,9 @@ def create_v2_workbook(
     extra_sheets : list[str] | None
         Additional optional sheets to include:
         "headcount", "kpi_dashboard", "sensitivity"
+    sga_rd_mode : str
+        "inline" = OPEX items directly in PL sheet (default)
+        "separate" = SGA/R&D totals reference detail sheets
 
     Returns
     -------
@@ -1146,15 +1282,20 @@ def create_v2_workbook(
     wb = Workbook()
 
     # Layer B: PL設計 (built first as active sheet)
-    build_pl_sheet(wb, num_segments=num_segments, fy_labels=fy)
+    build_pl_sheet(wb, num_segments=num_segments, fy_labels=fy, sga_rd_mode=sga_rd_mode)
 
     # Layer C: Segment model sheets
     for i in range(1, num_segments + 1):
         mt = model_types[i - 1] if i - 1 < len(model_types) else "subscription"
         build_segment_sheet(wb, i, fy_labels=fy, model_type=mt)
 
+    # SGA/R&D detail sheets (when separate mode)
+    if sga_rd_mode == "separate":
+        build_sga_detail_sheet(wb, fy_labels=fy)
+        build_rd_detail_sheet(wb, fy_labels=fy)
+
     # Layer A: Simulation (moved to first position)
-    build_simulation_sheet(wb, fy_labels=fy)
+    build_simulation_sheet(wb, fy_labels=fy, sga_rd_mode=sga_rd_mode)
 
     # Optional sheets based on Phase 3 adopted proposals
     extras = set(extra_sheets or [])
