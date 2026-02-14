@@ -115,12 +115,14 @@ export default function LLMConfigPage() {
   var phasesQuery = useQuery({
     queryKey: ['promptPhases'],
     queryFn: function() { return api.getPromptPhases() },
+    enabled: isAuthed,
   })
 
   // Load all prompts
   var promptsQuery = useQuery({
     queryKey: ['prompts', projectId],
     queryFn: function() { return api.listPrompts(projectId) },
+    enabled: isAuthed,
   })
 
   // Load selected prompt detail with versions
@@ -129,7 +131,7 @@ export default function LLMConfigPage() {
     queryFn: function() {
       return api.getPrompt(selectedPromptKey!, projectId)
     },
-    enabled: !!selectedPromptKey,
+    enabled: isAuthed && !!selectedPromptKey,
   })
 
   var phases: PhaseInfo[] = phasesQuery.data || []
