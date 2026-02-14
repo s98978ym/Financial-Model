@@ -104,17 +104,19 @@ export default function AdminLLMConfigPage() {
   var phasesQuery = useQuery({
     queryKey: ['promptPhases'],
     queryFn: function() { return api.getPromptPhases() },
+    enabled: isAuthed,
   })
 
   var promptsQuery = useQuery({
     queryKey: ['prompts', null],
     queryFn: function() { return api.listPrompts() },
+    enabled: isAuthed,
   })
 
   var promptDetailQuery = useQuery({
     queryKey: ['promptDetail', selectedPromptKey, null],
     queryFn: function() { return api.getPrompt(selectedPromptKey!) },
-    enabled: !!selectedPromptKey,
+    enabled: isAuthed && !!selectedPromptKey,
   })
 
   var phases: PhaseInfo[] = phasesQuery.data || []
