@@ -90,6 +90,18 @@ CREATE TABLE IF NOT EXISTS llm_audits (
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Prompt versions (admin-managed LLM prompt customizations)
+CREATE TABLE IF NOT EXISTS prompt_versions (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    prompt_key  TEXT NOT NULL,
+    project_id  UUID REFERENCES projects(id) ON DELETE CASCADE,
+    content     TEXT NOT NULL,
+    label       TEXT DEFAULT '',
+    author      TEXT DEFAULT 'admin',
+    is_active   BOOLEAN DEFAULT FALSE,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_documents_project ON documents(project_id);
 CREATE INDEX IF NOT EXISTS idx_runs_project ON runs(project_id);
@@ -98,3 +110,5 @@ CREATE INDEX IF NOT EXISTS idx_edits_run ON edits(run_id);
 CREATE INDEX IF NOT EXISTS idx_jobs_run ON jobs(run_id);
 CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status) WHERE status IN ('queued','running');
 CREATE INDEX IF NOT EXISTS idx_llm_audits_run ON llm_audits(run_id);
+CREATE INDEX IF NOT EXISTS idx_prompt_versions_key ON prompt_versions(prompt_key);
+CREATE INDEX IF NOT EXISTS idx_prompt_versions_project ON prompt_versions(project_id) WHERE project_id IS NOT NULL;

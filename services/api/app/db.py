@@ -118,6 +118,7 @@ _mem_phase_results: Dict[str, dict] = {}
 _mem_edits: List[dict] = []
 _mem_jobs: Dict[str, dict] = {}
 _mem_llm_audits: List[dict] = []
+_mem_prompt_versions: List[dict] = []
 
 
 # ---------------------------------------------------------------------------
@@ -699,3 +700,193 @@ def get_edits(run_id: str, phase: Optional[int] = None) -> List[dict]:
         if phase is not None:
             edits = [e for e in edits if e["phase"] == phase]
         return edits
+
+
+# ===================================================================
+# Prompt Versions
+# ===================================================================
+
+def _ensure_prompt_versions_table():
+    """Auto-create prompt_versions table if it doesn't exist (Postgres only)."""
+    if not _use_pg():
+        return
+    try:
+        with get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS prompt_versions (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    prompt_key TEXT NOT NULL,
+                    project_id UUID REFERENCES projects(id) ON DELETE CASCADE,
+                    content TEXT NOT NULL,
+                    label TEXT DEFAULT '',
+                    author TEXT DEFAULT 'admin',
+                    is_active BOOLEAN DEFAULT FALSE,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+                )
+            """)
+    except Exception as e:
+        logger.warning("prompt_versions migration skipped: %s", e)
+
+
+def save_prompt_version(prompt_key: str, content: str, project_id: Optional[str] = None,
+                        label: str = "", author: str = "admin", is_active: bool = True) -> dict:
+    """Save a new prompt version. If is_active, deactivate other versions for same key+project."""
+    _ensure_prompt_versions_table()
+
+    if _use_pg():
+        with get_conn() as conn:
+            cur = conn.cursor()
+            if is_active:
+                if project_id:
+                    cur.execute(
+                        "UPDATE prompt_versions SET is_active = FALSE WHERE prompt_key = %s AND project_id = %s",
+                        (prompt_key, project_id),
+                    )
+                else:
+                    cur.execute(
+                        "UPDATE prompt_versions SET is_active = FALSE WHERE prompt_key = %s AND project_id IS NULL",
+                        (prompt_key,),
+                    )
+            cur.execute(
+                """INSERT INTO prompt_versions (prompt_key, project_id, content, label, author, is_active)
+                   VALUES (%s, %s, %s, %s, %s, %s)
+                   RETURNING id, created_at""",
+                (prompt_key, project_id, content, label, author, is_active),
+            )
+            row = cur.fetchone()
+            return {"id": str(row[0]), "prompt_key": prompt_key, "project_id": project_id,
+                    "content": content, "label": label, "author": author, "is_active": is_active,
+                    "created_at": row[1].isoformat() if hasattr(row[1], "isoformat") else str(row[1])}
+    else:
+        if is_active:
+            for pv in _mem_prompt_versions:
+                if pv["prompt_key"] == prompt_key and pv.get("project_id") == project_id:
+                    pv["is_active"] = False
+        vid = _uuid()
+        now = _now_iso()
+        v = {"id": vid, "prompt_key": prompt_key, "project_id": project_id,
+             "content": content, "label": label, "author": author,
+             "is_active": is_active, "created_at": now}
+        _mem_prompt_versions.append(v)
+        return v
+
+
+def get_prompt_versions(prompt_key: str, project_id: Optional[str] = None) -> List[dict]:
+    """Get all versions for a prompt key, optionally scoped to a project."""
+    _ensure_prompt_versions_table()
+
+    if _use_pg():
+        with get_conn() as conn:
+            cur = conn.cursor()
+            if project_id:
+                cur.execute(
+                    """SELECT id, prompt_key, project_id, content, label, author, is_active, created_at
+                       FROM prompt_versions
+                       WHERE prompt_key = %s AND (project_id = %s OR project_id IS NULL)
+                       ORDER BY created_at DESC""",
+                    (prompt_key, project_id),
+                )
+            else:
+                cur.execute(
+                    """SELECT id, prompt_key, project_id, content, label, author, is_active, created_at
+                       FROM prompt_versions
+                       WHERE prompt_key = %s AND project_id IS NULL
+                       ORDER BY created_at DESC""",
+                    (prompt_key,),
+                )
+            return [
+                {"id": str(r[0]), "prompt_key": r[1], "project_id": str(r[2]) if r[2] else None,
+                 "content": r[3], "label": r[4], "author": r[5], "is_active": r[6],
+                 "created_at": r[7].isoformat() if hasattr(r[7], "isoformat") else str(r[7])}
+                for r in cur.fetchall()
+            ]
+    else:
+        versions = [v for v in _mem_prompt_versions if v["prompt_key"] == prompt_key]
+        if project_id:
+            versions = [v for v in versions if v.get("project_id") in (project_id, None)]
+        else:
+            versions = [v for v in versions if v.get("project_id") is None]
+        return sorted(versions, key=lambda v: v["created_at"], reverse=True)
+
+
+def get_active_prompt(prompt_key: str, project_id: Optional[str] = None) -> Optional[dict]:
+    """Get the active version for a prompt key. Project-level overrides global."""
+    _ensure_prompt_versions_table()
+
+    if _use_pg():
+        with get_conn() as conn:
+            cur = conn.cursor()
+            if project_id:
+                cur.execute(
+                    """SELECT id, prompt_key, project_id, content, label, author, is_active, created_at
+                       FROM prompt_versions
+                       WHERE prompt_key = %s AND project_id = %s AND is_active = TRUE
+                       LIMIT 1""",
+                    (prompt_key, project_id),
+                )
+                row = cur.fetchone()
+                if row:
+                    return {"id": str(row[0]), "prompt_key": row[1], "project_id": str(row[2]) if row[2] else None,
+                            "content": row[3], "label": row[4], "author": row[5], "is_active": row[6],
+                            "created_at": row[7].isoformat() if hasattr(row[7], "isoformat") else str(row[7])}
+            # Fallback to global
+            cur.execute(
+                """SELECT id, prompt_key, project_id, content, label, author, is_active, created_at
+                   FROM prompt_versions
+                   WHERE prompt_key = %s AND project_id IS NULL AND is_active = TRUE
+                   LIMIT 1""",
+                (prompt_key,),
+            )
+            row = cur.fetchone()
+            if not row:
+                return None
+            return {"id": str(row[0]), "prompt_key": row[1], "project_id": None,
+                    "content": row[3], "label": row[4], "author": row[5], "is_active": row[6],
+                    "created_at": row[7].isoformat() if hasattr(row[7], "isoformat") else str(row[7])}
+    else:
+        if project_id:
+            for v in reversed(_mem_prompt_versions):
+                if v["prompt_key"] == prompt_key and v.get("project_id") == project_id and v["is_active"]:
+                    return v
+        for v in reversed(_mem_prompt_versions):
+            if v["prompt_key"] == prompt_key and v.get("project_id") is None and v["is_active"]:
+                return v
+        return None
+
+
+def activate_prompt_version(version_id: str, prompt_key: str, project_id: Optional[str] = None) -> Optional[dict]:
+    """Activate a specific version (deactivates others for same key+project)."""
+    _ensure_prompt_versions_table()
+
+    if _use_pg():
+        with get_conn() as conn:
+            cur = conn.cursor()
+            if project_id:
+                cur.execute(
+                    "UPDATE prompt_versions SET is_active = FALSE WHERE prompt_key = %s AND project_id = %s",
+                    (prompt_key, project_id),
+                )
+            else:
+                cur.execute(
+                    "UPDATE prompt_versions SET is_active = FALSE WHERE prompt_key = %s AND project_id IS NULL",
+                    (prompt_key,),
+                )
+            cur.execute(
+                "UPDATE prompt_versions SET is_active = TRUE WHERE id = %s RETURNING id, content, label, created_at",
+                (version_id,),
+            )
+            row = cur.fetchone()
+            if not row:
+                return None
+            return {"id": str(row[0]), "content": row[1], "label": row[2],
+                    "created_at": row[3].isoformat() if hasattr(row[3], "isoformat") else str(row[3])}
+    else:
+        for v in _mem_prompt_versions:
+            if v["prompt_key"] == prompt_key and v.get("project_id") == project_id:
+                v["is_active"] = False
+        for v in _mem_prompt_versions:
+            if v["id"] == version_id:
+                v["is_active"] = True
+                return v
+        return None
