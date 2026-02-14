@@ -229,6 +229,31 @@ export default function LLMConfigPage() {
     promptsByPhase[p.phase].push(p)
   })
 
+  // Build ordered phase list for rendering prompt list.
+  // Use phases from API if available, otherwise derive from prompts data.
+  var phaseOrder: number[] = []
+  if (phases.length > 0) {
+    phases.forEach(function(ph) { phaseOrder.push(ph.phase) })
+  } else {
+    // Fallback: derive phase numbers from prompts
+    var seen: Record<number, boolean> = {}
+    prompts.forEach(function(p) {
+      if (!seen[p.phase]) {
+        seen[p.phase] = true
+        phaseOrder.push(p.phase)
+      }
+    })
+    phaseOrder.sort()
+  }
+
+  // Map phase numbers to labels (from API phases or fallback)
+  var phaseLabels: Record<number, string> = {}
+  phases.forEach(function(ph) { phaseLabels[ph.phase] = ph.label })
+  if (!phaseLabels[2]) phaseLabels[2] = 'BM分析'
+  if (!phaseLabels[3]) phaseLabels[3] = 'テンプレマップ'
+  if (!phaseLabels[4]) phaseLabels[4] = 'モデル設計'
+  if (!phaseLabels[5]) phaseLabels[5] = 'パラメータ抽出'
+
   var selectedPrompt = prompts.find(function(p) { return p.key === selectedPromptKey })
 
   // Loading auth check
@@ -316,9 +341,9 @@ export default function LLMConfigPage() {
     )
   }
 
-  // Data loading/error states
-  var isDataLoading = phasesQuery.isLoading || promptsQuery.isLoading
-  var dataError = phasesQuery.error || promptsQuery.error
+  // Data loading/error states — only block on promptsQuery (phases is supplementary)
+  var isDataLoading = promptsQuery.isLoading
+  var dataError = promptsQuery.error
 
   if (isDataLoading) {
     return (
@@ -456,56 +481,70 @@ export default function LLMConfigPage() {
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
             <div className="px-4 py-3 border-b border-gray-100">
               <h3 className="text-sm font-semibold text-gray-700">プロンプト一覧</h3>
+              <p className="text-[10px] text-gray-400 mt-0.5">{prompts.length} 件のプロンプト</p>
             </div>
-            <div className="divide-y divide-gray-50">
-              {phases.map(function(phase) {
-                var phasePrompts = promptsByPhase[phase.phase] || []
-                return (
-                  <div key={phase.phase}>
-                    <div className="px-4 py-2 bg-gray-50">
-                      <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
-                        Phase {phase.phase} — {phase.label}
-                      </span>
-                    </div>
-                    {phasePrompts.map(function(p) {
-                      var isSelected = selectedPromptKey === p.key
-                      return (
-                        <button
-                          key={p.key}
-                          onClick={function() { setSelectedPromptKey(p.key) }}
-                          className={'w-full text-left px-4 py-2.5 transition-colors flex items-center gap-2 ' + (
-                            isSelected
-                              ? 'bg-purple-50 border-l-2 border-purple-500'
-                              : 'hover:bg-gray-50 border-l-2 border-transparent'
-                          )}
-                        >
-                          <div className={'w-5 h-5 rounded flex items-center justify-center text-[10px] flex-shrink-0 ' + (
-                            p.prompt_type === 'system'
-                              ? 'bg-blue-100 text-blue-600'
-                              : 'bg-green-100 text-green-600'
-                          )}>
-                            {p.prompt_type === 'system' ? 'S' : 'U'}
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="text-xs font-medium text-gray-800 truncate">{p.display_name}</div>
-                            <div className="text-[10px] text-gray-400 truncate">{p.description}</div>
-                          </div>
-                          {p.is_customized && (
-                            <span className={'text-[9px] px-1.5 py-0.5 rounded-full font-medium flex-shrink-0 ' + (
-                              p.scope === 'project'
-                                ? 'bg-purple-100 text-purple-600'
-                                : 'bg-amber-100 text-amber-600'
+            {prompts.length === 0 ? (
+              <div className="px-4 py-8 text-center">
+                <p className="text-xs text-gray-400">プロンプトが見つかりません</p>
+                <button
+                  onClick={function() { promptsQuery.refetch() }}
+                  className="mt-2 text-xs text-purple-600 hover:underline"
+                >
+                  再読み込み
+                </button>
+              </div>
+            ) : (
+              <div className="divide-y divide-gray-50 max-h-[calc(100vh-380px)] overflow-y-auto">
+                {phaseOrder.map(function(phaseNum) {
+                  var phasePrompts = promptsByPhase[phaseNum] || []
+                  if (phasePrompts.length === 0) return null
+                  return (
+                    <div key={phaseNum}>
+                      <div className="px-4 py-2 bg-gray-50 sticky top-0 z-10">
+                        <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
+                          Phase {phaseNum} — {phaseLabels[phaseNum] || 'Phase ' + phaseNum}
+                        </span>
+                      </div>
+                      {phasePrompts.map(function(p) {
+                        var isSelected = selectedPromptKey === p.key
+                        return (
+                          <button
+                            key={p.key}
+                            onClick={function() { setSelectedPromptKey(p.key) }}
+                            className={'w-full text-left px-4 py-2.5 transition-colors flex items-center gap-2 ' + (
+                              isSelected
+                                ? 'bg-purple-50 border-l-2 border-purple-500'
+                                : 'hover:bg-gray-50 border-l-2 border-transparent'
+                            )}
+                          >
+                            <div className={'w-5 h-5 rounded flex items-center justify-center text-[10px] flex-shrink-0 ' + (
+                              p.prompt_type === 'system'
+                                ? 'bg-blue-100 text-blue-600'
+                                : 'bg-green-100 text-green-600'
                             )}>
-                              {p.scope === 'project' ? 'PJ' : 'G'}
-                            </span>
-                          )}
-                        </button>
-                      )
-                    })}
-                  </div>
-                )
-              })}
-            </div>
+                              {p.prompt_type === 'system' ? 'S' : 'U'}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="text-xs font-medium text-gray-800 truncate">{p.display_name}</div>
+                              <div className="text-[10px] text-gray-400 truncate">{p.description}</div>
+                            </div>
+                            {p.is_customized && (
+                              <span className={'text-[9px] px-1.5 py-0.5 rounded-full font-medium flex-shrink-0 ' + (
+                                p.scope === 'project'
+                                  ? 'bg-purple-100 text-purple-600'
+                                  : 'bg-amber-100 text-amber-600'
+                              )}>
+                                {p.scope === 'project' ? 'PJ' : 'G'}
+                              </span>
+                            )}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
           </div>
         </div>
 

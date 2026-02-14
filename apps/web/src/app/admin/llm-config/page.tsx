@@ -207,11 +207,37 @@ export default function AdminLLMConfigPage() {
     promptsByPhase[p.phase].push(p)
   })
 
+  // Build ordered phase list for rendering prompt list.
+  // Use phases from API if available, otherwise derive from prompts data.
+  var phaseOrder: number[] = []
+  if (phases.length > 0) {
+    phases.forEach(function(ph) { phaseOrder.push(ph.phase) })
+  } else {
+    // Fallback: derive phase numbers from prompts
+    var seen: Record<number, boolean> = {}
+    prompts.forEach(function(p) {
+      if (!seen[p.phase]) {
+        seen[p.phase] = true
+        phaseOrder.push(p.phase)
+      }
+    })
+    phaseOrder.sort()
+  }
+
+  // Map phase numbers to labels (from API phases or fallback)
+  var phaseLabels: Record<number, string> = {}
+  phases.forEach(function(ph) { phaseLabels[ph.phase] = ph.label })
+  // Fallback labels if phases API unavailable
+  if (!phaseLabels[2]) phaseLabels[2] = 'BM分析'
+  if (!phaseLabels[3]) phaseLabels[3] = 'テンプレマップ'
+  if (!phaseLabels[4]) phaseLabels[4] = 'モデル設計'
+  if (!phaseLabels[5]) phaseLabels[5] = 'パラメータ抽出'
+
   var selectedPrompt = prompts.find(function(p) { return p.key === selectedPromptKey })
 
-  // Data loading state
-  var isDataLoading = phasesQuery.isLoading || promptsQuery.isLoading
-  var dataError = phasesQuery.error || promptsQuery.error
+  // Data loading state — only block on promptsQuery (phases is supplementary)
+  var isDataLoading = promptsQuery.isLoading
+  var dataError = promptsQuery.error
 
   // Loading auth check
   if (isCheckingAuth) {
@@ -511,14 +537,15 @@ export default function AdminLLMConfigPage() {
                 </button>
               </div>
             ) : (
-              <div className="divide-y divide-gray-50">
-                {phases.map(function(phase) {
-                  var phasePrompts = promptsByPhase[phase.phase] || []
+              <div className="divide-y divide-gray-50 max-h-[calc(100vh-380px)] overflow-y-auto">
+                {phaseOrder.map(function(phaseNum) {
+                  var phasePrompts = promptsByPhase[phaseNum] || []
+                  if (phasePrompts.length === 0) return null
                   return (
-                    <div key={phase.phase}>
-                      <div className="px-4 py-2 bg-gray-50">
+                    <div key={phaseNum}>
+                      <div className="px-4 py-2 bg-gray-50 sticky top-0 z-10">
                         <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
-                          Phase {phase.phase} — {phase.label}
+                          Phase {phaseNum} — {phaseLabels[phaseNum] || 'Phase ' + phaseNum}
                         </span>
                       </div>
                       {phasePrompts.map(function(p) {
