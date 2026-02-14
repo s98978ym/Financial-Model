@@ -389,3 +389,45 @@ async def phase5_extract(body: dict):
         "phase": 5,
         "poll_url": f"/v1/jobs/{job['id']}",
     }
+
+
+# ===================================================================
+# Edits — Save & Retrieve user decisions (Phase 2 selection, Phase 3
+#          proposal decisions, Scenario parameter edits, etc.)
+# ===================================================================
+
+
+@router.post("/edits")
+async def save_user_edit(body: dict):
+    """Save a user edit/decision for a given phase.
+
+    Used by:
+    - Phase 2: selected_proposal_index
+    - Phase 3: proposal decisions (adopt/skip/instructions)
+    - Phase 6: scenario parameter overrides
+    """
+    project_id = body.get("project_id")
+    phase = body.get("phase")
+    patch_json = body.get("patch_json", {})
+
+    if not project_id or phase is None:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "VALIDATION_ERROR", "message": "project_id and phase required"},
+        )
+
+    run = db.get_latest_run(project_id)
+    if not run:
+        run = db.create_run(project_id)
+
+    edit = db.save_edit(run_id=run["id"], phase=phase, patch_json=patch_json)
+    return edit
+
+
+@router.get("/edits/{project_id}")
+async def get_user_edits(project_id: str, phase: int = None):
+    """Get all user edits for a project, optionally filtered by phase."""
+    run = db.get_latest_run(project_id)
+    if not run:
+        return []
+    return db.get_edits(run_id=run["id"], phase=phase)

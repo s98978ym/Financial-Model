@@ -941,10 +941,185 @@ def _sr_opex_row(ws, row: int, label: str, R: dict) -> None:
 # Public API: create full v2 workbook
 # ---------------------------------------------------------------------------
 
+def build_headcount_sheet(
+    wb: Workbook,
+    fy_labels: Optional[List[str]] = None,
+) -> None:
+    """Build a headcount planning sheet (人員計画)."""
+    fy = fy_labels or DEFAULT_FY_LABELS
+    ws = wb.create_sheet("人員計画")
+
+    # Title
+    ws.merge_cells("A1:F1")
+    c = ws.cell(row=1, column=1, value="人員計画")
+    c.font = Font(name="Meiryo", size=14, bold=True, color="FF4472C4")
+    ws.row_dimensions[1].height = 30
+
+    # FY headers
+    for i, label in enumerate(fy):
+        c = ws.cell(row=3, column=2 + i, value=label)
+        c.font = HEADER_FONT
+        c.fill = HEADER_FILL
+        c.alignment = Alignment(horizontal="center")
+    ws.cell(row=3, column=1, value="職種").font = SUBHEADER_FONT
+    ws.column_dimensions["A"].width = 24
+    for i in range(len(fy)):
+        ws.column_dimensions[get_column_letter(2 + i)].width = 14
+
+    # Roles
+    roles = [
+        ("経営/マネジメント", [1, 1, 2, 3, 4]),
+        ("エンジニア/開発", [3, 5, 8, 12, 18]),
+        ("営業/BD", [2, 3, 5, 8, 12]),
+        ("マーケティング", [1, 2, 3, 4, 6]),
+        ("CS/サポート", [1, 2, 3, 5, 7]),
+        ("管理/バックオフィス", [1, 1, 2, 3, 4]),
+    ]
+    for r_idx, (role, defaults) in enumerate(roles):
+        row = 4 + r_idx
+        ws.cell(row=row, column=1, value=role).font = LABEL_FONT
+        for c_idx, val in enumerate(defaults):
+            c = ws.cell(row=row, column=2 + c_idx, value=val)
+            c.fill = YELLOW_FILL
+            c.font = NUMBER_FONT
+            c.number_format = "#,##0"
+            c.alignment = Alignment(horizontal="right")
+
+    # Total row
+    total_row = 4 + len(roles)
+    ws.cell(row=total_row, column=1, value="合計FTE").font = BOLD_FONT
+    for c_idx in range(len(fy)):
+        col = 2 + c_idx
+        cl = get_column_letter(col)
+        c = ws.cell(row=total_row, column=col)
+        c.value = f"=SUM({cl}4:{cl}{total_row - 1})"
+        c.font = FORMULA_BOLD
+        c.number_format = "#,##0.0"
+        c.border = BOTTOM_DOUBLE
+
+    # Average cost per person
+    cost_row = total_row + 2
+    ws.cell(row=cost_row, column=1, value="平均人件費/人 (万円)").font = LABEL_FONT
+    for c_idx in range(len(fy)):
+        c = ws.cell(row=cost_row, column=2 + c_idx, value=600)
+        c.fill = YELLOW_FILL
+        c.font = NUMBER_FONT
+        c.number_format = "#,##0"
+
+    # Total cost
+    tc_row = cost_row + 1
+    ws.cell(row=tc_row, column=1, value="人件費合計 (万円)").font = BOLD_FONT
+    for c_idx in range(len(fy)):
+        col = 2 + c_idx
+        cl = get_column_letter(col)
+        c = ws.cell(row=tc_row, column=col)
+        c.value = f"={cl}{total_row}*{cl}{cost_row}"
+        c.font = FORMULA_BOLD
+        c.number_format = "#,##0"
+        c.border = BOTTOM_DOUBLE
+
+
+def build_kpi_dashboard_sheet(
+    wb: Workbook,
+    fy_labels: Optional[List[str]] = None,
+) -> None:
+    """Build a KPI dashboard sheet (KPIダッシュボード)."""
+    fy = fy_labels or DEFAULT_FY_LABELS
+    ws = wb.create_sheet("KPIダッシュボード")
+
+    ws.merge_cells("A1:F1")
+    c = ws.cell(row=1, column=1, value="KPIダッシュボード")
+    c.font = Font(name="Meiryo", size=14, bold=True, color="FF4472C4")
+    ws.row_dimensions[1].height = 30
+
+    for i, label in enumerate(fy):
+        c = ws.cell(row=3, column=2 + i, value=label)
+        c.font = HEADER_FONT
+        c.fill = HEADER_FILL
+        c.alignment = Alignment(horizontal="center")
+    ws.cell(row=3, column=1, value="KPI").font = SUBHEADER_FONT
+    ws.column_dimensions["A"].width = 28
+    for i in range(len(fy)):
+        ws.column_dimensions[get_column_letter(2 + i)].width = 14
+
+    kpis = [
+        ("顧客獲得数（累積）", [50, 150, 400, 800, 1500], "#,##0"),
+        ("月間アクティブユーザー", [30, 120, 300, 600, 1200], "#,##0"),
+        ("顧客継続率", [0.85, 0.88, 0.90, 0.92, 0.93], "0.0%"),
+        ("市場シェア", [0.001, 0.003, 0.008, 0.015, 0.025], "0.0%"),
+        ("CAC（万円）", [50, 40, 35, 30, 25], "#,##0"),
+        ("LTV（万円）", [100, 150, 200, 250, 300], "#,##0"),
+        ("LTV/CAC", [2.0, 3.75, 5.7, 8.3, 12.0], "0.0"),
+        ("NPS", [30, 35, 40, 45, 50], "#,##0"),
+        ("従業員1人あたり売上（万円）", [800, 1000, 1200, 1500, 1800], "#,##0"),
+    ]
+
+    for r_idx, (name, defaults, fmt) in enumerate(kpis):
+        row = 4 + r_idx
+        ws.cell(row=row, column=1, value=name).font = LABEL_FONT
+        for c_idx, val in enumerate(defaults):
+            c = ws.cell(row=row, column=2 + c_idx, value=val)
+            c.fill = YELLOW_FILL
+            c.font = NUMBER_FONT
+            c.number_format = fmt
+            c.alignment = Alignment(horizontal="right")
+
+
+def build_sensitivity_sheet(
+    wb: Workbook,
+    fy_labels: Optional[List[str]] = None,
+) -> None:
+    """Build a risk sensitivity analysis sheet (リスク感応度分析)."""
+    fy = fy_labels or DEFAULT_FY_LABELS
+    ws = wb.create_sheet("リスク感応度分析")
+
+    ws.merge_cells("A1:F1")
+    c = ws.cell(row=1, column=1, value="リスク感応度分析")
+    c.font = Font(name="Meiryo", size=14, bold=True, color="FF4472C4")
+    ws.row_dimensions[1].height = 30
+    ws.column_dimensions["A"].width = 24
+    ws.column_dimensions["B"].width = 16
+    ws.column_dimensions["C"].width = 16
+    ws.column_dimensions["D"].width = 18
+    ws.column_dimensions["E"].width = 18
+    ws.column_dimensions["F"].width = 18
+
+    # Headers
+    headers = ["リスク要因", "変動幅", "発生確率", "FY5売上への影響", "FY5営業利益への影響", "対策"]
+    for i, h in enumerate(headers):
+        c = ws.cell(row=3, column=1 + i, value=h)
+        c.font = HEADER_FONT
+        c.fill = HEADER_FILL
+        c.alignment = Alignment(horizontal="center")
+
+    risks = [
+        ("顧客獲得の遅延", "-20%", "30%", "", "", "マーケチャネル多様化"),
+        ("ユニットエコノミクス未確立", "-15%", "25%", "", "", "価格戦略見直し"),
+        ("主要人材の離職", "-10%", "20%", "", "", "ストックオプション"),
+        ("競合の価格攻勢", "-25%", "35%", "", "", "差別化強化"),
+        ("規制環境の変化", "-15%", "15%", "", "", "コンプライアンス体制"),
+        ("技術的負債の蓄積", "-10%", "40%", "", "", "定期リファクタリング"),
+    ]
+    for r_idx, (risk, delta, prob, rev, op, mitigation) in enumerate(risks):
+        row = 4 + r_idx
+        ws.cell(row=row, column=1, value=risk).font = LABEL_FONT
+        c = ws.cell(row=row, column=2, value=delta)
+        c.fill = YELLOW_FILL
+        c.font = NUMBER_FONT
+        c = ws.cell(row=row, column=3, value=prob)
+        c.fill = YELLOW_FILL
+        c.font = NUMBER_FONT
+        # Impact columns reference PL (placeholders)
+        ws.cell(row=row, column=4, value="").font = FORMULA_FONT
+        ws.cell(row=row, column=5, value="").font = FORMULA_FONT
+        ws.cell(row=row, column=6, value=mitigation).font = LABEL_FONT
+
+
 def create_v2_workbook(
     num_segments: int = 3,
     fy_labels: Optional[List[str]] = None,
     segment_model_types: Optional[List[str]] = None,
+    extra_sheets: Optional[List[str]] = None,
 ) -> Workbook:
     """Create a complete v2 workbook with 3-layer structure.
 
@@ -956,6 +1131,9 @@ def create_v2_workbook(
         Custom FY labels (e.g. ["FY26", "FY27", ...]).
     segment_model_types : list[str] | None
         Model type per segment (e.g. ["subscription", "transaction"]).
+    extra_sheets : list[str] | None
+        Additional optional sheets to include:
+        "headcount", "kpi_dashboard", "sensitivity"
 
     Returns
     -------
@@ -977,6 +1155,15 @@ def create_v2_workbook(
 
     # Layer A: Simulation (moved to first position)
     build_simulation_sheet(wb, fy_labels=fy)
+
+    # Optional sheets based on Phase 3 adopted proposals
+    extras = set(extra_sheets or [])
+    if "headcount" in extras:
+        build_headcount_sheet(wb, fy_labels=fy)
+    if "kpi_dashboard" in extras:
+        build_kpi_dashboard_sheet(wb, fy_labels=fy)
+    if "sensitivity" in extras:
+        build_sensitivity_sheet(wb, fy_labels=fy)
 
     # Register named ranges for PL KPIs
     _register_pl_named_ranges(wb, num_fys=len(fy))
