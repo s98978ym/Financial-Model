@@ -193,35 +193,114 @@ def _generate_local_excel(job_id: str, run_id: str, body: dict):
         except Exception as e:
             logger.warning("PLWriter failed: %s — falling back", e)
 
-        # Fallback: create a simple Excel with recalc data
-        import openpyxl
+        # Fallback: create full v2 workbook with computed PL data
         from .recalc import _compute_pl
 
+        db.update_job(job_id, status="running", progress=30, log_msg="Building v2 workbook")
+
         parameters = body.get("parameters", {})
-        wb = openpyxl.Workbook()
-        ws = wb.active
-        ws.title = "PL Summary"
 
-        # Header
-        headers = ["", "FY1", "FY2", "FY3", "FY4", "FY5"]
-        for col, h in enumerate(headers, 1):
-            ws.cell(row=1, column=col, value=h).font = openpyxl.styles.Font(bold=True)
+        # Determine segment count from Phase 2/4 results if available
+        num_segments = 3  # default
+        segment_names = []
+        try:
+            phase2 = db.get_phase_result(run_id, 2)
+            if phase2 and phase2.get("raw_json"):
+                p2 = phase2["raw_json"]
+                proposals = p2.get("proposals", [])
+                if proposals:
+                    segs = proposals[0].get("segments", [])
+                    if segs:
+                        num_segments = max(1, min(len(segs), 10))
+                        segment_names = [s.get("name", "") for s in segs]
+                elif p2.get("segments"):
+                    segs = p2["segments"]
+                    num_segments = max(1, min(len(segs), 10))
+                    segment_names = [s.get("name", "") for s in segs]
+        except Exception:
+            logger.debug("Could not load Phase 2 segments, using default %d", num_segments)
 
-        pl = _compute_pl(parameters)["pl_summary"]
-        rows_data = [
-            ("売上高", pl["revenue"]),
-            ("売上原価", pl["cogs"]),
-            ("粗利", pl["gross_profit"]),
-            ("OPEX", pl["opex"]),
-            ("営業利益", pl["operating_profit"]),
-            ("FCF", pl["fcf"]),
-            ("累積FCF", pl["cumulative_fcf"]),
-        ]
+        # Load Phase 5 parameters if available
+        try:
+            phase5 = db.get_phase_result(run_id, 5)
+            if phase5 and phase5.get("raw_json"):
+                from .recalc import _extract_params_from_phase5
+                p5_params = _extract_params_from_phase5(phase5["raw_json"])
+                # Phase 5 params as base, user params override
+                parameters = {**p5_params, **parameters}
+        except Exception:
+            logger.debug("Could not load Phase 5 parameters")
 
-        for r, (label, values) in enumerate(rows_data, 2):
-            ws.cell(row=r, column=1, value=label)
-            for c, v in enumerate(values, 2):
-                ws.cell(row=r, column=c, value=v)
+        db.update_job(job_id, status="running", progress=50, log_msg="Computing PL data")
+
+        # Compute PL
+        result = _compute_pl(parameters)
+        pl = result["pl_summary"]
+
+        # Create full v2 workbook
+        from src.excel.template_v2 import (
+            create_v2_workbook, PL_ROWS, FY_COLS, SEG_ROWS, SEG_STREAM_ROWS_PER,
+            MAX_STREAMS, YELLOW_FILL, NUMBER_FONT, NUMBER_FMT, PERCENT_FMT,
+        )
+        from openpyxl.styles import Alignment
+
+        wb = create_v2_workbook(num_segments=num_segments)
+
+        db.update_job(job_id, status="running", progress=70, log_msg="Populating data")
+
+        # --- Populate PL設計 sheet ---
+        ws_pl = wb["PL設計"]
+
+        # Override revenue formula with computed values
+        for i, col in enumerate(FY_COLS):
+            c = ws_pl.cell(row=PL_ROWS["revenue"], column=col)
+            c.value = pl["revenue"][i]
+            c.fill = YELLOW_FILL
+            c.font = NUMBER_FONT
+            c.number_format = NUMBER_FMT
+            c.alignment = Alignment(horizontal="right")
+
+        # Set COGS rate
+        cogs_rate = float(parameters.get("cogs_rate", 0.3))
+        for i, col in enumerate(FY_COLS):
+            ws_pl.cell(row=PL_ROWS["cogs_rate"], column=col).value = cogs_rate
+
+        # Split OPEX into components
+        opex_list = pl["opex"]
+        for i, col in enumerate(FY_COLS):
+            ox = opex_list[i]
+            ws_pl.cell(row=PL_ROWS["payroll"], column=col).value = round(ox * 0.45)
+            ws_pl.cell(row=PL_ROWS["marketing"], column=col).value = round(ox * 0.20)
+            ws_pl.cell(row=PL_ROWS["office"], column=col).value = round(ox * 0.15)
+            ws_pl.cell(row=PL_ROWS["system"], column=col).value = round(ox * 0.12)
+            ws_pl.cell(row=PL_ROWS["other_opex"], column=col).value = round(ox * 0.08)
+
+        # --- Populate segment sheets with revenue breakdown ---
+        rev_per_seg = [round(r / num_segments) for r in pl["revenue"]]
+        for seg_idx in range(1, num_segments + 1):
+            sheet_name = f"セグメント{seg_idx}モデル"
+            if sheet_name not in wb.sheetnames:
+                continue
+            ws_seg = wb[sheet_name]
+
+            # Set segment name if available
+            if seg_idx <= len(segment_names) and segment_names[seg_idx - 1]:
+                ws_seg.cell(row=2, column=1).value = f"セグメント: {segment_names[seg_idx - 1]}"
+
+            # Put all revenue in stream 1 as a simple model
+            stream1_base = SEG_ROWS["stream_start"]
+            ws_seg.cell(row=stream1_base + 1, column=2).value = (
+                segment_names[seg_idx - 1] if seg_idx <= len(segment_names) and segment_names[seg_idx - 1]
+                else f"セグメント{seg_idx}"
+            )
+            for i, col in enumerate(FY_COLS):
+                # Set unit price = rev / 12 (monthly), volume = 1, frequency = 1
+                # This makes stream revenue = price * 1 * 1 * 12 = rev
+                ws_seg.cell(row=stream1_base + 2, column=col).value = round(rev_per_seg[i] / 12)
+                ws_seg.cell(row=stream1_base + 3, column=col).value = 1
+                ws_seg.cell(row=stream1_base + 4, column=col).value = 1
+
+        db.update_job(job_id, status="running", progress=90, log_msg="Saving workbook")
 
         buf = io.BytesIO()
         wb.save(buf)
@@ -229,7 +308,7 @@ def _generate_local_excel(job_id: str, run_id: str, body: dict):
 
         db.update_job(
             job_id, status="completed", progress=100,
-            log_msg="Excel generated (fallback)",
+            log_msg="Excel generated (v2 workbook)",
         )
 
     except Exception as e:
