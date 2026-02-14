@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { useParams } from 'next/navigation'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { api } from '@/lib/api'
@@ -31,6 +31,7 @@ export default function ScenarioPlaygroundPage() {
   var [plResult, setPLResult] = useState<any>(null)
   var [initialized, setInitialized] = useState(false)
   var [industry, setIndustry] = useState<IndustryKey>('その他')
+  var saveTimerRef = useRef<any>(null)
 
   // Load project state to get Phase 5 parameters
   var projectState = useQuery({
@@ -49,6 +50,24 @@ export default function ScenarioPlaygroundPage() {
       setIndustry(detected)
     }
   }, [projectState.data])
+
+  // Persist parameter edits to DB (debounced)
+  var saveParams = useMutation({
+    mutationFn: function(p: Record<string, number>) {
+      return api.saveEdit({
+        project_id: projectId,
+        phase: 6,
+        patch_json: { parameters: p },
+      })
+    },
+  })
+
+  function debouncedSave(newParams: Record<string, number>) {
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+    saveTimerRef.current = setTimeout(function() {
+      saveParams.mutate(newParams)
+    }, 2000) // Save 2s after last change
+  }
 
   var recalc = useMutation({
     mutationFn: function(p: { parameters: any; scenario: string }) {
@@ -86,6 +105,7 @@ export default function ScenarioPlaygroundPage() {
       var newParams = Object.assign({}, parameters, { [key]: value })
       setParameters(newParams)
       recalc.mutate({ parameters: newParams, scenario: scenario })
+      debouncedSave(newParams)
     },
     [parameters, scenario, recalc]
   )
@@ -95,6 +115,7 @@ export default function ScenarioPlaygroundPage() {
       var newParams = Object.assign({}, parameters, changes)
       setParameters(newParams)
       recalc.mutate({ parameters: newParams, scenario: scenario })
+      debouncedSave(newParams)
     },
     [parameters, scenario, recalc]
   )

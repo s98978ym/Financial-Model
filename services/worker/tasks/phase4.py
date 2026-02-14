@@ -55,10 +55,48 @@ def run_model_design(self, job_id: str):
 
         db.update_job(job_id, progress=15, log_msg="Phase 2 & 3 data loaded")
 
-        # --- Apply user edits ---
-        edits = payload.get("edits", [])
-        if edits:
-            db.update_job(job_id, progress=18, log_msg=f"Applying {len(edits)} user edits")
+        # --- Build feedback from Phase 2 selection + Phase 3 proposal decisions ---
+        feedback_parts = []
+
+        # Load Phase 2 user selection (which proposal was chosen)
+        phase2_edits = db.get_edits(run_id, phase=2)
+        if phase2_edits:
+            selected_idx = 0
+            for ed in reversed(phase2_edits):
+                pj = ed.get("patch_json", {})
+                if "selected_proposal_index" in pj:
+                    selected_idx = pj["selected_proposal_index"]
+                    break
+            proposals = analysis_json.get("proposals", [])
+            if selected_idx < len(proposals):
+                chosen = proposals[selected_idx]
+                feedback_parts.append(
+                    f"ユーザーが選択したビジネスモデル提案: {chosen.get('label', '')}\n"
+                    f"セグメント: {', '.join(s.get('name', str(s)) if isinstance(s, dict) else str(s) for s in chosen.get('segments', []))}"
+                )
+
+        # Load Phase 3 proposal decisions (adopted suggestions + instructions)
+        phase3_edits = db.get_edits(run_id, phase=3)
+        if phase3_edits:
+            for ed in reversed(phase3_edits):
+                pj = ed.get("patch_json", {})
+                adopted = pj.get("adopted", [])
+                if adopted:
+                    feedback_parts.append("━━━ ユーザーが採用した提案 ━━━")
+                    for dec in adopted:
+                        proposal_text = dec.get("proposalText", dec.get("selectedOption", ""))
+                        instruction = dec.get("instruction", "")
+                        feedback_parts.append(f"・{proposal_text}")
+                        if instruction:
+                            feedback_parts.append(f"  → ユーザー指示: {instruction}")
+                    feedback_parts.append(
+                        "上記の採用された提案を考慮して、セルマッピングに反映してください。"
+                    )
+                    break  # Use the latest edit
+
+        feedback = "\n".join(feedback_parts)
+        if feedback:
+            db.update_job(job_id, progress=18, log_msg=f"Loaded user decisions as feedback")
 
         # --- Run Model Design ---
         provider = AnthropicProvider()
@@ -66,12 +104,11 @@ def run_model_design(self, job_id: str):
         designer = ModelDesigner(llm_client=adapter)
 
         db.update_job(job_id, progress=20, log_msg="Starting model design")
-        # Pass dicts directly (agents handle serialization internally)
         result = designer.design(
             analysis_json=analysis_json,
             template_structure_json=ts_json,
             catalog_items=catalog_items,
-            feedback="",
+            feedback=feedback,
         )
 
         # --- Store result ---

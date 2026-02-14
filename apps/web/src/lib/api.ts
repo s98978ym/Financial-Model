@@ -128,6 +128,16 @@ export const api = {
   phase5Extract: (body: any) =>
     fetchAPI('/phase5/extract', { method: 'POST', body: JSON.stringify(body) }),
 
+  // Edits — save/load user decisions
+  saveEdit: (body: { project_id: string; phase: number; patch_json: any }) =>
+    fetchAPI('/edits', { method: 'POST', body: JSON.stringify(body) }),
+
+  getEdits: (projectId: string, phase?: number) => {
+    var url = '/edits/' + projectId
+    if (phase != null) url += '?phase=' + phase
+    return fetchAPI(url)
+  },
+
   // Recalc (synchronous)
   recalc: (body: any) =>
     fetchAPI('/recalc', { method: 'POST', body: JSON.stringify(body) }),

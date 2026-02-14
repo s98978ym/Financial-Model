@@ -194,13 +194,14 @@ def _generate_local_excel(job_id: str, run_id: str, body: dict):
             logger.warning("PLWriter failed: %s — falling back", e)
 
         # Fallback: create full v2 workbook with computed PL data
-        from .recalc import _compute_pl
+        from .recalc import _compute_pl, _apply_scenario_multipliers
 
         db.update_job(job_id, status="running", progress=30, log_msg="Building v2 workbook")
 
         parameters = body.get("parameters", {})
+        options = body.get("options", {})
 
-        # Determine segment count from Phase 2/4 results if available
+        # Determine segment count from Phase 2/4 results using user's selected proposal
         num_segments = 3  # default
         segment_names = []
         try:
@@ -209,16 +210,47 @@ def _generate_local_excel(job_id: str, run_id: str, body: dict):
                 p2 = phase2["raw_json"]
                 proposals = p2.get("proposals", [])
                 if proposals:
-                    segs = proposals[0].get("segments", [])
+                    # Respect user's Phase 2 selection
+                    selected_idx = 0
+                    try:
+                        phase2_edits = db.get_edits(run_id, phase=2)
+                        for ed in reversed(phase2_edits):
+                            pj = ed.get("patch_json", {})
+                            if "selected_proposal_index" in pj:
+                                selected_idx = pj["selected_proposal_index"]
+                                break
+                    except Exception:
+                        pass
+                    chosen = proposals[selected_idx] if selected_idx < len(proposals) else proposals[0]
+                    segs = chosen.get("segments", [])
                     if segs:
                         num_segments = max(1, min(len(segs), 10))
-                        segment_names = [s.get("name", "") for s in segs]
-                elif p2.get("segments"):
-                    segs = p2["segments"]
-                    num_segments = max(1, min(len(segs), 10))
-                    segment_names = [s.get("name", "") for s in segs]
+                        segment_names = [
+                            s.get("name", "") if isinstance(s, dict) else str(s)
+                            for s in segs
+                        ]
         except Exception:
             logger.debug("Could not load Phase 2 segments, using default %d", num_segments)
+
+        # Determine extra sheets from Phase 3 adopted proposals
+        extra_sheets = []
+        try:
+            phase3_edits = db.get_edits(run_id, phase=3)
+            for ed in reversed(phase3_edits):
+                pj = ed.get("patch_json", {})
+                adopted = pj.get("adopted", [])
+                if adopted:
+                    for dec in adopted:
+                        text = (dec.get("proposalText", "") + " " + dec.get("selectedOption", "")).lower()
+                        if any(k in text for k in ["人員", "headcount", "fte", "採用"]):
+                            extra_sheets.append("headcount")
+                        if any(k in text for k in ["kpi", "ダッシュボード", "指標", "モニタリング"]):
+                            extra_sheets.append("kpi_dashboard")
+                        if any(k in text for k in ["リスク", "感応度", "sensitivity", "シナリオ分析"]):
+                            extra_sheets.append("sensitivity")
+                    break
+        except Exception:
+            logger.debug("Could not load Phase 3 decisions for extra sheets")
 
         # Load Phase 5 parameters if available
         try:
@@ -226,10 +258,27 @@ def _generate_local_excel(job_id: str, run_id: str, body: dict):
             if phase5 and phase5.get("raw_json"):
                 from .recalc import _extract_params_from_phase5
                 p5_params = _extract_params_from_phase5(phase5["raw_json"])
-                # Phase 5 params as base, user params override
                 parameters = {**p5_params, **parameters}
         except Exception:
             logger.debug("Could not load Phase 5 parameters")
+
+        # Load user's scenario parameter edits from DB (phase 6 edits)
+        try:
+            scenario_edits = db.get_edits(run_id, phase=6)
+            for ed in reversed(scenario_edits):
+                pj = ed.get("patch_json", {})
+                user_params = pj.get("parameters", {})
+                if user_params:
+                    parameters = {**parameters, **user_params}
+                    break
+        except Exception:
+            logger.debug("Could not load scenario parameter edits")
+
+        # Apply scenario multipliers from export options
+        best_mult = options.get("best_multipliers", {"revenue": 1.2, "cost": 0.9})
+        worst_mult = options.get("worst_multipliers", {"revenue": 0.8, "cost": 1.15})
+        scenario = body.get("scenario", "base")
+        parameters = _apply_scenario_multipliers(parameters, scenario, best_mult, worst_mult)
 
         db.update_job(job_id, status="running", progress=50, log_msg="Computing PL data")
 
@@ -244,7 +293,7 @@ def _generate_local_excel(job_id: str, run_id: str, body: dict):
         )
         from openpyxl.styles import Alignment
 
-        wb = create_v2_workbook(num_segments=num_segments)
+        wb = create_v2_workbook(num_segments=num_segments, extra_sheets=extra_sheets)
 
         db.update_job(job_id, status="running", progress=70, log_msg="Populating data")
 

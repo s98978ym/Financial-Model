@@ -7,24 +7,27 @@ import { api, shouldPollJob } from '@/lib/api'
 import { PhaseLayout } from '@/components/ui/PhaseLayout'
 
 export default function ExportPage() {
-  const params = useParams()
-  const projectId = params.id as string
-  const [scenarios, setScenarios] = useState(['base', 'best', 'worst'])
-  const [jobId, setJobId] = useState<string | null>(null)
+  var params = useParams()
+  var projectId = params.id as string
+  var [scenarios, setScenarios] = useState(['base', 'best', 'worst'])
+  var [jobId, setJobId] = useState<string | null>(null)
+  var [includeNeedsReview, setIncludeNeedsReview] = useState(true)
+  var [includeCaseDiff, setIncludeCaseDiff] = useState(true)
 
-  const exportMutation = useMutation({
-    mutationFn: () =>
-      api.exportExcel({
+  var exportMutation = useMutation({
+    mutationFn: function() {
+      return api.exportExcel({
         project_id: projectId,
-        scenarios,
+        scenarios: scenarios,
         options: {
-          include_needs_review: true,
-          include_case_diff: true,
+          include_needs_review: includeNeedsReview,
+          include_case_diff: includeCaseDiff,
           best_multipliers: { revenue: 1.2, cost: 0.9 },
           worst_multipliers: { revenue: 0.8, cost: 1.15 },
         },
-      }),
-    onSuccess: (data) => {
+      })
+    },
+    onSuccess: function(data: any) {
       setJobId(data.job_id)
     },
   })
@@ -83,11 +86,21 @@ export default function ExportPage() {
           <h3 className="font-medium text-gray-900 mb-3">出力オプション</h3>
           <div className="space-y-2 text-sm text-gray-600">
             <label className="flex items-center gap-2">
-              <input type="checkbox" defaultChecked className="rounded border-gray-300 text-blue-600" />
+              <input
+                type="checkbox"
+                checked={includeNeedsReview}
+                onChange={function(e) { setIncludeNeedsReview(e.target.checked) }}
+                className="rounded border-gray-300 text-blue-600"
+              />
               needs_review.csv を含める
             </label>
             <label className="flex items-center gap-2">
-              <input type="checkbox" defaultChecked className="rounded border-gray-300 text-blue-600" />
+              <input
+                type="checkbox"
+                checked={includeCaseDiff}
+                onChange={function(e) { setIncludeCaseDiff(e.target.checked) }}
+                className="rounded border-gray-300 text-blue-600"
+              />
               ケース差分レポートを含める
             </label>
           </div>
