@@ -327,15 +327,17 @@ def _add_named_range(wb: Workbook, name: str, sheet: str, cell: str) -> None:
     wb.defined_names.add(dn)
 
 
-def _register_pl_named_ranges(wb: Workbook, num_fys: int = 5) -> None:
+def _register_pl_named_ranges(wb: Workbook, num_fys: int = 5, sga_rd_mode: str = "inline") -> None:
     """Register named ranges for PL KPI rows."""
     sheet = "PL設計"
+    # Use correct OPEX total row depending on mode
+    opex_row = PL_ROWS["opex_total_sep"] if sga_rd_mode == "separate" else PL_ROWS["opex_total"]
     ranges = {
         "PL_REVENUE":      PL_ROWS["revenue"],
         "PL_COGS_RATE":    PL_ROWS["cogs_rate"],
         "PL_COGS":         PL_ROWS["cogs"],
         "PL_GP":           PL_ROWS["gross_profit"],
-        "PL_OPEX":         PL_ROWS["opex_total"],
+        "PL_OPEX":         opex_row,
         "PL_PAYROLL":      PL_ROWS["payroll"],
         "PL_MARKETING":    PL_ROWS["marketing"],
         "PL_OFFICE":       PL_ROWS["office"],
@@ -1307,7 +1309,7 @@ def create_v2_workbook(
         build_sensitivity_sheet(wb, fy_labels=fy)
 
     # Register named ranges for PL KPIs
-    _register_pl_named_ranges(wb, num_fys=len(fy))
+    _register_pl_named_ranges(wb, num_fys=len(fy), sga_rd_mode=sga_rd_mode)
 
     # Set calculation mode
     from openpyxl.workbook.properties import CalcProperties

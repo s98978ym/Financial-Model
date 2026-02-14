@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 class JobLogEntry(BaseModel):
     ts: str
     msg: str
+    payload: Optional[Dict[str, Any]] = None
 
 
 class JobStatus(BaseModel):
@@ -19,7 +20,7 @@ class JobStatus(BaseModel):
     progress: int = Field(default=0, ge=0, le=100)
     phase: int = 0
     logs: List[JobLogEntry] = Field(default_factory=list)
-    result: Optional[Dict[str, Any]] = None
+    result: Optional[str] = None
     error_msg: Optional[str] = None
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
