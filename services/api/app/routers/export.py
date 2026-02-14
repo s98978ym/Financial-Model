@@ -282,25 +282,35 @@ def _generate_local_excel(job_id: str, run_id: str, body: dict):
 
         db.update_job(job_id, status="running", progress=50, log_msg="Computing PL data")
 
-        # Compute PL
+        # Compute PL from driver parameters
         result = _compute_pl(parameters)
         pl = result["pl_summary"]
+
+        # SGA/R&D mode: "inline" (default) or "separate"
+        sga_rd_mode = options.get("sga_rd_mode", "inline")
+        if sga_rd_mode not in ("inline", "separate"):
+            sga_rd_mode = "inline"
 
         # Create full v2 workbook
         from src.excel.template_v2 import (
             create_v2_workbook, PL_ROWS, FY_COLS, SEG_ROWS, SEG_STREAM_ROWS_PER,
             MAX_STREAMS, YELLOW_FILL, NUMBER_FONT, NUMBER_FMT, PERCENT_FMT,
+            SGA_ROWS, RD_ROWS,
         )
         from openpyxl.styles import Alignment
 
-        wb = create_v2_workbook(num_segments=num_segments, extra_sheets=extra_sheets)
+        wb = create_v2_workbook(
+            num_segments=num_segments,
+            extra_sheets=extra_sheets,
+            sga_rd_mode=sga_rd_mode,
+        )
 
         db.update_job(job_id, status="running", progress=70, log_msg="Populating data")
 
-        # --- Populate PL設計 sheet ---
+        # --- Populate PL設計 sheet with driver-computed values ---
         ws_pl = wb["PL設計"]
 
-        # Override revenue formula with computed values
+        # Override revenue formula with computed values (driven by revenue_fy1 + growth_rate)
         for i, col in enumerate(FY_COLS):
             c = ws_pl.cell(row=PL_ROWS["revenue"], column=col)
             c.value = pl["revenue"][i]
@@ -309,20 +319,43 @@ def _generate_local_excel(job_id: str, run_id: str, body: dict):
             c.number_format = NUMBER_FMT
             c.alignment = Alignment(horizontal="right")
 
-        # Set COGS rate
+        # Set COGS rate (driven by cogs_rate driver)
         cogs_rate = float(parameters.get("cogs_rate", 0.3))
         for i, col in enumerate(FY_COLS):
             ws_pl.cell(row=PL_ROWS["cogs_rate"], column=col).value = cogs_rate
 
-        # Split OPEX into components
+        # Split OPEX into components (driven by opex_base + opex_growth)
         opex_list = pl["opex"]
-        for i, col in enumerate(FY_COLS):
-            ox = opex_list[i]
-            ws_pl.cell(row=PL_ROWS["payroll"], column=col).value = round(ox * 0.45)
-            ws_pl.cell(row=PL_ROWS["marketing"], column=col).value = round(ox * 0.20)
-            ws_pl.cell(row=PL_ROWS["office"], column=col).value = round(ox * 0.15)
-            ws_pl.cell(row=PL_ROWS["system"], column=col).value = round(ox * 0.12)
-            ws_pl.cell(row=PL_ROWS["other_opex"], column=col).value = round(ox * 0.08)
+
+        if sga_rd_mode == "separate":
+            # Populate detail sheets: 販管費明細 and 開発費明細
+            ws_sga = wb["販管費明細"]
+            ws_rd = wb["開発費明細"]
+
+            for i, col in enumerate(FY_COLS):
+                ox = opex_list[i]
+                # SGA breakdown (88% of OPEX): payroll 45%, marketing 20%, office 15%, other 8%
+                ws_sga.cell(row=SGA_ROWS["payroll"], column=col).value = round(ox * 0.45)
+                ws_sga.cell(row=SGA_ROWS["marketing"], column=col).value = round(ox * 0.20)
+                ws_sga.cell(row=SGA_ROWS["office"], column=col).value = round(ox * 0.15)
+                ws_sga.cell(row=SGA_ROWS["other"], column=col).value = round(ox * 0.08)
+
+                # R&D breakdown (12% of OPEX)
+                rd_total = round(ox * 0.12)
+                ws_rd.cell(row=RD_ROWS["internal"], column=col).value = round(rd_total * 0.50)
+                ws_rd.cell(row=RD_ROWS["outsource"], column=col).value = round(rd_total * 0.25)
+                ws_rd.cell(row=RD_ROWS["cloud_infra"], column=col).value = round(rd_total * 0.20)
+                ws_rd.cell(row=RD_ROWS["other"], column=col).value = round(rd_total * 0.05)
+            # PL rows 12-13 are formulas referencing detail sheets (already set by template)
+        else:
+            # Inline mode: write OPEX directly to PL sheet
+            for i, col in enumerate(FY_COLS):
+                ox = opex_list[i]
+                ws_pl.cell(row=PL_ROWS["payroll"], column=col).value = round(ox * 0.45)
+                ws_pl.cell(row=PL_ROWS["marketing"], column=col).value = round(ox * 0.20)
+                ws_pl.cell(row=PL_ROWS["office"], column=col).value = round(ox * 0.15)
+                ws_pl.cell(row=PL_ROWS["system"], column=col).value = round(ox * 0.12)
+                ws_pl.cell(row=PL_ROWS["other_opex"], column=col).value = round(ox * 0.08)
 
         # --- Populate segment sheets with revenue breakdown ---
         rev_per_seg = [round(r / num_segments) for r in pl["revenue"]]
