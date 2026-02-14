@@ -221,7 +221,7 @@ def _generate_local_excel(job_id: str, run_id: str, body: dict):
                                 break
                     except Exception:
                         logger.debug("Could not load Phase 2 edits for proposal selection")
-                    chosen = proposals[selected_idx] if selected_idx < len(proposals) else proposals[0]
+                    chosen = proposals[selected_idx] if 0 <= selected_idx < len(proposals) else proposals[0]
                     segs = chosen.get("segments", [])
                     if segs:
                         num_segments = max(1, min(len(segs), 10))
@@ -233,22 +233,39 @@ def _generate_local_excel(job_id: str, run_id: str, body: dict):
             logger.debug("Could not load Phase 2 segments, using default %d: %s", num_segments, e)
 
         # Determine extra sheets from Phase 3 adopted proposals
-        extra_sheets = []
+        extra_sheets: list[str] = []
         try:
-            phase3_edits = db.get_edits(run_id, phase=3)
-            for ed in reversed(phase3_edits):
-                pj = ed.get("patch_json", {})
-                adopted = pj.get("adopted", [])
-                if adopted:
-                    for dec in adopted:
-                        text = (dec.get("proposalText", "") + " " + dec.get("selectedOption", "")).lower()
-                        if any(k in text for k in ["人員", "headcount", "fte", "採用"]):
-                            extra_sheets.append("headcount")
-                        if any(k in text for k in ["kpi", "ダッシュボード", "指標", "モニタリング"]):
-                            extra_sheets.append("kpi_dashboard")
-                        if any(k in text for k in ["リスク", "感応度", "sensitivity", "シナリオ分析"]):
-                            extra_sheets.append("sensitivity")
-                    break
+            # Check explicit flags first (structured approach)
+            phase3 = db.get_phase_result(run_id, 3)
+            if phase3 and phase3.get("raw_json"):
+                p3 = phase3["raw_json"]
+                # Structured flags take priority
+                flags = p3.get("extra_sheets", {})
+                if flags.get("headcount"):
+                    extra_sheets.append("headcount")
+                if flags.get("kpi_dashboard"):
+                    extra_sheets.append("kpi_dashboard")
+                if flags.get("sensitivity"):
+                    extra_sheets.append("sensitivity")
+
+            # Fallback: keyword matching on Phase 3 edits
+            if not extra_sheets:
+                phase3_edits = db.get_edits(run_id, phase=3)
+                for ed in reversed(phase3_edits):
+                    pj = ed.get("patch_json", {})
+                    adopted = pj.get("adopted", [])
+                    if adopted:
+                        for dec in adopted:
+                            text = (dec.get("proposalText", "") + " " + dec.get("selectedOption", "")).lower()
+                            if any(k in text for k in ["人員", "headcount", "fte", "採用"]):
+                                extra_sheets.append("headcount")
+                            if any(k in text for k in ["kpi", "ダッシュボード", "指標", "モニタリング"]):
+                                extra_sheets.append("kpi_dashboard")
+                            if any(k in text for k in ["リスク", "感応度", "sensitivity", "シナリオ分析"]):
+                                extra_sheets.append("sensitivity")
+                        break
+            # Deduplicate
+            extra_sheets = list(dict.fromkeys(extra_sheets))
         except Exception as e:
             logger.debug("Could not load Phase 3 decisions for extra sheets: %s", e)
 
