@@ -12,7 +12,7 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .routers import projects, documents, phases, recalc, export, jobs
+from .routers import projects, documents, phases, recalc, export, jobs, prompts
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +52,7 @@ app.include_router(phases.router, prefix="/v1", tags=["phases"])
 app.include_router(recalc.router, prefix="/v1", tags=["recalc"])
 app.include_router(export.router, prefix="/v1", tags=["export"])
 app.include_router(jobs.router, prefix="/v1", tags=["jobs"])
+app.include_router(prompts.router, prefix="/v1", tags=["admin"])
 
 
 # ---------------------------------------------------------------------------

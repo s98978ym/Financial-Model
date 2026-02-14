@@ -155,6 +155,36 @@ export const api = {
       // Treat 404 and transient 5xx errors as failed so polling stops
       return { status: 'failed', error_msg: err.message || 'Job fetch failed' }
     }),
+
+  // Admin: Prompt Management
+  getPromptPhases: () => fetchAPI('/admin/prompts/phases'),
+
+  listPrompts: (projectId?: string) => {
+    var url = '/admin/prompts'
+    if (projectId) url += '?project_id=' + projectId
+    return fetchAPI(url)
+  },
+
+  getPrompt: (key: string, projectId?: string) => {
+    var url = '/admin/prompts/' + key
+    if (projectId) url += '?project_id=' + projectId
+    return fetchAPI(url)
+  },
+
+  updatePrompt: (key: string, body: { content: string; project_id?: string; label?: string }) =>
+    fetchAPI('/admin/prompts/' + key, { method: 'PUT', body: JSON.stringify(body) }),
+
+  resetPrompt: (key: string, projectId?: string) =>
+    fetchAPI('/admin/prompts/' + key + '/reset', {
+      method: 'POST',
+      body: JSON.stringify({ project_id: projectId || null }),
+    }),
+
+  activatePromptVersion: (key: string, versionId: string, projectId?: string) =>
+    fetchAPI('/admin/prompts/' + key + '/versions/' + versionId, {
+      method: 'PUT',
+      body: JSON.stringify({ project_id: projectId || null }),
+    }),
 }
 
 /**
