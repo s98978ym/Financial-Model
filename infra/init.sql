@@ -68,7 +68,7 @@ CREATE TABLE IF NOT EXISTS jobs (
                 CHECK (status IN ('queued','running','completed','failed','timeout')),
     progress    INT DEFAULT 0 CHECK (progress BETWEEN 0 AND 100),
     logs        JSONB DEFAULT '[]',
-    result_ref  UUID REFERENCES phase_results(id),
+    result_ref  UUID REFERENCES phase_results(id) ON DELETE SET NULL,
     error_msg   TEXT,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -109,6 +109,7 @@ CREATE INDEX IF NOT EXISTS idx_phase_results_run ON phase_results(run_id);
 CREATE INDEX IF NOT EXISTS idx_edits_run ON edits(run_id);
 CREATE INDEX IF NOT EXISTS idx_jobs_run ON jobs(run_id);
 CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status) WHERE status IN ('queued','running');
+CREATE INDEX IF NOT EXISTS idx_jobs_result_ref ON jobs(result_ref) WHERE result_ref IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_llm_audits_run ON llm_audits(run_id);
 CREATE INDEX IF NOT EXISTS idx_prompt_versions_key ON prompt_versions(prompt_key);
 CREATE INDEX IF NOT EXISTS idx_prompt_versions_project ON prompt_versions(project_id) WHERE project_id IS NOT NULL;

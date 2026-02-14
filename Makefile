@@ -9,7 +9,7 @@
 
 ## Run all Python tests
 test:
-	python -m pytest tests/ services/api/tests/ -v --tb=short 2>&1 | tail -80
+	python -m pytest tests/ services/api/tests/ -v --tb=short
 
 ## Run API tests only
 test-api:

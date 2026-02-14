@@ -251,12 +251,10 @@ async def reset_prompt(prompt_key: str, body: dict = None):
     except KeyError:
         raise HTTPException(status_code=404, detail=f"Unknown prompt key: {prompt_key}")
 
-    # Deactivate all versions for this key+scope
-    versions = db.get_prompt_versions(prompt_key, project_id)
-    for v in versions:
-        if v["is_active"]:
-            db.activate_prompt_version("__none__", prompt_key, project_id)
-            break
+    # Deactivate all versions for this key+scope by activating a non-existent version.
+    # activate_prompt_version first deactivates all, then tries to activate the given ID.
+    # Since no version has this key+scope after deactivation, the reset is complete.
+    db.deactivate_all_prompt_versions(prompt_key, project_id)
 
     return {"status": "reset", "prompt_key": prompt_key, "default_content": entry.default_content}
 

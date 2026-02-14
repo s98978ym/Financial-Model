@@ -220,7 +220,7 @@ def _generate_local_excel(job_id: str, run_id: str, body: dict):
                                 selected_idx = pj["selected_proposal_index"]
                                 break
                     except Exception:
-                        pass
+                        logger.debug("Could not load Phase 2 edits for proposal selection")
                     chosen = proposals[selected_idx] if selected_idx < len(proposals) else proposals[0]
                     segs = chosen.get("segments", [])
                     if segs:
@@ -229,8 +229,8 @@ def _generate_local_excel(job_id: str, run_id: str, body: dict):
                             s.get("name", "") if isinstance(s, dict) else str(s)
                             for s in segs
                         ]
-        except Exception:
-            logger.debug("Could not load Phase 2 segments, using default %d", num_segments)
+        except Exception as e:
+            logger.debug("Could not load Phase 2 segments, using default %d: %s", num_segments, e)
 
         # Determine extra sheets from Phase 3 adopted proposals
         extra_sheets = []
@@ -249,8 +249,8 @@ def _generate_local_excel(job_id: str, run_id: str, body: dict):
                         if any(k in text for k in ["リスク", "感応度", "sensitivity", "シナリオ分析"]):
                             extra_sheets.append("sensitivity")
                     break
-        except Exception:
-            logger.debug("Could not load Phase 3 decisions for extra sheets")
+        except Exception as e:
+            logger.debug("Could not load Phase 3 decisions for extra sheets: %s", e)
 
         # Load Phase 5 parameters if available
         try:
@@ -259,8 +259,8 @@ def _generate_local_excel(job_id: str, run_id: str, body: dict):
                 from .recalc import _extract_params_from_phase5
                 p5_params = _extract_params_from_phase5(phase5["raw_json"])
                 parameters = {**p5_params, **parameters}
-        except Exception:
-            logger.debug("Could not load Phase 5 parameters")
+        except Exception as e:
+            logger.debug("Could not load Phase 5 parameters: %s", e)
 
         # Load user's scenario parameter edits from DB (phase 6 edits)
         try:
@@ -271,8 +271,8 @@ def _generate_local_excel(job_id: str, run_id: str, body: dict):
                 if user_params:
                     parameters = {**parameters, **user_params}
                     break
-        except Exception:
-            logger.debug("Could not load scenario parameter edits")
+        except Exception as e:
+            logger.debug("Could not load scenario parameter edits: %s", e)
 
         # Apply scenario multipliers from export options
         best_mult = options.get("best_multipliers", {"revenue": 1.2, "cost": 0.9})

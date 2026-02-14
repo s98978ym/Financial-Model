@@ -91,22 +91,34 @@ def generate_excel(self, job_id: str):
             else:
                 validation = {"status": "skipped"}
 
-            db.update_job(
-                job_id, status="completed", progress=100,
-                log_msg="Export complete",
-                result_ref=json.dumps({
+            # Store export metadata as a phase_result record (phase=6)
+            # so result_ref holds a valid UUID FK to phase_results(id)
+            export_result = db.save_phase_result(
+                run_id=run_id,
+                phase=6,
+                raw_json={
                     "output_dir": output_dir,
                     "files": generated_files,
                     "validation": validation if isinstance(validation, dict) else {"status": "ok"},
-                }),
+                },
+            )
+            db.update_job(
+                job_id, status="completed", progress=100,
+                log_msg="Export complete",
+                result_ref=export_result["id"],
             )
 
         except ImportError as ie:
             logger.warning("Excel modules not available: %s — returning stub", ie)
+            stub_result = db.save_phase_result(
+                run_id=run_id,
+                phase=6,
+                raw_json={"stub": True, "parameters": parameters_json},
+            )
             db.update_job(
                 job_id, status="completed", progress=100,
                 log_msg="Export complete (stub — Excel modules not available)",
-                result_ref=json.dumps({"stub": True, "parameters": parameters_json}),
+                result_ref=stub_result["id"],
             )
 
         return {"status": "completed", "job_id": job_id}

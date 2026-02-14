@@ -2,20 +2,29 @@
 
 from __future__ import annotations
 
+from typing import Optional
+
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, Field
 
 from .. import db
 
 router = APIRouter()
 
 
+class _ProjectCreateBody(BaseModel):
+    name: str = Field(default="Untitled", min_length=1, max_length=200)
+    template_id: str = Field(default="v2_ib_grade")
+    owner: Optional[str] = Field(default="")
+
+
 @router.post("/projects", status_code=201)
-async def create_project(body: dict):
+async def create_project(body: _ProjectCreateBody):
     """Create a new project."""
     project = db.create_project(
-        name=body.get("name", "Untitled"),
-        template_id=body.get("template_id", "v2_ib_grade"),
-        owner=body.get("owner", ""),
+        name=body.name,
+        template_id=body.template_id,
+        owner=body.owner or "",
     )
     return project
 

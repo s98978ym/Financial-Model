@@ -40,6 +40,13 @@ export default function ScenarioPlaygroundPage() {
     enabled: !!projectId,
   })
 
+  // Clean up debounce timer on unmount to prevent state updates after unmount
+  useEffect(function() {
+    return function() {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+    }
+  }, [])
+
   // Detect industry from project data
   useEffect(function() {
     if (projectState.data) {
