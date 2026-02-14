@@ -6,16 +6,58 @@ All endpoints are under /v1/admin/prompts.
 from __future__ import annotations
 
 import logging
+import secrets
 import sys
 import os
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 
 from .. import db
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+# -------------------------------------------------------------------
+# Admin authentication
+# -------------------------------------------------------------------
+_valid_tokens: set = set()
+
+
+def _require_admin(authorization: Optional[str] = Header(default=None)):
+    """Verify admin Bearer token on protected endpoints."""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="管理者認証が必要です")
+    token = authorization[7:]
+    if token not in _valid_tokens:
+        raise HTTPException(status_code=401, detail="認証トークンが無効または期限切れです")
+
+
+@router.post("/admin/auth")
+async def admin_auth(body: dict):
+    """Authenticate admin user with ID and password."""
+    admin_id = body.get("admin_id", "")
+    password = body.get("password", "")
+
+    if not admin_id or not password:
+        raise HTTPException(status_code=422, detail="IDとパスワードは必須です")
+
+    expected_id = os.environ.get("ADMIN_ID", "admin")
+    expected_pw = os.environ.get("ADMIN_PASSWORD", "plgen2024")
+
+    if admin_id == expected_id and password == expected_pw:
+        token = secrets.token_hex(32)
+        _valid_tokens.add(token)
+        logger.info("Admin authenticated (token count: %d)", len(_valid_tokens))
+        return {"authenticated": True, "token": token}
+
+    raise HTTPException(status_code=401, detail="IDまたはパスワードが正しくありません")
+
+
+@router.get("/admin/auth/verify", dependencies=[Depends(_require_admin)])
+async def verify_admin_token():
+    """Verify if admin token is still valid."""
+    return {"authenticated": True}
 
 
 def _get_registry():
@@ -91,13 +133,13 @@ PHASE_META = [
 ]
 
 
-@router.get("/admin/prompts/phases")
+@router.get("/admin/prompts/phases", dependencies=[Depends(_require_admin)])
 async def list_phases():
     """Pipeline phase metadata for visualization."""
     return PHASE_META
 
 
-@router.get("/admin/prompts")
+@router.get("/admin/prompts", dependencies=[Depends(_require_admin)])
 async def list_prompts(project_id: Optional[str] = None):
     """List all registered prompts with metadata and customization status."""
     reg = _registry()
@@ -126,7 +168,7 @@ async def list_prompts(project_id: Optional[str] = None):
     return result
 
 
-@router.get("/admin/prompts/{prompt_key}")
+@router.get("/admin/prompts/{prompt_key}", dependencies=[Depends(_require_admin)])
 async def get_prompt(prompt_key: str, project_id: Optional[str] = None):
     """Get full detail for a single prompt including version history."""
     reg = _registry()
@@ -155,7 +197,7 @@ async def get_prompt(prompt_key: str, project_id: Optional[str] = None):
     }
 
 
-@router.put("/admin/prompts/{prompt_key}")
+@router.put("/admin/prompts/{prompt_key}", dependencies=[Depends(_require_admin)])
 async def update_prompt(prompt_key: str, body: dict):
     """Save a new version of a prompt.
 
@@ -190,7 +232,7 @@ async def update_prompt(prompt_key: str, body: dict):
     return version
 
 
-@router.post("/admin/prompts/{prompt_key}/reset")
+@router.post("/admin/prompts/{prompt_key}/reset", dependencies=[Depends(_require_admin)])
 async def reset_prompt(prompt_key: str, body: dict = None):
     """Reset prompt to default (deactivate all custom versions for this key+scope).
 
@@ -219,7 +261,7 @@ async def reset_prompt(prompt_key: str, body: dict = None):
     return {"status": "reset", "prompt_key": prompt_key, "default_content": entry.default_content}
 
 
-@router.put("/admin/prompts/{prompt_key}/versions/{version_id}")
+@router.put("/admin/prompts/{prompt_key}/versions/{version_id}", dependencies=[Depends(_require_admin)])
 async def activate_version(prompt_key: str, version_id: str, body: dict = None):
     """Activate a specific historical version."""
     body = body or {}
