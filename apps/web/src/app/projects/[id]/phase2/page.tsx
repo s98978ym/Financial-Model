@@ -22,6 +22,8 @@ export default function Phase2Page() {
   // Extract proposals from result
   var proposals = result?.proposals || []
 
+  var [saveError, setSaveError] = useState<string | null>(null)
+
   // Save selected proposal index to DB then navigate
   var saveSelection = useMutation({
     mutationFn: function(idx: number) {
@@ -34,12 +36,21 @@ export default function Phase2Page() {
     onSuccess: function() {
       router.push('/projects/' + projectId + '/phase3')
     },
+    onError: function(err: Error) {
+      console.error('[Phase2] saveSelection error:', err.message)
+      setSaveError(err.message)
+    },
   })
 
   function handleSelectAndProceed() {
     if (selectedIndex != null) {
+      setSaveError(null)
       saveSelection.mutate(selectedIndex)
     }
+  }
+
+  function handleSkipAndProceed() {
+    router.push('/projects/' + projectId + '/phase3')
   }
 
   return (
@@ -148,17 +159,30 @@ export default function Phase2Page() {
 
       {/* Selected proposal → next phase */}
       {selectedIndex != null && (
-        <div className="mt-6 flex items-center justify-between p-4 bg-green-50 border border-green-200 rounded-lg">
-          <p className="text-sm text-green-700">
-            <strong>{proposals[selectedIndex]?.label}</strong> を選択しました。
-          </p>
-          <button
-            onClick={handleSelectAndProceed}
-            disabled={saveSelection.isPending}
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm disabled:opacity-50"
-          >
-            {saveSelection.isPending ? '保存中...' : 'Phase 3 へ進む'}
-          </button>
+        <div className="mt-6 p-4 bg-green-50 border border-green-200 rounded-lg">
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-green-700">
+              <strong>{proposals[selectedIndex]?.label}</strong> を選択しました。
+            </p>
+            <button
+              onClick={handleSelectAndProceed}
+              disabled={saveSelection.isPending}
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm disabled:opacity-50"
+            >
+              {saveSelection.isPending ? '保存中...' : 'Phase 3 へ進む'}
+            </button>
+          </div>
+          {saveError && (
+            <div className="mt-3 flex items-center justify-between bg-red-50 border border-red-200 rounded p-3">
+              <p className="text-xs text-red-600">保存に失敗しました: {saveError}</p>
+              <button
+                onClick={handleSkipAndProceed}
+                className="text-xs text-blue-600 hover:underline ml-3 whitespace-nowrap"
+              >
+                保存をスキップして進む
+              </button>
+            </div>
+          )}
         </div>
       )}
     </PhaseLayout>

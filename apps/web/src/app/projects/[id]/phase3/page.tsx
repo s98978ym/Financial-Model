@@ -17,12 +17,14 @@ export default function Phase3Page() {
     usePhaseJob({ projectId, phase: 3 })
 
   var [proposalDecisions, setProposalDecisions] = useState<any[]>([])
+  var [saveError, setSaveError] = useState<string | null>(null)
 
   // Load Phase 2 edits to get user's selected proposal index
   var phase2Edits = useQuery({
     queryKey: ['edits', projectId, 2],
     queryFn: function() { return api.getEdits(projectId, 2) },
     enabled: !!projectId,
+    retry: 1,
   })
 
   // Get the correct selected proposal from Phase 2 (respect user selection)
@@ -69,9 +71,14 @@ export default function Phase3Page() {
     onSuccess: function() {
       router.push('/projects/' + projectId + '/phase4')
     },
+    onError: function(err: Error) {
+      console.error('[Phase3] saveDecisions error:', err.message)
+      setSaveError(err.message)
+    },
   })
 
   var handleApplyDecisions = useCallback(function(decisions: any[]) {
+    setSaveError(null)
     setProposalDecisions(decisions)
     saveDecisions.mutate(decisions)
   }, [saveDecisions])
@@ -188,6 +195,24 @@ export default function Phase3Page() {
               >
                 Phase 4 へ進む
               </button>
+            </div>
+          )}
+
+          {saveError && (
+            <div className="mt-4 bg-red-50 border border-red-200 rounded-lg p-3 flex items-center justify-between">
+              <p className="text-xs text-red-600">保存に失敗しました: {saveError}</p>
+              <button
+                onClick={function() { router.push('/projects/' + projectId + '/phase4') }}
+                className="text-xs text-blue-600 hover:underline ml-3 whitespace-nowrap"
+              >
+                保存をスキップして進む
+              </button>
+            </div>
+          )}
+
+          {saveDecisions.isPending && (
+            <div className="mt-4 text-center">
+              <p className="text-sm text-gray-500">提案を保存中...</p>
             </div>
           )}
 
