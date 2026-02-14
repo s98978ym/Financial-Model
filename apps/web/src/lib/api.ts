@@ -166,11 +166,13 @@ export const api = {
   downloadExcel: (jobId: string) =>
     `${API_BASE}/export/download/${jobId}`,
 
-  // Jobs (return failed status on errors so polling stops gracefully)
+  // Jobs (keep polling on transient errors — only stop on terminal status)
   getJob: (jobId: string) =>
     fetchAPI(`/jobs/${jobId}`).catch((err) => {
-      // Treat 404 and transient 5xx errors as failed so polling stops
-      return { status: 'failed', error_msg: err.message || 'Job fetch failed' }
+      // Return a transient 'running' status so polling continues on network errors.
+      // Only the backend should decide when a job is truly 'failed'.
+      console.warn('[API] getJob transient error, continuing poll:', err.message)
+      return { status: 'running', progress: 0, error_msg: err.message || 'Job fetch failed', _transient: true }
     }),
 
   // Admin: Authentication

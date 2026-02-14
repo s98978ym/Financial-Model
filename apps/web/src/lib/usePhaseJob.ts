@@ -43,12 +43,18 @@ export function usePhaseJob({ projectId, phase, autoLoad = true }: UsePhaseJobOp
   useEffect(() => {
     if (projectState?.phase_results?.[phase]) {
       const phaseResult = projectState.phase_results[phase]
-      setState((prev) => ({
-        ...prev,
-        status: 'completed',
-        progress: 100,
-        result: phaseResult.raw_json,
-      }))
+      setState((prev) => {
+        // Don't overwrite with stale results if a new job is actively running
+        if (prev.jobId && (prev.status === 'queued' || prev.status === 'running') && prev.progress < 95) {
+          return prev
+        }
+        return {
+          ...prev,
+          status: 'completed',
+          progress: 100,
+          result: phaseResult.raw_json,
+        }
+      })
     }
   }, [projectState, phase])
 
@@ -60,17 +66,17 @@ export function usePhaseJob({ projectId, phase, autoLoad = true }: UsePhaseJobOp
     refetchInterval: (query) => shouldPollJob(query.state.data),
   })
 
-  // Track whether we've already invalidated for this job completion
-  const completionInvalidated = useRef(false)
+  // Track which jobId we've already invalidated for (prevents double-invalidation per job)
+  const completionInvalidatedForJob = useRef<string | null>(null)
 
   // Update state when job status changes
   useEffect(() => {
     if (!jobData) return
 
     if (jobData.status === 'completed') {
-      // Job is done — refetch project state to populate result (only once)
-      if (!completionInvalidated.current) {
-        completionInvalidated.current = true
+      // Job is done — refetch project state to populate result (only once per jobId)
+      if (completionInvalidatedForJob.current !== state.jobId) {
+        completionInvalidatedForJob.current = state.jobId
         queryClient.invalidateQueries({ queryKey: ['projectState', projectId] })
       }
       // Keep as 'running' briefly while waiting for projectState to arrive with result
@@ -82,7 +88,6 @@ export function usePhaseJob({ projectId, phase, autoLoad = true }: UsePhaseJobOp
         error: null,
       }))
     } else {
-      completionInvalidated.current = false
       setState((prev) => ({
         ...prev,
         status: jobData.status,

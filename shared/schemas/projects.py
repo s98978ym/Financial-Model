@@ -21,8 +21,10 @@ class ProjectResponse(BaseModel):
     id: str
     name: str
     template_id: str
+    owner: Optional[str] = None
     status: Literal["created", "active", "completed", "archived"] = "created"
     current_phase: int = 1
+    memo: str = ""
     created_at: datetime
     updated_at: datetime
 

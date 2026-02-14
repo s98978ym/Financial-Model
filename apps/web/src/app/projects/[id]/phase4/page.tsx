@@ -16,7 +16,7 @@ export default function Phase4Page() {
   const { result, isProcessing, isComplete, isFailed, trigger, progress, error, projectState } =
     usePhaseJob({ projectId, phase: 4 })
 
-  const assignments = result?.cell_assignments || result?.assignments || []
+  const assignments = result?.cell_assignments || []
   const unmapped = result?.unmapped_cells || []
   const warnings = result?.warnings || []
   const hasEstimated = assignments.some((a: any) => a.derivation === 'estimated')

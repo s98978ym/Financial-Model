@@ -855,6 +855,29 @@ def get_active_prompt(prompt_key: str, project_id: Optional[str] = None) -> Opti
         return None
 
 
+def deactivate_all_prompt_versions(prompt_key: str, project_id: Optional[str] = None) -> None:
+    """Deactivate all versions for a prompt key+scope (used for reset to default)."""
+    _ensure_prompt_versions_table()
+
+    if _use_pg():
+        with get_conn() as conn:
+            cur = conn.cursor()
+            if project_id:
+                cur.execute(
+                    "UPDATE prompt_versions SET is_active = FALSE WHERE prompt_key = %s AND project_id = %s",
+                    (prompt_key, project_id),
+                )
+            else:
+                cur.execute(
+                    "UPDATE prompt_versions SET is_active = FALSE WHERE prompt_key = %s AND project_id IS NULL",
+                    (prompt_key,),
+                )
+    else:
+        for v in _mem_prompt_versions:
+            if v["prompt_key"] == prompt_key and v.get("project_id") == project_id:
+                v["is_active"] = False
+
+
 def activate_prompt_version(version_id: str, prompt_key: str, project_id: Optional[str] = None) -> Optional[dict]:
     """Activate a specific version (deactivates others for same key+project)."""
     _ensure_prompt_versions_table()

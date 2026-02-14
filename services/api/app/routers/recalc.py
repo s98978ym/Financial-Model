@@ -33,12 +33,19 @@ _PARAM_KEY_MAP = {
     "原価率": "cogs_rate",
     "原価": "cogs_rate",
     "cogs": "cogs_rate",
-    # OPEX keywords → opex_base
+    # OPEX keywords → opex_base (total SGA/OPEX only)
     "販管費": "opex_base",
     "opex": "opex_base",
-    "人件費": "opex_base",
+    # Payroll → payroll (component, not total OPEX)
+    "人件費": "payroll",
     # OPEX growth → opex_growth
     "opex増加率": "opex_growth",
+    # Depreciation → depreciation
+    "減価償却": "depreciation",
+    "depreciation": "depreciation",
+    # CAPEX → capex
+    "capex": "capex",
+    "設備投資": "capex",
 }
 
 
@@ -99,11 +106,21 @@ def _compute_pl(parameters: Dict[str, Any]) -> Dict[str, Any]:
     cogs_rate = float(parameters.get("cogs_rate", 0.3))
     opex_base = float(parameters.get("opex_base", 80_000_000))
     opex_growth = float(parameters.get("opex_growth", 0.1))
+    depreciation_val = float(parameters.get("depreciation", 0))
+    capex_val = float(parameters.get("capex", 0))
+
+    # If payroll is provided but opex_base is default, use payroll as a component
+    payroll = parameters.get("payroll")
+    if payroll is not None and "opex_base" not in parameters:
+        # Estimate total OPEX from payroll (payroll is ~45% of OPEX)
+        opex_base = float(payroll) / 0.45
 
     revenue = []
     cogs = []
     gross_profit = []
     opex = []
+    depreciation_list = []
+    capex_list = []
     operating_profit = []
     fcf = []
     cumulative_fcf = []
@@ -114,14 +131,19 @@ def _compute_pl(parameters: Dict[str, Any]) -> Dict[str, Any]:
         cost = rev * cogs_rate
         gp = rev - cost
         ox = opex_base * ((1 + opex_growth) ** year)
-        op = gp - ox
-        cf = op * 0.9  # simplified FCF
+        depr = depreciation_val
+        cx = capex_val
+        op = gp - ox - depr
+        # FCF = OP + depreciation - CAPEX (matches Excel template formula)
+        cf = op + depr - cx
         cum += cf
 
         revenue.append(round(rev))
         cogs.append(round(cost))
         gross_profit.append(round(gp))
         opex.append(round(ox))
+        depreciation_list.append(round(depr))
+        capex_list.append(round(cx))
         operating_profit.append(round(op))
         fcf.append(round(cf))
         cumulative_fcf.append(round(cum))
@@ -145,6 +167,8 @@ def _compute_pl(parameters: Dict[str, Any]) -> Dict[str, Any]:
             "cogs": cogs,
             "gross_profit": gross_profit,
             "opex": opex,
+            "depreciation": depreciation_list,
+            "capex": capex_list,
             "operating_profit": operating_profit,
             "fcf": fcf,
             "cumulative_fcf": cumulative_fcf,

@@ -61,16 +61,15 @@ export default function AdminLLMConfigPage() {
   var [loginError, setLoginError] = useState('')
   var [isLoggingIn, setIsLoggingIn] = useState(false)
 
-  // Check stored token on mount
+  // Check in-memory token on mount (no sessionStorage — avoids XSS exposure)
   useEffect(function() {
-    var stored = sessionStorage.getItem('admin_token')
-    if (stored) {
-      setAdminToken(stored)
+    var existing = require('@/lib/api').getAdminToken()
+    if (existing) {
+      setAdminToken(existing)
       api.verifyAdminToken().then(function() {
         setIsAuthed(true)
         setIsCheckingAuth(false)
       }).catch(function() {
-        sessionStorage.removeItem('admin_token')
         setAdminToken(null)
         setIsCheckingAuth(false)
       })
@@ -85,7 +84,6 @@ export default function AdminLLMConfigPage() {
     setLoginError('')
     api.adminAuth(loginId, loginPw).then(function(res: any) {
       setAdminToken(res.token)
-      sessionStorage.setItem('admin_token', res.token)
       setIsAuthed(true)
       setIsLoggingIn(false)
     }).catch(function() {
@@ -383,7 +381,6 @@ export default function AdminLLMConfigPage() {
             </button>
             <button
               onClick={function() {
-                sessionStorage.removeItem('admin_token')
                 setAdminToken(null)
                 setIsAuthed(false)
               }}
@@ -428,7 +425,6 @@ export default function AdminLLMConfigPage() {
         <div className="flex items-center gap-3">
           <button
             onClick={function() {
-              sessionStorage.removeItem('admin_token')
               setAdminToken(null)
               setIsAuthed(false)
             }}

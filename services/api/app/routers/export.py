@@ -87,17 +87,12 @@ async def download_excel(job_id: str):
             },
         )
 
-    # Try to load from file store or disk
-    result_ref = job.get("result_ref") or ""
+    # Try to load from file store
     file_bytes = None
 
     # Check in-memory store
     if job_id in _file_store:
         file_bytes = _file_store[job_id]
-    # Check disk path
-    elif result_ref and os.path.exists(result_ref):
-        with open(result_ref, "rb") as f:
-            file_bytes = f.read()
 
     if not file_bytes:
         raise HTTPException(
@@ -183,9 +178,14 @@ def _generate_local_excel(job_id: str, run_id: str, body: dict):
                 with open(output_path, "rb") as f:
                     _file_store[job_id] = f.read()
 
+                # Save phase_results for phase 6 and link via result_ref (UUID FK)
+                pr = db.save_phase_result(run_id, phase=6, raw_json={
+                    "type": "excel_export_plwriter",
+                    "output_path": output_path,
+                })
                 db.update_job(
                     job_id, status="completed", progress=100,
-                    log_msg="Excel generated", result_ref=output_path,
+                    log_msg="Excel generated", result_ref=pr["id"],
                 )
                 return
         except ImportError:
@@ -220,8 +220,8 @@ def _generate_local_excel(job_id: str, run_id: str, body: dict):
                                 selected_idx = pj["selected_proposal_index"]
                                 break
                     except Exception:
-                        pass
-                    chosen = proposals[selected_idx] if selected_idx < len(proposals) else proposals[0]
+                        logger.debug("Could not load Phase 2 edits for proposal selection")
+                    chosen = proposals[selected_idx] if 0 <= selected_idx < len(proposals) else proposals[0]
                     segs = chosen.get("segments", [])
                     if segs:
                         num_segments = max(1, min(len(segs), 10))
@@ -229,28 +229,45 @@ def _generate_local_excel(job_id: str, run_id: str, body: dict):
                             s.get("name", "") if isinstance(s, dict) else str(s)
                             for s in segs
                         ]
-        except Exception:
-            logger.debug("Could not load Phase 2 segments, using default %d", num_segments)
+        except Exception as e:
+            logger.debug("Could not load Phase 2 segments, using default %d: %s", num_segments, e)
 
         # Determine extra sheets from Phase 3 adopted proposals
-        extra_sheets = []
+        extra_sheets: list[str] = []
         try:
-            phase3_edits = db.get_edits(run_id, phase=3)
-            for ed in reversed(phase3_edits):
-                pj = ed.get("patch_json", {})
-                adopted = pj.get("adopted", [])
-                if adopted:
-                    for dec in adopted:
-                        text = (dec.get("proposalText", "") + " " + dec.get("selectedOption", "")).lower()
-                        if any(k in text for k in ["人員", "headcount", "fte", "採用"]):
-                            extra_sheets.append("headcount")
-                        if any(k in text for k in ["kpi", "ダッシュボード", "指標", "モニタリング"]):
-                            extra_sheets.append("kpi_dashboard")
-                        if any(k in text for k in ["リスク", "感応度", "sensitivity", "シナリオ分析"]):
-                            extra_sheets.append("sensitivity")
-                    break
-        except Exception:
-            logger.debug("Could not load Phase 3 decisions for extra sheets")
+            # Check explicit flags first (structured approach)
+            phase3 = db.get_phase_result(run_id, 3)
+            if phase3 and phase3.get("raw_json"):
+                p3 = phase3["raw_json"]
+                # Structured flags take priority
+                flags = p3.get("extra_sheets", {})
+                if flags.get("headcount"):
+                    extra_sheets.append("headcount")
+                if flags.get("kpi_dashboard"):
+                    extra_sheets.append("kpi_dashboard")
+                if flags.get("sensitivity"):
+                    extra_sheets.append("sensitivity")
+
+            # Fallback: keyword matching on Phase 3 edits
+            if not extra_sheets:
+                phase3_edits = db.get_edits(run_id, phase=3)
+                for ed in reversed(phase3_edits):
+                    pj = ed.get("patch_json", {})
+                    adopted = pj.get("adopted", [])
+                    if adopted:
+                        for dec in adopted:
+                            text = (dec.get("proposalText", "") + " " + dec.get("selectedOption", "")).lower()
+                            if any(k in text for k in ["人員", "headcount", "fte", "採用"]):
+                                extra_sheets.append("headcount")
+                            if any(k in text for k in ["kpi", "ダッシュボード", "指標", "モニタリング"]):
+                                extra_sheets.append("kpi_dashboard")
+                            if any(k in text for k in ["リスク", "感応度", "sensitivity", "シナリオ分析"]):
+                                extra_sheets.append("sensitivity")
+                        break
+            # Deduplicate
+            extra_sheets = list(dict.fromkeys(extra_sheets))
+        except Exception as e:
+            logger.debug("Could not load Phase 3 decisions for extra sheets: %s", e)
 
         # Load Phase 5 parameters if available
         try:
@@ -259,8 +276,8 @@ def _generate_local_excel(job_id: str, run_id: str, body: dict):
                 from .recalc import _extract_params_from_phase5
                 p5_params = _extract_params_from_phase5(phase5["raw_json"])
                 parameters = {**p5_params, **parameters}
-        except Exception:
-            logger.debug("Could not load Phase 5 parameters")
+        except Exception as e:
+            logger.debug("Could not load Phase 5 parameters: %s", e)
 
         # Load user's scenario parameter edits from DB (phase 6 edits)
         try:
@@ -271,8 +288,8 @@ def _generate_local_excel(job_id: str, run_id: str, body: dict):
                 if user_params:
                     parameters = {**parameters, **user_params}
                     break
-        except Exception:
-            logger.debug("Could not load scenario parameter edits")
+        except Exception as e:
+            logger.debug("Could not load scenario parameter edits: %s", e)
 
         # Apply scenario multipliers from export options
         best_mult = options.get("best_multipliers", {"revenue": 1.2, "cost": 0.9})
@@ -358,7 +375,12 @@ def _generate_local_excel(job_id: str, run_id: str, body: dict):
                 ws_pl.cell(row=PL_ROWS["other_opex"], column=col).value = round(ox * 0.08)
 
         # --- Populate segment sheets with revenue breakdown ---
-        rev_per_seg = [round(r / num_segments) for r in pl["revenue"]]
+        # Use largest-remainder method to avoid rounding errors (sum must equal total)
+        def _distribute(total: int, n: int) -> list[int]:
+            base = total // n
+            remainder = total - base * n
+            return [base + (1 if i < remainder else 0) for i in range(n)]
+
         for seg_idx in range(1, num_segments + 1):
             sheet_name = f"セグメント{seg_idx}モデル"
             if sheet_name not in wb.sheetnames:
@@ -376,11 +398,14 @@ def _generate_local_excel(job_id: str, run_id: str, body: dict):
                 else f"セグメント{seg_idx}"
             )
             for i, col in enumerate(FY_COLS):
-                # Set unit price = rev / 12 (monthly), volume = 1, frequency = 1
-                # This makes stream revenue = price * 1 * 1 * 12 = rev
-                ws_seg.cell(row=stream1_base + 2, column=col).value = round(rev_per_seg[i] / 12)
+                # Distribute revenue across segments without rounding loss
+                seg_rev = _distribute(pl["revenue"][i], num_segments)[seg_idx - 1]
+                # Formula: 単価 × 数量 × 頻度 × 12 = seg_rev
+                # Set: 単価 = seg_rev, 数量 = 1, 頻度 = 1/12
+                # → seg_rev * 1 * (1/12) * 12 = seg_rev (exact)
+                ws_seg.cell(row=stream1_base + 2, column=col).value = seg_rev
                 ws_seg.cell(row=stream1_base + 3, column=col).value = 1
-                ws_seg.cell(row=stream1_base + 4, column=col).value = 1
+                ws_seg.cell(row=stream1_base + 4, column=col).value = round(1 / 12, 10)
 
         db.update_job(job_id, status="running", progress=90, log_msg="Saving workbook")
 
@@ -388,9 +413,17 @@ def _generate_local_excel(job_id: str, run_id: str, body: dict):
         wb.save(buf)
         _file_store[job_id] = buf.getvalue()
 
+        # Save phase_results for phase 6 and link via result_ref (UUID FK)
+        pr = db.save_phase_result(run_id, phase=6, raw_json={
+            "type": "excel_export",
+            "scenario": scenario,
+            "num_segments": num_segments,
+            "sga_rd_mode": sga_rd_mode,
+        })
         db.update_job(
             job_id, status="completed", progress=100,
             log_msg="Excel generated (v2 workbook)",
+            result_ref=pr["id"],
         )
 
     except Exception as e:

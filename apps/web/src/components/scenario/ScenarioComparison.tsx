@@ -10,23 +10,28 @@ interface ScenarioComparisonProps {
 
 export function ScenarioComparison({ projectId, parameters }: ScenarioComparisonProps) {
   // Fetch all three scenarios in parallel
-  const { data: baseData } = useQuery({
+  const { data: baseData, error: baseError } = useQuery({
     queryKey: ['recalc', projectId, 'base', parameters],
     queryFn: () => api.recalc({ project_id: projectId, parameters, scenario: 'base' }),
-    staleTime: 5000,
+    staleTime: 30_000,
+    retry: 2,
   })
 
-  const { data: bestData } = useQuery({
+  const { data: bestData, error: bestError } = useQuery({
     queryKey: ['recalc', projectId, 'best', parameters],
     queryFn: () => api.recalc({ project_id: projectId, parameters, scenario: 'best' }),
-    staleTime: 5000,
+    staleTime: 30_000,
+    retry: 2,
   })
 
-  const { data: worstData } = useQuery({
+  const { data: worstData, error: worstError } = useQuery({
     queryKey: ['recalc', projectId, 'worst', parameters],
     queryFn: () => api.recalc({ project_id: projectId, parameters, scenario: 'worst' }),
-    staleTime: 5000,
+    staleTime: 30_000,
+    retry: 2,
   })
+
+  const scenarioError = baseError || bestError || worstError
 
   const formatYen = (v: number | undefined) => {
     if (v == null) return '-'
@@ -46,6 +51,11 @@ export function ScenarioComparison({ projectId, parameters }: ScenarioComparison
       <div className="px-5 py-3 border-b border-gray-100">
         <h3 className="font-medium text-gray-900">シナリオ比較</h3>
       </div>
+      {scenarioError && (
+        <div className="px-4 py-2 bg-red-50 border-b border-red-100 text-xs text-red-600">
+          シナリオ計算エラー: {(scenarioError as Error).message}
+        </div>
+      )}
       <table className="w-full text-sm">
         <thead className="bg-gray-50">
           <tr>

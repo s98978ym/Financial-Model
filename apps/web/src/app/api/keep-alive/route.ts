@@ -13,7 +13,7 @@ export async function GET() {
       method: 'GET',
       signal: AbortSignal.timeout(10_000), // 10s timeout
     })
-    const data = await res.json()
+    const data = await res.json().catch(() => ({ status: res.statusText }))
     return NextResponse.json({
       status: 'ok',
       api: data,
