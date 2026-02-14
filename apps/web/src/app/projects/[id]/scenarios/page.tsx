@@ -15,12 +15,17 @@ import { PhaseLayout } from '@/components/ui/PhaseLayout'
 import type { IndustryKey } from '@/data/industryBenchmarks'
 import { detectIndustry } from '@/data/industryBenchmarks'
 
-var DEFAULT_PARAMS = {
+var DEFAULT_PARAMS: Record<string, number> = {
   revenue_fy1: 100_000_000,
   growth_rate: 0.30,
   cogs_rate: 0.30,
   opex_base: 80_000_000,
   opex_growth: 0.10,
+  capex: 0,
+  depreciation: 0,
+  depreciation_mode: 0,  // 0 = manual, 1 = auto
+  useful_life: 5,
+  existing_depreciation: 0,
 }
 
 export default function ScenarioPlaygroundPage() {
@@ -79,11 +84,25 @@ export default function ScenarioPlaygroundPage() {
     }, 2000) // Save 2s after last change
   }
 
+  function prepareParams(p: Record<string, number>) {
+    var out: Record<string, any> = {}
+    Object.keys(p).forEach(function(key) {
+      if (key === 'depreciation_mode') {
+        out[key] = p[key] === 1 ? 'auto' : 'manual'
+      } else if (key === 'depreciation_method') {
+        out[key] = p[key] === 1 ? 'declining_balance' : 'straight_line'
+      } else {
+        out[key] = p[key]
+      }
+    })
+    return out
+  }
+
   var recalc = useMutation({
     mutationFn: function(p: { parameters: any; scenario: string }) {
       return api.recalc({
         project_id: projectId,
-        parameters: p.parameters,
+        parameters: prepareParams(p.parameters),
         scenario: p.scenario,
       })
     },
@@ -183,6 +202,7 @@ export default function ScenarioPlaygroundPage() {
           <DriverSliders
             parameters={parameters}
             onChange={handleParameterChange}
+            onBatchChange={handleBatchChange}
             industry={industry}
           />
         </div>
