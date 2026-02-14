@@ -51,10 +51,42 @@ def _get_pool():
             connect_timeout=5,
         )
         logger.info("PostgreSQL connection pool created")
+        _run_migrations(_pool)
         return _pool
     except Exception as e:
         logger.warning("Failed to create PostgreSQL pool: %s — using in-memory fallback", e)
         return None
+
+
+def _run_migrations(pool):
+    """Apply lightweight schema migrations (add missing columns)."""
+    global _has_memo_col
+    try:
+        conn = pool.getconn()
+        try:
+            cur = conn.cursor()
+            # Check if memo column already exists
+            cur.execute(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_name = 'projects' AND column_name = 'memo'"
+            )
+            if cur.fetchone():
+                _has_memo_col = True
+                logger.info("Migration check: 'memo' column already exists")
+            else:
+                cur.execute("ALTER TABLE projects ADD COLUMN memo TEXT NOT NULL DEFAULT ''")
+                conn.commit()
+                _has_memo_col = True
+                logger.info("Migration: added 'memo' column to projects table")
+        except Exception as e:
+            conn.rollback()
+            _has_memo_col = False
+            logger.warning("Migration failed (non-fatal): %s", e)
+        finally:
+            pool.putconn(conn)
+    except Exception as e:
+        _has_memo_col = False
+        logger.warning("Could not run migrations: %s", e)
 
 
 @contextmanager
@@ -104,6 +136,17 @@ def _use_pg() -> bool:
     return _get_pool() is not None
 
 
+# Track whether memo column has been confirmed present
+_has_memo_col = False
+
+
+def _proj_cols() -> str:
+    """Return SELECT/RETURNING column list for projects based on schema."""
+    if _has_memo_col:
+        return "id, name, template_id, owner, status, current_phase, memo, created_at, updated_at"
+    return "id, name, template_id, owner, status, current_phase, created_at, updated_at"
+
+
 # ===================================================================
 # Projects
 # ===================================================================
@@ -113,9 +156,8 @@ def create_project(name: str, template_id: str = "v2_ib_grade", owner: str = "")
         with get_conn() as conn:
             cur = conn.cursor()
             cur.execute(
-                """INSERT INTO projects (name, template_id, owner)
-                   VALUES (%s, %s, %s)
-                   RETURNING id, name, template_id, owner, status, current_phase, memo, created_at, updated_at""",
+                f"INSERT INTO projects (name, template_id, owner) "
+                f"VALUES (%s, %s, %s) RETURNING {_proj_cols()}",
                 (name, template_id, owner),
             )
             row = cur.fetchone()
@@ -136,11 +178,7 @@ def get_project(project_id: str) -> Optional[dict]:
     if _use_pg():
         with get_conn() as conn:
             cur = conn.cursor()
-            cur.execute(
-                """SELECT id, name, template_id, owner, status, current_phase, memo, created_at, updated_at
-                   FROM projects WHERE id = %s""",
-                (project_id,),
-            )
+            cur.execute(f"SELECT {_proj_cols()} FROM projects WHERE id = %s", (project_id,))
             row = cur.fetchone()
             return _project_row_to_dict(row) if row else None
     else:
@@ -151,10 +189,7 @@ def list_projects() -> List[dict]:
     if _use_pg():
         with get_conn() as conn:
             cur = conn.cursor()
-            cur.execute(
-                """SELECT id, name, template_id, owner, status, current_phase, memo, created_at, updated_at
-                   FROM projects ORDER BY created_at DESC"""
-            )
+            cur.execute(f"SELECT {_proj_cols()} FROM projects ORDER BY created_at DESC")
             return [_project_row_to_dict(r) for r in cur.fetchall()]
     else:
         return list(_mem_projects.values())
@@ -162,10 +197,13 @@ def list_projects() -> List[dict]:
 
 def update_project(project_id: str, **kwargs) -> Optional[dict]:
     if _use_pg():
+        allowed = {"status", "current_phase", "name"}
+        if _has_memo_col:
+            allowed.add("memo")
         sets = []
         vals = []
         for k, v in kwargs.items():
-            if k in ("status", "current_phase", "name", "memo"):
+            if k in allowed:
                 sets.append(f"{k} = %s")
                 vals.append(v)
         if not sets:
@@ -176,7 +214,7 @@ def update_project(project_id: str, **kwargs) -> Optional[dict]:
             cur = conn.cursor()
             cur.execute(
                 f"UPDATE projects SET {', '.join(sets)} WHERE id = %s "
-                "RETURNING id, name, template_id, owner, status, current_phase, memo, created_at, updated_at",
+                f"RETURNING {_proj_cols()}",
                 vals,
             )
             row = cur.fetchone()
@@ -222,13 +260,23 @@ def delete_project(project_id: str) -> bool:
 def _project_row_to_dict(row) -> dict:
     if row is None:
         return {}
-    return {
-        "id": str(row[0]), "name": row[1], "template_id": row[2],
-        "owner": row[3] or "", "status": row[4], "current_phase": row[5],
-        "memo": row[6] or "",
-        "created_at": row[7].isoformat() if hasattr(row[7], "isoformat") else str(row[7]),
-        "updated_at": row[8].isoformat() if hasattr(row[8], "isoformat") else str(row[8]),
-    }
+    # Handle both old (8-col: no memo) and new (9-col: with memo) row formats
+    if len(row) >= 9:
+        return {
+            "id": str(row[0]), "name": row[1], "template_id": row[2],
+            "owner": row[3] or "", "status": row[4], "current_phase": row[5],
+            "memo": row[6] or "",
+            "created_at": row[7].isoformat() if hasattr(row[7], "isoformat") else str(row[7]),
+            "updated_at": row[8].isoformat() if hasattr(row[8], "isoformat") else str(row[8]),
+        }
+    else:
+        return {
+            "id": str(row[0]), "name": row[1], "template_id": row[2],
+            "owner": row[3] or "", "status": row[4], "current_phase": row[5],
+            "memo": "",
+            "created_at": row[6].isoformat() if hasattr(row[6], "isoformat") else str(row[6]),
+            "updated_at": row[7].isoformat() if hasattr(row[7], "isoformat") else str(row[7]),
+        }
 
 
 # ===================================================================
