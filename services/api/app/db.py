@@ -115,7 +115,7 @@ def create_project(name: str, template_id: str = "v2_ib_grade", owner: str = "")
             cur.execute(
                 """INSERT INTO projects (name, template_id, owner)
                    VALUES (%s, %s, %s)
-                   RETURNING id, name, template_id, owner, status, current_phase, created_at, updated_at""",
+                   RETURNING id, name, template_id, owner, status, current_phase, memo, created_at, updated_at""",
                 (name, template_id, owner),
             )
             row = cur.fetchone()
@@ -126,7 +126,7 @@ def create_project(name: str, template_id: str = "v2_ib_grade", owner: str = "")
         p = {
             "id": pid, "name": name, "template_id": template_id,
             "owner": owner, "status": "created", "current_phase": 1,
-            "created_at": now, "updated_at": now,
+            "memo": "", "created_at": now, "updated_at": now,
         }
         _mem_projects[pid] = p
         return p
@@ -137,7 +137,7 @@ def get_project(project_id: str) -> Optional[dict]:
         with get_conn() as conn:
             cur = conn.cursor()
             cur.execute(
-                """SELECT id, name, template_id, owner, status, current_phase, created_at, updated_at
+                """SELECT id, name, template_id, owner, status, current_phase, memo, created_at, updated_at
                    FROM projects WHERE id = %s""",
                 (project_id,),
             )
@@ -152,7 +152,7 @@ def list_projects() -> List[dict]:
         with get_conn() as conn:
             cur = conn.cursor()
             cur.execute(
-                """SELECT id, name, template_id, owner, status, current_phase, created_at, updated_at
+                """SELECT id, name, template_id, owner, status, current_phase, memo, created_at, updated_at
                    FROM projects ORDER BY created_at DESC"""
             )
             return [_project_row_to_dict(r) for r in cur.fetchall()]
@@ -165,7 +165,7 @@ def update_project(project_id: str, **kwargs) -> Optional[dict]:
         sets = []
         vals = []
         for k, v in kwargs.items():
-            if k in ("status", "current_phase", "name"):
+            if k in ("status", "current_phase", "name", "memo"):
                 sets.append(f"{k} = %s")
                 vals.append(v)
         if not sets:
@@ -176,7 +176,7 @@ def update_project(project_id: str, **kwargs) -> Optional[dict]:
             cur = conn.cursor()
             cur.execute(
                 f"UPDATE projects SET {', '.join(sets)} WHERE id = %s "
-                "RETURNING id, name, template_id, owner, status, current_phase, created_at, updated_at",
+                "RETURNING id, name, template_id, owner, status, current_phase, memo, created_at, updated_at",
                 vals,
             )
             row = cur.fetchone()
@@ -184,9 +184,39 @@ def update_project(project_id: str, **kwargs) -> Optional[dict]:
     else:
         p = _mem_projects.get(project_id)
         if p:
-            p.update(kwargs)
+            for k, v in kwargs.items():
+                if k in ("status", "current_phase", "name", "memo"):
+                    p[k] = v
             p["updated_at"] = _now_iso()
         return p
+
+
+def delete_project(project_id: str) -> bool:
+    """Delete a project and all related data (cascades via FK)."""
+    if _use_pg():
+        with get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("DELETE FROM projects WHERE id = %s", (project_id,))
+            return cur.rowcount > 0
+    else:
+        if project_id in _mem_projects:
+            del _mem_projects[project_id]
+            # Clean up related in-memory data
+            doc_ids = [k for k, v in _mem_documents.items() if v["project_id"] == project_id]
+            for did in doc_ids:
+                del _mem_documents[did]
+            run_ids = [k for k, v in _mem_runs.items() if v["project_id"] == project_id]
+            for rid in run_ids:
+                del _mem_runs[rid]
+                # Clean phase results and jobs for this run
+                pr_keys = [k for k in _mem_phase_results if k.startswith(rid + "::")]
+                for pk in pr_keys:
+                    del _mem_phase_results[pk]
+                job_ids = [k for k, v in _mem_jobs.items() if v["run_id"] == rid]
+                for jid in job_ids:
+                    del _mem_jobs[jid]
+            return True
+        return False
 
 
 def _project_row_to_dict(row) -> dict:
@@ -195,8 +225,9 @@ def _project_row_to_dict(row) -> dict:
     return {
         "id": str(row[0]), "name": row[1], "template_id": row[2],
         "owner": row[3] or "", "status": row[4], "current_phase": row[5],
-        "created_at": row[6].isoformat() if hasattr(row[6], "isoformat") else str(row[6]),
-        "updated_at": row[7].isoformat() if hasattr(row[7], "isoformat") else str(row[7]),
+        "memo": row[6] or "",
+        "created_at": row[7].isoformat() if hasattr(row[7], "isoformat") else str(row[7]),
+        "updated_at": row[8].isoformat() if hasattr(row[8], "isoformat") else str(row[8]),
     }
 
 

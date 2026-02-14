@@ -77,6 +77,12 @@ export const api = {
 
   getProjectState: (id: string) => fetchAPI(`/projects/${id}/state`),
 
+  updateProject: (id: string, body: { name?: string; memo?: string; status?: string }) =>
+    fetchAPI(`/projects/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+
+  deleteProject: (id: string) =>
+    fetchAPI(`/projects/${id}`, { method: 'DELETE' }),
+
   // Documents (FormData — no Content-Type header, browser sets multipart boundary)
   uploadDocument: (projectId: string, body: { kind: string; text?: string }) => {
     const formData = new FormData()

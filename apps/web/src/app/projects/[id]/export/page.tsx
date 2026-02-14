@@ -44,7 +44,7 @@ export default function ExportPage() {
 
   return (
     <PhaseLayout
-      phase={6}
+      phase={7}
       title="Excel エクスポート"
       subtitle="最終的な収益計画を Excel ファイルとしてダウンロード"
       projectId={projectId}

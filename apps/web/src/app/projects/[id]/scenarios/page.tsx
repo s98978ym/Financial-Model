@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback, useEffect } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams } from 'next/navigation'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { PLChart } from '@/components/charts/PLChart'
@@ -25,7 +25,6 @@ var DEFAULT_PARAMS = {
 
 export default function ScenarioPlaygroundPage() {
   var params = useParams()
-  var router = useRouter()
   var projectId = params.id as string
   var [scenario, setScenario] = useState<'base' | 'best' | 'worst'>('base')
   var [parameters, setParameters] = useState(DEFAULT_PARAMS)
@@ -168,15 +167,6 @@ export default function ScenarioPlaygroundPage() {
         <ScenarioComparison projectId={projectId} parameters={parameters} />
       </div>
 
-      {/* Navigation */}
-      <div className="mt-8 flex justify-end">
-        <button
-          onClick={function() { router.push('/projects/' + projectId + '/export') }}
-          className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 text-sm"
-        >
-          Excel エクスポートへ進む
-        </button>
-      </div>
     </PhaseLayout>
   )
 }
