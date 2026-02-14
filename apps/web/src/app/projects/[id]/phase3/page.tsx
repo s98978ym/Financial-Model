@@ -1,9 +1,10 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useState, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { usePhaseJob } from '@/lib/usePhaseJob'
 import { PhaseLayout } from '@/components/ui/PhaseLayout'
+import ProposalCards from '@/components/proposals/ProposalCards'
 
 export default function Phase3Page() {
   const params = useParams()
@@ -12,6 +13,9 @@ export default function Phase3Page() {
 
   const { result, isProcessing, isComplete, isFailed, trigger, progress, error, projectState } =
     usePhaseJob({ projectId, phase: 3 })
+
+  // Store user decisions on proposals
+  var [proposalDecisions, setProposalDecisions] = useState<any[]>([])
 
   // Load Phase 2 proposals from project state for proper data flow
   const phase2Proposal = useMemo(() => {
@@ -30,6 +34,11 @@ export default function Phase3Page() {
     cost_detail: 'コスト詳細',
     headcount: '人員計画',
   }
+
+  var handleApplyDecisions = useCallback(function(decisions: any[]) {
+    setProposalDecisions(decisions)
+    router.push('/projects/' + projectId + '/phase4')
+  }, [projectId, router])
 
   return (
     <PhaseLayout
@@ -75,7 +84,25 @@ export default function Phase3Page() {
       {/* Result table */}
       {isComplete && mappings.length > 0 && (
         <>
-          <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+          {/* Overall structure description */}
+          {result?.overall_structure && (
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6">
+              <div className="flex items-start gap-3">
+                <div className="w-6 h-6 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <svg className="w-3.5 h-3.5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-blue-700 mb-1">テンプレート概要</p>
+                  <p className="text-sm text-blue-800">{result.overall_structure}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Mappings table */}
+          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
             <table className="w-full text-sm">
               <thead className="bg-gray-50">
                 <tr>
@@ -109,34 +136,39 @@ export default function Phase3Page() {
             </table>
           </div>
 
-          <div className="mt-6 flex justify-end">
-            <button
-              onClick={() => router.push(`/projects/${projectId}/phase4`)}
-              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm"
-            >
-              Phase 4 へ進む
-            </button>
-          </div>
+          {/* Interactive Proposals (replaces old amber bullet list) */}
+          {result?.suggestions && result.suggestions.length > 0 && (
+            <ProposalCards
+              suggestions={result.suggestions}
+              onDecisionsChange={setProposalDecisions}
+              onApplyAll={handleApplyDecisions}
+            />
+          )}
+
+          {/* Navigate to Phase 4 (shown if no proposals, or proposals not required) */}
+          {(!result?.suggestions || result.suggestions.length === 0) && (
+            <div className="mt-6 flex justify-end">
+              <button
+                onClick={() => router.push(`/projects/${projectId}/phase4`)}
+                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm"
+              >
+                Phase 4 へ進む
+              </button>
+            </div>
+          )}
+
+          {/* If proposals exist but user wants to skip without deciding */}
+          {result?.suggestions && result.suggestions.length > 0 && (
+            <div className="mt-4 flex justify-end">
+              <button
+                onClick={function() { router.push('/projects/' + projectId + '/phase4') }}
+                className="text-xs text-gray-400 hover:text-gray-600 hover:underline transition-colors"
+              >
+                提案をスキップして Phase 4 へ進む
+              </button>
+            </div>
+          )}
         </>
-      )}
-
-      {/* Overall structure description */}
-      {isComplete && result?.overall_structure && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-          <p className="text-sm text-blue-800">{result.overall_structure}</p>
-        </div>
-      )}
-
-      {/* Suggestions */}
-      {isComplete && result?.suggestions?.length > 0 && (
-        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6">
-          <p className="text-sm font-medium text-amber-800 mb-2">提案</p>
-          <ul className="text-sm text-amber-700 space-y-1 list-disc list-inside">
-            {result.suggestions.map((s: string, idx: number) => (
-              <li key={idx}>{s}</li>
-            ))}
-          </ul>
-        </div>
       )}
 
       {/* Empty result fallback */}
