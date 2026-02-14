@@ -60,6 +60,9 @@ export default function ScenarioPlaygroundPage() {
         patch_json: { parameters: p },
       })
     },
+    onError: function(err: Error) {
+      console.warn('[Scenario] Failed to save parameters:', err.message)
+    },
   })
 
   function debouncedSave(newParams: Record<string, number>) {

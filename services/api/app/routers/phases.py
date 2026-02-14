@@ -10,6 +10,7 @@ import logging
 import importlib
 import os
 import threading
+from typing import Optional
 
 from fastapi import APIRouter, HTTPException
 
@@ -425,7 +426,7 @@ async def save_user_edit(body: dict):
 
 
 @router.get("/edits/{project_id}")
-async def get_user_edits(project_id: str, phase: int = None):
+async def get_user_edits(project_id: str, phase: Optional[int] = None):
     """Get all user edits for a project, optionally filtered by phase."""
     run = db.get_latest_run(project_id)
     if not run:
