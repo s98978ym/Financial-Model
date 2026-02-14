@@ -109,13 +109,24 @@ export default function LLMConfigPage() {
   var [isEditing, setIsEditing] = useState(false)
   var [scope, setScope] = useState<'global' | 'project'>('global')
   var [showVersions, setShowVersions] = useState(false)
+  var [toast, setToast] = useState<{type: 'success' | 'error', text: string} | null>(null)
   var textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  // Auto-dismiss toast
+  useEffect(function() {
+    if (toast) {
+      var t = setTimeout(function() { setToast(null) }, 4000)
+      return function() { clearTimeout(t) }
+    }
+  }, [toast])
 
   // Load phase metadata
   var phasesQuery = useQuery({
     queryKey: ['promptPhases'],
     queryFn: function() { return api.getPromptPhases() },
     enabled: isAuthed,
+    retry: 2,
+    retryDelay: 1000,
   })
 
   // Load all prompts
@@ -123,6 +134,8 @@ export default function LLMConfigPage() {
     queryKey: ['prompts', projectId],
     queryFn: function() { return api.listPrompts(projectId) },
     enabled: isAuthed,
+    retry: 2,
+    retryDelay: 1000,
   })
 
   // Load selected prompt detail with versions
@@ -132,6 +145,8 @@ export default function LLMConfigPage() {
       return api.getPrompt(selectedPromptKey!, projectId)
     },
     enabled: isAuthed && !!selectedPromptKey,
+    retry: 2,
+    retryDelay: 1000,
   })
 
   var phases: PhaseInfo[] = phasesQuery.data || []
@@ -169,6 +184,10 @@ export default function LLMConfigPage() {
       queryClient.invalidateQueries({ queryKey: ['promptDetail', selectedPromptKey] })
       setIsEditing(false)
       setEditLabel('')
+      setToast({type: 'success', text: '保存しました'})
+    },
+    onError: function(err: any) {
+      setToast({type: 'error', text: '保存に失敗: ' + (err.message || String(err))})
     },
   })
 
@@ -180,6 +199,10 @@ export default function LLMConfigPage() {
     onSuccess: function() {
       queryClient.invalidateQueries({ queryKey: ['prompts'] })
       queryClient.invalidateQueries({ queryKey: ['promptDetail', selectedPromptKey] })
+      setToast({type: 'success', text: 'デフォルトに戻しました'})
+    },
+    onError: function(err: any) {
+      setToast({type: 'error', text: 'リセットに失敗: ' + (err.message || String(err))})
     },
   })
 
@@ -192,6 +215,10 @@ export default function LLMConfigPage() {
       queryClient.invalidateQueries({ queryKey: ['prompts'] })
       queryClient.invalidateQueries({ queryKey: ['promptDetail', selectedPromptKey] })
       setShowVersions(false)
+      setToast({type: 'success', text: 'バージョンを適用しました'})
+    },
+    onError: function(err: any) {
+      setToast({type: 'error', text: 'バージョン適用に失敗: ' + (err.message || String(err))})
     },
   })
 
@@ -289,8 +316,45 @@ export default function LLMConfigPage() {
     )
   }
 
+  // Data loading/error states
+  var isDataLoading = phasesQuery.isLoading || promptsQuery.isLoading
+  var dataError = phasesQuery.error || promptsQuery.error
+
+  if (isDataLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[40vh]">
+        <div className="text-center">
+          <div className="inline-block w-8 h-8 border-2 border-purple-200 border-t-purple-600 rounded-full animate-spin mb-3" />
+          <p className="text-sm text-gray-500">プロンプトデータを読み込み中...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (dataError) {
+    return (
+      <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-center">
+        <h3 className="text-sm font-semibold text-red-700 mb-1">データ取得エラー</h3>
+        <p className="text-xs text-red-600 mb-4">{String((dataError as any)?.message || dataError)}</p>
+        <div className="flex items-center justify-center gap-3">
+          <button onClick={function() { phasesQuery.refetch(); promptsQuery.refetch() }} className="text-xs bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 font-medium">再読み込み</button>
+          <button onClick={function() { sessionStorage.removeItem('admin_token'); setAdminToken(null); setIsAuthed(false) }} className="text-xs text-red-600 px-4 py-2 rounded-lg border border-red-300 hover:bg-red-100">再ログイン</button>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="max-w-[1200px] mx-auto">
+      {/* Toast notification */}
+      {toast && (
+        <div className={'fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg text-sm font-medium transition-all ' + (
+          toast.type === 'success' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'
+        )}>
+          {toast.text}
+        </div>
+      )}
+
       {/* Header */}
       <div className="mb-6 flex items-center justify-between">
         <div>
@@ -591,7 +655,7 @@ export default function LLMConfigPage() {
                       </button>
                       <button
                         onClick={function() { saveMutation.mutate() }}
-                        disabled={saveMutation.isPending || editContent === promptDetail.current_content}
+                        disabled={saveMutation.isPending || (!editLabel.trim() && editContent === promptDetail.current_content)}
                         className="text-xs bg-purple-600 text-white px-4 py-1.5 rounded-lg hover:bg-purple-700 disabled:opacity-50 font-medium"
                       >
                         {saveMutation.isPending ? '保存中...' : '保存'}
