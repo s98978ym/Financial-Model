@@ -43,7 +43,7 @@ async def admin_auth(body: dict):
         raise HTTPException(status_code=422, detail="IDとパスワードは必須です")
 
     expected_id = os.environ.get("ADMIN_ID", "admin")
-    expected_pw = os.environ.get("ADMIN_PASSWORD", "plgen2024")
+    expected_pw = os.environ.get("ADMIN_PASSWORD", "archeco01")
 
     if admin_id == expected_id and password == expected_pw:
         token = secrets.token_hex(32)
