@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { useParams } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api, setAdminToken } from '@/lib/api'
 import Link from 'next/link'
@@ -44,9 +43,6 @@ interface PromptVersion {
   created_at: string
 }
 
-// -------------------------------------------------------------------
-// Phase icon mapping
-// -------------------------------------------------------------------
 var PHASE_ICONS: Record<string, string> = {
   search: '\uD83D\uDD0D',
   map: '\uD83D\uDDFA\uFE0F',
@@ -54,12 +50,7 @@ var PHASE_ICONS: Record<string, string> = {
   download: '\uD83D\uDCCA',
 }
 
-// -------------------------------------------------------------------
-// Main Page
-// -------------------------------------------------------------------
-export default function LLMConfigPage() {
-  var params = useParams()
-  var projectId = params.id as string
+export default function AdminLLMConfigPage() {
   var queryClient = useQueryClient()
 
   // Auth state
@@ -107,28 +98,22 @@ export default function LLMConfigPage() {
   var [editContent, setEditContent] = useState('')
   var [editLabel, setEditLabel] = useState('')
   var [isEditing, setIsEditing] = useState(false)
-  var [scope, setScope] = useState<'global' | 'project'>('global')
   var [showVersions, setShowVersions] = useState(false)
   var textareaRef = useRef<HTMLTextAreaElement>(null)
 
-  // Load phase metadata
   var phasesQuery = useQuery({
     queryKey: ['promptPhases'],
     queryFn: function() { return api.getPromptPhases() },
   })
 
-  // Load all prompts
   var promptsQuery = useQuery({
-    queryKey: ['prompts', projectId],
-    queryFn: function() { return api.listPrompts(projectId) },
+    queryKey: ['prompts', null],
+    queryFn: function() { return api.listPrompts() },
   })
 
-  // Load selected prompt detail with versions
   var promptDetailQuery = useQuery({
-    queryKey: ['promptDetail', selectedPromptKey, projectId],
-    queryFn: function() {
-      return api.getPrompt(selectedPromptKey!, projectId)
-    },
+    queryKey: ['promptDetail', selectedPromptKey, null],
+    queryFn: function() { return api.getPrompt(selectedPromptKey!) },
     enabled: !!selectedPromptKey,
   })
 
@@ -136,7 +121,6 @@ export default function LLMConfigPage() {
   var prompts: PromptInfo[] = promptsQuery.data || []
   var promptDetail = promptDetailQuery.data as (PromptInfo & { versions: PromptVersion[] }) | undefined
 
-  // Update editor when prompt selection changes
   useEffect(function() {
     if (promptDetail) {
       setEditContent(promptDetail.current_content)
@@ -145,7 +129,6 @@ export default function LLMConfigPage() {
     }
   }, [promptDetail])
 
-  // Auto-resize textarea
   useEffect(function() {
     if (textareaRef.current && isEditing) {
       textareaRef.current.style.height = 'auto'
@@ -153,12 +136,10 @@ export default function LLMConfigPage() {
     }
   }, [editContent, isEditing])
 
-  // Save mutation
   var saveMutation = useMutation({
     mutationFn: function() {
       return api.updatePrompt(selectedPromptKey!, {
         content: editContent,
-        project_id: scope === 'project' ? projectId : undefined,
         label: editLabel,
       })
     },
@@ -170,10 +151,9 @@ export default function LLMConfigPage() {
     },
   })
 
-  // Reset mutation
   var resetMutation = useMutation({
     mutationFn: function() {
-      return api.resetPrompt(selectedPromptKey!, scope === 'project' ? projectId : undefined)
+      return api.resetPrompt(selectedPromptKey!)
     },
     onSuccess: function() {
       queryClient.invalidateQueries({ queryKey: ['prompts'] })
@@ -181,10 +161,9 @@ export default function LLMConfigPage() {
     },
   })
 
-  // Activate version mutation
   var activateVersionMutation = useMutation({
     mutationFn: function(versionId: string) {
-      return api.activatePromptVersion(selectedPromptKey!, versionId, scope === 'project' ? projectId : undefined)
+      return api.activatePromptVersion(selectedPromptKey!, versionId)
     },
     onSuccess: function() {
       queryClient.invalidateQueries({ queryKey: ['prompts'] })
@@ -193,7 +172,6 @@ export default function LLMConfigPage() {
     },
   })
 
-  // Group prompts by phase
   var promptsByPhase: Record<number, PromptInfo[]> = {}
   prompts.forEach(function(p) {
     if (!promptsByPhase[p.phase]) promptsByPhase[p.phase] = []
@@ -274,11 +252,8 @@ export default function LLMConfigPage() {
             </div>
 
             <div className="mt-5 text-center">
-              <Link
-                href={'/projects/' + projectId + '/scenarios'}
-                className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
-              >
-                シナリオへ戻る
+              <Link href="/" className="text-xs text-gray-400 hover:text-gray-600 transition-colors">
+                ダッシュボードへ戻る
               </Link>
             </div>
           </form>
@@ -302,13 +277,10 @@ export default function LLMConfigPage() {
             <h1 className="text-xl font-bold text-gray-900">LLM設定管理</h1>
             <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-medium">管理者専用</span>
           </div>
-          <p className="text-sm text-gray-500 ml-11">各フェーズのLLMプロンプトを管理・カスタマイズ</p>
+          <p className="text-sm text-gray-500 ml-11">各フェーズのLLMプロンプトを管理・カスタマイズ（グローバル設定）</p>
         </div>
-        <Link
-          href={'/projects/' + projectId + '/scenarios'}
-          className="text-sm text-gray-400 hover:text-gray-600 transition-colors"
-        >
-          シナリオへ戻る
+        <Link href="/" className="text-sm text-gray-400 hover:text-gray-600 transition-colors">
+          ダッシュボードへ戻る
         </Link>
       </div>
 
@@ -373,7 +345,6 @@ export default function LLMConfigPage() {
             )
           })}
         </div>
-        {/* Model info */}
         {phases[0] && (
           <div className="mt-3 flex items-center gap-4 text-[10px] text-gray-400 border-t border-gray-100 pt-3">
             <span>Model: <strong className="text-gray-600">{phases[0].model}</strong></span>
@@ -383,7 +354,7 @@ export default function LLMConfigPage() {
         )}
       </div>
 
-      {/* Content Area: Prompt List + Editor */}
+      {/* Content Area */}
       <div className="grid grid-cols-12 gap-4">
         {/* Left: Prompt Selector */}
         <div className="col-span-4">
@@ -425,12 +396,8 @@ export default function LLMConfigPage() {
                             <div className="text-[10px] text-gray-400 truncate">{p.description}</div>
                           </div>
                           {p.is_customized && (
-                            <span className={'text-[9px] px-1.5 py-0.5 rounded-full font-medium flex-shrink-0 ' + (
-                              p.scope === 'project'
-                                ? 'bg-purple-100 text-purple-600'
-                                : 'bg-amber-100 text-amber-600'
-                            )}>
-                              {p.scope === 'project' ? 'PJ' : 'G'}
+                            <span className="text-[9px] px-1.5 py-0.5 rounded-full font-medium flex-shrink-0 bg-amber-100 text-amber-600">
+                              G
                             </span>
                           )}
                         </button>
@@ -461,29 +428,7 @@ export default function LLMConfigPage() {
                   <p className="text-[10px] text-gray-400 mt-0.5">{promptDetail.description}</p>
                 </div>
                 <div className="flex items-center gap-2">
-                  {/* Scope toggle */}
-                  <div className="flex rounded-lg border border-gray-200 overflow-hidden">
-                    <button
-                      onClick={function() { setScope('global') }}
-                      className={'px-2.5 py-1 text-[10px] font-medium transition-colors ' + (
-                        scope === 'global'
-                          ? 'bg-gray-800 text-white'
-                          : 'bg-white text-gray-500 hover:bg-gray-50'
-                      )}
-                    >
-                      Global
-                    </button>
-                    <button
-                      onClick={function() { setScope('project') }}
-                      className={'px-2.5 py-1 text-[10px] font-medium transition-colors ' + (
-                        scope === 'project'
-                          ? 'bg-purple-600 text-white'
-                          : 'bg-white text-gray-500 hover:bg-gray-50'
-                      )}
-                    >
-                      Project
-                    </button>
-                  </div>
+                  <span className="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded">Global</span>
                   {promptDetail.is_customized && (
                     <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">
                       カスタム中
@@ -495,7 +440,6 @@ export default function LLMConfigPage() {
               {/* Content Area */}
               <div className="p-4">
                 {!isEditing ? (
-                  // Read-only view
                   <div className="relative group">
                     <pre className="text-xs text-gray-700 bg-gray-50 rounded-lg p-4 overflow-auto max-h-[500px] whitespace-pre-wrap font-mono leading-relaxed border border-gray-100">
                       {promptDetail.current_content}
@@ -509,7 +453,6 @@ export default function LLMConfigPage() {
                     >
                       編集
                     </button>
-                    {/* Character count */}
                     <div className="mt-2 text-[10px] text-gray-400 text-right">
                       {promptDetail.current_content.length.toLocaleString()} 文字
                       {promptDetail.is_customized && (
@@ -520,7 +463,6 @@ export default function LLMConfigPage() {
                     </div>
                   </div>
                 ) : (
-                  // Edit mode
                   <div>
                     <textarea
                       ref={textareaRef}
@@ -609,14 +551,14 @@ export default function LLMConfigPage() {
                 </div>
               </div>
 
-              {/* Version History Panel */}
+              {/* Version History */}
               {showVersions && (
                 <div className="border-t border-gray-200">
                   <div className="px-5 py-3 bg-gray-50 border-b border-gray-100">
                     <h4 className="text-xs font-semibold text-gray-600">バージョン履歴</h4>
                   </div>
                   <div className="max-h-[300px] overflow-y-auto divide-y divide-gray-50">
-                    {/* Default version (always shown) */}
+                    {/* Default */}
                     <div className="flex items-center gap-3 px-5 py-3 hover:bg-gray-50 transition-colors">
                       <div className={'w-2 h-2 rounded-full flex-shrink-0 ' + (
                         !promptDetail.is_customized ? 'bg-green-500' : 'bg-gray-300'
@@ -647,7 +589,6 @@ export default function LLMConfigPage() {
                       )}
                     </div>
 
-                    {/* Saved versions */}
                     {((promptDetail as any)?.versions || []).map(function(v: PromptVersion) {
                       return (
                         <div key={v.id} className="flex items-center gap-3 px-5 py-3 hover:bg-gray-50 transition-colors">
@@ -659,12 +600,7 @@ export default function LLMConfigPage() {
                               <span className="text-xs font-medium text-gray-800">
                                 {v.label || new Date(v.created_at).toLocaleString('ja-JP')}
                               </span>
-                              {v.project_id && (
-                                <span className="text-[10px] bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded">PJ</span>
-                              )}
-                              {!v.project_id && (
-                                <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">Global</span>
-                              )}
+                              <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">Global</span>
                               {v.is_active && (
                                 <span className="text-[10px] text-green-600 font-medium">適用中</span>
                               )}

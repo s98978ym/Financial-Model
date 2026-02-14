@@ -36,6 +36,17 @@ async function fetchWithRetry(
   }
 }
 
+// Admin token management
+var _adminToken: string | null = null
+
+export function setAdminToken(token: string | null) {
+  _adminToken = token
+}
+
+export function getAdminToken(): string | null {
+  return _adminToken
+}
+
 /** Warm up the Render backend on page load (fire-and-forget with retry). */
 let _warmedUp = false
 export function warmUpBackend() {
@@ -50,12 +61,18 @@ export function warmUpBackend() {
 
 async function fetchAPI(path: string, options: RequestInit = {}): Promise<any> {
   const url = `${API_BASE}${path}`
+  var baseHeaders: Record<string, string> = {
+    'Content-Type': 'application/json',
+  }
+  if (_adminToken && path.indexOf('/admin/') === 0) {
+    baseHeaders['Authorization'] = 'Bearer ' + _adminToken
+  }
   const res = await fetchWithRetry(url, {
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
     ...options,
+    headers: {
+      ...baseHeaders,
+      ...(options.headers as Record<string, string> || {}),
+    },
   })
 
   if (!res.ok) {
@@ -155,6 +172,18 @@ export const api = {
       // Treat 404 and transient 5xx errors as failed so polling stops
       return { status: 'failed', error_msg: err.message || 'Job fetch failed' }
     }),
+
+  // Admin: Authentication
+  adminAuth: function(adminId: string, password: string) {
+    return fetchAPI('/admin/auth', {
+      method: 'POST',
+      body: JSON.stringify({ admin_id: adminId, password: password }),
+    })
+  },
+
+  verifyAdminToken: function() {
+    return fetchAPI('/admin/auth/verify')
+  },
 
   // Admin: Prompt Management
   getPromptPhases: () => fetchAPI('/admin/prompts/phases'),
