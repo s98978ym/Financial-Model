@@ -109,13 +109,24 @@ export default function LLMConfigPage() {
   var [isEditing, setIsEditing] = useState(false)
   var [scope, setScope] = useState<'global' | 'project'>('global')
   var [showVersions, setShowVersions] = useState(false)
+  var [toast, setToast] = useState<{type: 'success' | 'error', text: string} | null>(null)
   var textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  // Auto-dismiss toast
+  useEffect(function() {
+    if (toast) {
+      var t = setTimeout(function() { setToast(null) }, 4000)
+      return function() { clearTimeout(t) }
+    }
+  }, [toast])
 
   // Load phase metadata
   var phasesQuery = useQuery({
     queryKey: ['promptPhases'],
     queryFn: function() { return api.getPromptPhases() },
     enabled: isAuthed,
+    retry: 2,
+    retryDelay: 1000,
   })
 
   // Load all prompts
@@ -123,6 +134,8 @@ export default function LLMConfigPage() {
     queryKey: ['prompts', projectId],
     queryFn: function() { return api.listPrompts(projectId) },
     enabled: isAuthed,
+    retry: 2,
+    retryDelay: 1000,
   })
 
   // Load selected prompt detail with versions
@@ -132,6 +145,8 @@ export default function LLMConfigPage() {
       return api.getPrompt(selectedPromptKey!, projectId)
     },
     enabled: isAuthed && !!selectedPromptKey,
+    retry: 2,
+    retryDelay: 1000,
   })
 
   var phases: PhaseInfo[] = phasesQuery.data || []
@@ -169,6 +184,10 @@ export default function LLMConfigPage() {
       queryClient.invalidateQueries({ queryKey: ['promptDetail', selectedPromptKey] })
       setIsEditing(false)
       setEditLabel('')
+      setToast({type: 'success', text: '保存しました'})
+    },
+    onError: function(err: any) {
+      setToast({type: 'error', text: '保存に失敗: ' + (err.message || String(err))})
     },
   })
 
@@ -180,6 +199,10 @@ export default function LLMConfigPage() {
     onSuccess: function() {
       queryClient.invalidateQueries({ queryKey: ['prompts'] })
       queryClient.invalidateQueries({ queryKey: ['promptDetail', selectedPromptKey] })
+      setToast({type: 'success', text: 'デフォルトに戻しました'})
+    },
+    onError: function(err: any) {
+      setToast({type: 'error', text: 'リセットに失敗: ' + (err.message || String(err))})
     },
   })
 
@@ -192,6 +215,10 @@ export default function LLMConfigPage() {
       queryClient.invalidateQueries({ queryKey: ['prompts'] })
       queryClient.invalidateQueries({ queryKey: ['promptDetail', selectedPromptKey] })
       setShowVersions(false)
+      setToast({type: 'success', text: 'バージョンを適用しました'})
+    },
+    onError: function(err: any) {
+      setToast({type: 'error', text: 'バージョン適用に失敗: ' + (err.message || String(err))})
     },
   })
 
@@ -201,6 +228,31 @@ export default function LLMConfigPage() {
     if (!promptsByPhase[p.phase]) promptsByPhase[p.phase] = []
     promptsByPhase[p.phase].push(p)
   })
+
+  // Build ordered phase list for rendering prompt list.
+  // Use phases from API if available, otherwise derive from prompts data.
+  var phaseOrder: number[] = []
+  if (phases.length > 0) {
+    phases.forEach(function(ph) { phaseOrder.push(ph.phase) })
+  } else {
+    // Fallback: derive phase numbers from prompts
+    var seen: Record<number, boolean> = {}
+    prompts.forEach(function(p) {
+      if (!seen[p.phase]) {
+        seen[p.phase] = true
+        phaseOrder.push(p.phase)
+      }
+    })
+    phaseOrder.sort()
+  }
+
+  // Map phase numbers to labels (from API phases or fallback)
+  var phaseLabels: Record<number, string> = {}
+  phases.forEach(function(ph) { phaseLabels[ph.phase] = ph.label })
+  if (!phaseLabels[2]) phaseLabels[2] = 'BM分析'
+  if (!phaseLabels[3]) phaseLabels[3] = 'テンプレマップ'
+  if (!phaseLabels[4]) phaseLabels[4] = 'モデル設計'
+  if (!phaseLabels[5]) phaseLabels[5] = 'パラメータ抽出'
 
   var selectedPrompt = prompts.find(function(p) { return p.key === selectedPromptKey })
 
@@ -289,8 +341,45 @@ export default function LLMConfigPage() {
     )
   }
 
+  // Data loading/error states — only block on promptsQuery (phases is supplementary)
+  var isDataLoading = promptsQuery.isLoading
+  var dataError = promptsQuery.error
+
+  if (isDataLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[40vh]">
+        <div className="text-center">
+          <div className="inline-block w-8 h-8 border-2 border-purple-200 border-t-purple-600 rounded-full animate-spin mb-3" />
+          <p className="text-sm text-gray-500">プロンプトデータを読み込み中...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (dataError) {
+    return (
+      <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-center">
+        <h3 className="text-sm font-semibold text-red-700 mb-1">データ取得エラー</h3>
+        <p className="text-xs text-red-600 mb-4">{String((dataError as any)?.message || dataError)}</p>
+        <div className="flex items-center justify-center gap-3">
+          <button onClick={function() { phasesQuery.refetch(); promptsQuery.refetch() }} className="text-xs bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 font-medium">再読み込み</button>
+          <button onClick={function() { sessionStorage.removeItem('admin_token'); setAdminToken(null); setIsAuthed(false) }} className="text-xs text-red-600 px-4 py-2 rounded-lg border border-red-300 hover:bg-red-100">再ログイン</button>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="max-w-[1200px] mx-auto">
+      {/* Toast notification */}
+      {toast && (
+        <div className={'fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg text-sm font-medium transition-all ' + (
+          toast.type === 'success' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'
+        )}>
+          {toast.text}
+        </div>
+      )}
+
       {/* Header */}
       <div className="mb-6 flex items-center justify-between">
         <div>
@@ -392,56 +481,70 @@ export default function LLMConfigPage() {
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
             <div className="px-4 py-3 border-b border-gray-100">
               <h3 className="text-sm font-semibold text-gray-700">プロンプト一覧</h3>
+              <p className="text-[10px] text-gray-400 mt-0.5">{prompts.length} 件のプロンプト</p>
             </div>
-            <div className="divide-y divide-gray-50">
-              {phases.map(function(phase) {
-                var phasePrompts = promptsByPhase[phase.phase] || []
-                return (
-                  <div key={phase.phase}>
-                    <div className="px-4 py-2 bg-gray-50">
-                      <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
-                        Phase {phase.phase} — {phase.label}
-                      </span>
-                    </div>
-                    {phasePrompts.map(function(p) {
-                      var isSelected = selectedPromptKey === p.key
-                      return (
-                        <button
-                          key={p.key}
-                          onClick={function() { setSelectedPromptKey(p.key) }}
-                          className={'w-full text-left px-4 py-2.5 transition-colors flex items-center gap-2 ' + (
-                            isSelected
-                              ? 'bg-purple-50 border-l-2 border-purple-500'
-                              : 'hover:bg-gray-50 border-l-2 border-transparent'
-                          )}
-                        >
-                          <div className={'w-5 h-5 rounded flex items-center justify-center text-[10px] flex-shrink-0 ' + (
-                            p.prompt_type === 'system'
-                              ? 'bg-blue-100 text-blue-600'
-                              : 'bg-green-100 text-green-600'
-                          )}>
-                            {p.prompt_type === 'system' ? 'S' : 'U'}
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="text-xs font-medium text-gray-800 truncate">{p.display_name}</div>
-                            <div className="text-[10px] text-gray-400 truncate">{p.description}</div>
-                          </div>
-                          {p.is_customized && (
-                            <span className={'text-[9px] px-1.5 py-0.5 rounded-full font-medium flex-shrink-0 ' + (
-                              p.scope === 'project'
-                                ? 'bg-purple-100 text-purple-600'
-                                : 'bg-amber-100 text-amber-600'
+            {prompts.length === 0 ? (
+              <div className="px-4 py-8 text-center">
+                <p className="text-xs text-gray-400">プロンプトが見つかりません</p>
+                <button
+                  onClick={function() { promptsQuery.refetch() }}
+                  className="mt-2 text-xs text-purple-600 hover:underline"
+                >
+                  再読み込み
+                </button>
+              </div>
+            ) : (
+              <div className="divide-y divide-gray-50 max-h-[calc(100vh-380px)] overflow-y-auto">
+                {phaseOrder.map(function(phaseNum) {
+                  var phasePrompts = promptsByPhase[phaseNum] || []
+                  if (phasePrompts.length === 0) return null
+                  return (
+                    <div key={phaseNum}>
+                      <div className="px-4 py-2 bg-gray-50 sticky top-0 z-10">
+                        <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
+                          Phase {phaseNum} — {phaseLabels[phaseNum] || 'Phase ' + phaseNum}
+                        </span>
+                      </div>
+                      {phasePrompts.map(function(p) {
+                        var isSelected = selectedPromptKey === p.key
+                        return (
+                          <button
+                            key={p.key}
+                            onClick={function() { setSelectedPromptKey(p.key) }}
+                            className={'w-full text-left px-4 py-2.5 transition-colors flex items-center gap-2 ' + (
+                              isSelected
+                                ? 'bg-purple-50 border-l-2 border-purple-500'
+                                : 'hover:bg-gray-50 border-l-2 border-transparent'
+                            )}
+                          >
+                            <div className={'w-5 h-5 rounded flex items-center justify-center text-[10px] flex-shrink-0 ' + (
+                              p.prompt_type === 'system'
+                                ? 'bg-blue-100 text-blue-600'
+                                : 'bg-green-100 text-green-600'
                             )}>
-                              {p.scope === 'project' ? 'PJ' : 'G'}
-                            </span>
-                          )}
-                        </button>
-                      )
-                    })}
-                  </div>
-                )
-              })}
-            </div>
+                              {p.prompt_type === 'system' ? 'S' : 'U'}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="text-xs font-medium text-gray-800 truncate">{p.display_name}</div>
+                              <div className="text-[10px] text-gray-400 truncate">{p.description}</div>
+                            </div>
+                            {p.is_customized && (
+                              <span className={'text-[9px] px-1.5 py-0.5 rounded-full font-medium flex-shrink-0 ' + (
+                                p.scope === 'project'
+                                  ? 'bg-purple-100 text-purple-600'
+                                  : 'bg-amber-100 text-amber-600'
+                              )}>
+                                {p.scope === 'project' ? 'PJ' : 'G'}
+                              </span>
+                            )}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
           </div>
         </div>
 
@@ -591,7 +694,7 @@ export default function LLMConfigPage() {
                       </button>
                       <button
                         onClick={function() { saveMutation.mutate() }}
-                        disabled={saveMutation.isPending || editContent === promptDetail.current_content}
+                        disabled={saveMutation.isPending || (!editLabel.trim() && editContent === promptDetail.current_content)}
                         className="text-xs bg-purple-600 text-white px-4 py-1.5 rounded-lg hover:bg-purple-700 disabled:opacity-50 font-medium"
                       >
                         {saveMutation.isPending ? '保存中...' : '保存'}
