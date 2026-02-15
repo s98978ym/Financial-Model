@@ -73,10 +73,18 @@ def _dispatch_celery(task_name: str, job_id: str):
     def _run():
         try:
             logger.info("Running %s synchronously for job %s", task_name, job_id)
+            # Celery tasks with bind=True expect (self, job_id).
+            # Task.run is the raw function; Task.__call__ injects self.
+            # When Celery is installed, fn is a Task object — calling fn(job_id)
+            # triggers Task.__call__ which correctly passes self for bind=True.
+            # When fn is a raw function, just call it directly.
             fn(job_id)
         except Exception as e:
-            logger.error("Sync task %s failed for job %s: %s", task_name, job_id, e)
-            db.update_job(job_id, status="failed", error_msg=str(e))
+            logger.exception("Sync task %s failed for job %s: %s", task_name, job_id, e)
+            try:
+                db.update_job(job_id, status="failed", error_msg=str(e)[:500])
+            except Exception:
+                logger.error("Failed to update job %s status to failed", job_id)
 
     thread = threading.Thread(target=_run, daemon=True)
     thread.start()

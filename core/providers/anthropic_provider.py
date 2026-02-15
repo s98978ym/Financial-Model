@@ -95,10 +95,13 @@ class AnthropicProvider(LLMProvider):
                     "temperature": cfg.temperature,
                     "system": full_system,
                     "messages": [{"role": "user", "content": user_prompt}],
+                    "timeout": cfg.timeout_seconds,
                 }
 
-                # Use non-streaming for reliability (background tasks don't need streaming)
-                response = self.client.messages.create(**kwargs)
+                # Use streaming to avoid HTTP-level timeout on large responses
+                # and to ensure the connection stays alive during generation.
+                with self.client.messages.stream(**kwargs) as stream:
+                    response = stream.get_final_message()
 
                 latency_ms = int((time.time() - t0) * 1000)
 
