@@ -34,10 +34,43 @@ class SegmentSummary(BaseModel):
 
 
 class SGABreakdown(BaseModel):
-    """SGA category breakdown (5-year)."""
+    """SGA category breakdown — flat totals per category (5-year)."""
 
     payroll: List[int] = Field(default_factory=list)
     marketing: List[int] = Field(default_factory=list)
+    office: List[int] = Field(default_factory=list)
+    system: List[int] = Field(default_factory=list)
+    other: List[int] = Field(default_factory=list)
+
+
+class PayrollRoleDetail(BaseModel):
+    """Single personnel role: salary x headcount."""
+
+    label: str = ""
+    salary: int = 0
+    headcount: List[int] = Field(default_factory=list)
+    cost: List[int] = Field(default_factory=list)
+
+
+class PayrollDetail(BaseModel):
+    """Payroll with per-role breakdown."""
+
+    roles: Dict[str, PayrollRoleDetail] = Field(default_factory=dict)
+    total: List[int] = Field(default_factory=list)
+
+
+class MarketingDetail(BaseModel):
+    """Marketing with subcategory breakdown."""
+
+    categories: Dict[str, List[int]] = Field(default_factory=dict)
+    total: List[int] = Field(default_factory=list)
+
+
+class SGADetail(BaseModel):
+    """Nested SGA detail with role-level payroll and marketing subcategories."""
+
+    payroll: PayrollDetail = Field(default_factory=PayrollDetail)
+    marketing: MarketingDetail = Field(default_factory=MarketingDetail)
     office: List[int] = Field(default_factory=list)
     system: List[int] = Field(default_factory=list)
     other: List[int] = Field(default_factory=list)
@@ -57,8 +90,10 @@ class PLSummary(BaseModel):
     cumulative_fcf: List[float] = Field(default_factory=list)
     # Segment breakdown
     segments: List[SegmentSummary] = Field(default_factory=list)
-    # SGA category breakdown
+    # SGA category breakdown (flat totals for charts)
     sga_breakdown: Optional[SGABreakdown] = None
+    # SGA detail with role-level payroll & marketing subcategories
+    sga_detail: Optional[SGADetail] = None
 
 
 class DepreciationSettings(BaseModel):

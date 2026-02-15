@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
 import traceback
 
 from services.worker.celery_app import app
@@ -60,7 +61,30 @@ def run_bm_analysis(self, job_id: str):
 
         db.update_job(job_id, progress=20, log_msg="Starting LLM analysis")
 
-        result = analyzer.analyze(truncated, feedback=feedback)
+        # Run analysis with a heartbeat thread that updates progress
+        # so the frontend knows the job is still alive during the LLM call
+        _heartbeat_stop = threading.Event()
+
+        def _heartbeat():
+            pct = 25
+            while not _heartbeat_stop.is_set():
+                _heartbeat_stop.wait(timeout=8)
+                if _heartbeat_stop.is_set():
+                    break
+                pct = min(pct + 5, 85)
+                try:
+                    db.update_job(job_id, progress=pct, log_msg="LLM generating response...")
+                except Exception:
+                    pass
+
+        hb_thread = threading.Thread(target=_heartbeat, daemon=True)
+        hb_thread.start()
+
+        try:
+            result = analyzer.analyze(truncated, feedback=feedback)
+        finally:
+            _heartbeat_stop.set()
+            hb_thread.join(timeout=2)
 
         # --- Store result ---
         result_dict = result.model_dump()
@@ -78,5 +102,5 @@ def run_bm_analysis(self, job_id: str):
 
     except Exception as e:
         logger.exception("Phase 2 task failed for job %s", job_id)
-        db.update_job(job_id, status="failed", error_msg=str(e))
+        db.update_job(job_id, status="failed", error_msg=str(e)[:500])
         raise

@@ -204,6 +204,7 @@ export default function ScenarioPlaygroundPage() {
             onChange={handleParameterChange}
             onBatchChange={handleBatchChange}
             industry={industry}
+            sgaDetail={plResult?.pl_summary?.sga_detail}
           />
         </div>
 

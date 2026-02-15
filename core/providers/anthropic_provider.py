@@ -95,9 +95,11 @@ class AnthropicProvider(LLMProvider):
                     "temperature": cfg.temperature,
                     "system": full_system,
                     "messages": [{"role": "user", "content": user_prompt}],
+                    "timeout": cfg.timeout_seconds,
                 }
 
-                # Use streaming (required by Anthropic SDK for long requests)
+                # Use streaming to avoid HTTP-level timeout on large responses
+                # and to ensure the connection stays alive during generation.
                 with self.client.messages.stream(**kwargs) as stream:
                     response = stream.get_final_message()
 

@@ -21,6 +21,27 @@ interface SGABreakdown {
   other: number[]
 }
 
+interface PayrollRoleDetail {
+  label: string
+  salary: number
+  headcount: number[]
+  cost: number[]
+}
+
+interface SGADetail {
+  payroll: {
+    roles: Record<string, PayrollRoleDetail>
+    total: number[]
+  }
+  marketing: {
+    categories: Record<string, number[]>
+    total: number[]
+  }
+  office: number[]
+  system: number[]
+  other: number[]
+}
+
 interface ModelOverviewProps {
   parameters: Record<string, number>
   kpis?: {
@@ -41,6 +62,7 @@ interface ModelOverviewProps {
     cumulative_fcf: number[]
     segments?: SegmentData[]
     sga_breakdown?: SGABreakdown
+    sga_detail?: SGADetail
   }
   industry: IndustryKey
   onParameterChange: (key: string, value: number) => void
@@ -180,6 +202,7 @@ export function ModelOverview({ parameters, kpis, plSummary, industry, onParamet
   var segments = plSummary?.segments
   var hasMultipleSegments = segments && segments.length > 1
   var sgaBreakdown = plSummary?.sga_breakdown
+  var sgaDetail = plSummary?.sga_detail
 
   return (
     <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
@@ -300,7 +323,7 @@ export function ModelOverview({ parameters, kpis, plSummary, industry, onParamet
 
             {/* SGA breakdown bar */}
             {sgaBreakdown != null && (
-              <SGABreakdownBar breakdown={sgaBreakdown} />
+              <SGABreakdownBar breakdown={sgaBreakdown} detail={sgaDetail} />
             )}
           </div>
         </div>
@@ -400,9 +423,12 @@ export function ModelOverview({ parameters, kpis, plSummary, industry, onParamet
   )
 }
 
-function SGABreakdownBar({ breakdown }: { breakdown: SGABreakdown }) {
+function SGABreakdownBar({ breakdown, detail }: { breakdown: SGABreakdown; detail?: SGADetail }) {
   var cats = ['payroll', 'marketing', 'office', 'system', 'other'] as const
   var total = cats.reduce(function(s: number, cat) { return s + (breakdown[cat][0] || 0) }, 0)
+
+  var payrollRoles = detail?.payroll?.roles
+  var hasRoles = payrollRoles && Object.keys(payrollRoles).length > 0
 
   return (
     <div className="mt-3 pt-2 border-t border-red-200">
@@ -436,6 +462,25 @@ function SGABreakdownBar({ breakdown }: { breakdown: SGABreakdown }) {
           )
         })}
       </div>
+
+      {/* Role-level payroll detail */}
+      {hasRoles && (
+        <div className="mt-2 pt-1.5 border-t border-red-100">
+          <div className="text-[10px] text-orange-600 font-medium mb-1">人件費: 平均年収 x 人数</div>
+          <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
+            {Object.entries(payrollRoles!).map(function([key, role]) {
+              return (
+                <div key={key} className="flex items-center justify-between">
+                  <span className="text-[10px] text-gray-500">{role.label}</span>
+                  <span className="text-[10px] font-mono text-gray-600">
+                    {(role.salary / 10_000).toFixed(0)}万 x {role.headcount[0] || 0}人
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
