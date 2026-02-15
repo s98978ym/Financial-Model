@@ -90,8 +90,8 @@ export function PLChart({ data, kpis }: PLChartProps) {
   }
 
   var hasSegments = data.segments && data.segments.length > 1
-  var hasSGA = data.sga_breakdown && Object.values(data.sga_breakdown).some(function(arr) {
-    return arr.some(function(v) { return v > 0 })
+  var hasSGA = data.sga_breakdown && Object.values(data.sga_breakdown).some(function(arr: number[]) {
+    return arr.some(function(v: number) { return v > 0 })
   })
 
   return (

@@ -299,40 +299,8 @@ export function ModelOverview({ parameters, kpis, plSummary, industry, onParamet
             </p>
 
             {/* SGA breakdown bar */}
-            {sgaBreakdown && (
-              <div className="mt-3 pt-2 border-t border-red-200">
-                <div className="text-[11px] text-red-600 font-medium mb-1.5">販管費内訳（FY1）</div>
-                <div className="h-4 rounded-full overflow-hidden flex mb-1">
-                  {(['payroll', 'marketing', 'office', 'system', 'other'] as const).map(function(cat) {
-                    var val = sgaBreakdown[cat][0] || 0
-                    var total = Object.values(sgaBreakdown).reduce(function(s, arr) { return s + (arr[0] || 0) }, 0)
-                    var pct = total > 0 ? (val / total) * 100 : 20
-                    return (
-                      <div
-                        key={cat}
-                        className={SGA_COLORS[cat] + ' transition-all relative group'}
-                        style={{ width: pct + '%' }}
-                      >
-                        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                          <span className="text-[9px] text-white font-bold drop-shadow">{pct.toFixed(0)}%</span>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-                <div className="flex flex-wrap gap-x-3 gap-y-0.5">
-                  {(['payroll', 'marketing', 'office', 'system', 'other'] as const).map(function(cat) {
-                    var val = sgaBreakdown[cat][0] || 0
-                    return (
-                      <div key={cat} className="flex items-center gap-1">
-                        <div className={'w-1.5 h-1.5 rounded-full ' + SGA_COLORS[cat]} />
-                        <span className="text-[10px] text-gray-500">{SGA_LABELS[cat]}</span>
-                        <span className="text-[10px] font-mono text-gray-700">{formatYen(val)}</span>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
+            {sgaBreakdown != null && (
+              <SGABreakdownBar breakdown={sgaBreakdown} />
             )}
           </div>
         </div>
@@ -427,6 +395,46 @@ export function ModelOverview({ parameters, kpis, plSummary, industry, onParamet
             )}
           </div>
         )}
+      </div>
+    </div>
+  )
+}
+
+function SGABreakdownBar({ breakdown }: { breakdown: SGABreakdown }) {
+  var cats = ['payroll', 'marketing', 'office', 'system', 'other'] as const
+  var total = cats.reduce(function(s: number, cat) { return s + (breakdown[cat][0] || 0) }, 0)
+
+  return (
+    <div className="mt-3 pt-2 border-t border-red-200">
+      <div className="text-[11px] text-red-600 font-medium mb-1.5">販管費内訳（FY1）</div>
+      <div className="h-4 rounded-full overflow-hidden flex mb-1">
+        {cats.map(function(cat) {
+          var val = breakdown[cat][0] || 0
+          var pct = total > 0 ? (val / total) * 100 : 20
+          return (
+            <div
+              key={cat}
+              className={SGA_COLORS[cat] + ' transition-all relative group'}
+              style={{ width: pct + '%' }}
+            >
+              <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                <span className="text-[9px] text-white font-bold drop-shadow">{pct.toFixed(0)}%</span>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+      <div className="flex flex-wrap gap-x-3 gap-y-0.5">
+        {cats.map(function(cat) {
+          var val = breakdown[cat][0] || 0
+          return (
+            <div key={cat} className="flex items-center gap-1">
+              <div className={'w-1.5 h-1.5 rounded-full ' + SGA_COLORS[cat]} />
+              <span className="text-[10px] text-gray-500">{SGA_LABELS[cat]}</span>
+              <span className="text-[10px] font-mono text-gray-700">{formatYen(val)}</span>
+            </div>
+          )
+        })}
       </div>
     </div>
   )
