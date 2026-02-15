@@ -6,7 +6,9 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import threading
+import time
 import traceback
 
 from services.worker.celery_app import app
@@ -66,12 +68,15 @@ def run_bm_analysis(self, job_id: str):
         _heartbeat_stop = threading.Event()
 
         def _heartbeat():
-            pct = 25
+            t0 = time.time()
             while not _heartbeat_stop.is_set():
                 _heartbeat_stop.wait(timeout=8)
                 if _heartbeat_stop.is_set():
                     break
-                pct = min(pct + 5, 85)
+                elapsed = time.time() - t0
+                # Asymptotic progress: fast early, slows down approaching 95%
+                # ~40% at 30s, ~52% at 60s, ~69% at 2min, ~89% at 5min, ~94% at 10min
+                pct = min(int(25 + 70 * (1 - math.exp(-elapsed / 120))), 95)
                 try:
                     db.update_job(job_id, progress=pct, log_msg="LLM generating response...")
                 except Exception:

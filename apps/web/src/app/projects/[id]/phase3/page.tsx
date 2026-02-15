@@ -7,6 +7,8 @@ import { usePhaseJob } from '@/lib/usePhaseJob'
 import { PhaseLayout } from '@/components/ui/PhaseLayout'
 import { api } from '@/lib/api'
 import ProposalCards from '@/components/proposals/ProposalCards'
+import { RevenueModelConfigurator } from '@/components/revenue'
+import type { SegmentRevenueModel } from '@/components/revenue'
 
 export default function Phase3Page() {
   var params = useParams()
@@ -18,6 +20,8 @@ export default function Phase3Page() {
 
   var [proposalDecisions, setProposalDecisions] = useState<any[]>([])
   var [saveError, setSaveError] = useState<string | null>(null)
+  var [revenueModels, setRevenueModels] = useState<SegmentRevenueModel[]>([])
+  var [savingRevenue, setSavingRevenue] = useState(false)
 
   // Load Phase 2 edits to get user's selected proposal index
   var phase2Edits = useQuery({
@@ -26,6 +30,26 @@ export default function Phase3Page() {
     enabled: !!projectId,
     retry: 1,
   })
+
+  // Load Phase 3 edits (to restore revenue model configs)
+  var phase3Edits = useQuery({
+    queryKey: ['edits', projectId, 3],
+    queryFn: function() { return api.getEdits(projectId, 3) },
+    enabled: !!projectId,
+    retry: 1,
+  })
+
+  // Restore revenue model configs from saved edits
+  useMemo(function() {
+    if (!phase3Edits.data) return
+    var edits = phase3Edits.data || []
+    for (var i = edits.length - 1; i >= 0; i--) {
+      if (edits[i].patch_json && edits[i].patch_json.revenue_model_configs) {
+        setRevenueModels(edits[i].patch_json.revenue_model_configs)
+        break
+      }
+    }
+  }, [phase3Edits.data])
 
   // Get the correct selected proposal from Phase 2 (respect user selection)
   var phase2Proposal = useMemo(function() {
@@ -45,6 +69,18 @@ export default function Phase3Page() {
     return proposals[selectedIdx] || proposals[0] || null
   }, [projectState, phase2Edits.data])
 
+  // Extract segments from the selected Phase 2 proposal
+  var segments = useMemo(function() {
+    if (!phase2Proposal) return []
+    return (phase2Proposal.segments || []).map(function(seg: any) {
+      return {
+        name: seg.name || '',
+        model_type: seg.model_type || '',
+        revenue_formula: seg.revenue_formula || '',
+      }
+    })
+  }, [phase2Proposal])
+
   var mappings = result?.sheet_mappings || result?.mappings || []
 
   var purposeLabels: Record<string, string> = {
@@ -53,6 +89,24 @@ export default function Phase3Page() {
     assumptions: '前提条件',
     cost_detail: 'コスト詳細',
     headcount: '人員計画',
+    capex: '設備投資',
+  }
+
+  // Save revenue model configs
+  function handleSaveRevenueModels() {
+    setSavingRevenue(true)
+    setSaveError(null)
+    api.saveEdit({
+      project_id: projectId,
+      phase: 3,
+      patch_json: { revenue_model_configs: revenueModels },
+    }).then(function() {
+      setSavingRevenue(false)
+    }).catch(function(err: Error) {
+      console.error('[Phase3] save revenue models error:', err.message)
+      setSaveError(err.message)
+      setSavingRevenue(false)
+    })
   }
 
   // Save Phase 3 decisions to DB then navigate to Phase 4
@@ -82,6 +136,27 @@ export default function Phase3Page() {
     setProposalDecisions(decisions)
     saveDecisions.mutate(decisions)
   }, [saveDecisions])
+
+  // Navigate to Phase 4, saving revenue models first if configured
+  function handleProceedToPhase4() {
+    var hasConfigs = revenueModels.some(function(m) { return m.archetype != null })
+    if (hasConfigs) {
+      setSavingRevenue(true)
+      api.saveEdit({
+        project_id: projectId,
+        phase: 3,
+        patch_json: { revenue_model_configs: revenueModels },
+      }).then(function() {
+        setSavingRevenue(false)
+        router.push('/projects/' + projectId + '/phase4')
+      }).catch(function() {
+        setSavingRevenue(false)
+        router.push('/projects/' + projectId + '/phase4')
+      })
+    } else {
+      router.push('/projects/' + projectId + '/phase4')
+    }
+  }
 
   return (
     <PhaseLayout
@@ -124,7 +199,7 @@ export default function Phase3Page() {
         </div>
       )}
 
-      {/* Result table */}
+      {/* Result table + Revenue Model Configurator */}
       {isComplete && mappings.length > 0 && (
         <>
           {result?.overall_structure && (
@@ -143,7 +218,7 @@ export default function Phase3Page() {
             </div>
           )}
 
-          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden mb-6">
             <table className="w-full text-sm">
               <thead className="bg-gray-50">
                 <tr>
@@ -179,6 +254,31 @@ export default function Phase3Page() {
             </table>
           </div>
 
+          {/* ═══ REVENUE MODEL CONFIGURATOR ═══ */}
+          {segments.length > 0 && (
+            <div className="mb-6">
+              <RevenueModelConfigurator
+                segments={segments}
+                value={revenueModels}
+                onChange={function(models) {
+                  setRevenueModels(models)
+                }}
+              />
+              {/* Auto-save indicator */}
+              {revenueModels.some(function(m) { return m.archetype != null }) && (
+                <div className="mt-3 flex items-center justify-end gap-3">
+                  <button
+                    onClick={handleSaveRevenueModels}
+                    disabled={savingRevenue}
+                    className="text-xs text-blue-600 hover:text-blue-800 disabled:text-gray-400"
+                  >
+                    {savingRevenue ? '保存中...' : '設定を保存'}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
           {result?.suggestions && result.suggestions.length > 0 && (
             <ProposalCards
               suggestions={result.suggestions}
@@ -187,16 +287,16 @@ export default function Phase3Page() {
             />
           )}
 
-          {(!result?.suggestions || result.suggestions.length === 0) && (
-            <div className="mt-6 flex justify-end">
-              <button
-                onClick={function() { router.push('/projects/' + projectId + '/phase4') }}
-                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm"
-              >
-                Phase 4 へ進む
-              </button>
-            </div>
-          )}
+          {/* Phase 4 navigation */}
+          <div className="mt-6 flex justify-end">
+            <button
+              onClick={handleProceedToPhase4}
+              disabled={savingRevenue || saveDecisions.isPending}
+              className="bg-blue-600 text-white px-5 py-2 rounded-lg hover:bg-blue-700 text-sm disabled:opacity-50"
+            >
+              {savingRevenue ? '保存中...' : 'Phase 4 へ進む'}
+            </button>
+          </div>
 
           {saveError && (
             <div className="mt-4 bg-red-50 border border-red-200 rounded-lg p-3 flex items-center justify-between">
@@ -213,17 +313,6 @@ export default function Phase3Page() {
           {saveDecisions.isPending && (
             <div className="mt-4 text-center">
               <p className="text-sm text-gray-500">提案を保存中...</p>
-            </div>
-          )}
-
-          {result?.suggestions && result.suggestions.length > 0 && (
-            <div className="mt-4 flex justify-end">
-              <button
-                onClick={function() { router.push('/projects/' + projectId + '/phase4') }}
-                className="text-xs text-gray-400 hover:text-gray-600 hover:underline transition-colors"
-              >
-                提案をスキップして Phase 4 へ進む
-              </button>
             </div>
           )}
         </>

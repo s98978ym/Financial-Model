@@ -87,7 +87,13 @@ export default function Phase2Page() {
         <div className="text-center py-12">
           <div className="inline-block w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mb-4" />
           <p className="text-gray-600">ビジネスモデルを分析中... ({progress}%)</p>
-          <p className="text-xs text-gray-400 mt-1">LLMが事業計画書を読み解いています</p>
+          <p className="text-xs text-gray-400 mt-1">
+            {progress < 50
+              ? 'LLMが事業計画書を読み解いています'
+              : progress < 80
+                ? '収益構造を分析しています'
+                : '最終処理中です。もうしばらくお待ちください'}
+          </p>
         </div>
       )}
 
