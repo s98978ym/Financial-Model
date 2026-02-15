@@ -41,12 +41,17 @@ def update_job(
 
 @router.get("/jobs/{job_id}")
 async def get_job(job_id: str):
-    """Poll job status."""
+    """Poll job status.
+
+    When the job is completed and has a result_ref, the phase result's
+    raw_json is inlined as ``result_data`` so the frontend can display
+    results immediately without waiting for a separate projectState refetch.
+    """
     job = db.get_job(job_id)
     if not job:
         raise HTTPException(status_code=404, detail={"code": "JOB_NOT_FOUND"})
 
-    return {
+    resp: dict = {
         "id": job["id"],
         "status": job["status"],
         "progress": job["progress"],
@@ -57,3 +62,11 @@ async def get_job(job_id: str):
         "created_at": job["created_at"],
         "updated_at": job["updated_at"],
     }
+
+    # Inline result data on completion to eliminate FE projectState wait
+    if job["status"] == "completed" and job.get("result_ref"):
+        pr = db.get_phase_result(job["run_id"], job["phase"])
+        if pr:
+            resp["result_data"] = pr.get("raw_json")
+
+    return resp

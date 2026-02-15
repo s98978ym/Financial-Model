@@ -74,19 +74,24 @@ export function usePhaseJob({ projectId, phase, autoLoad = true }: UsePhaseJobOp
     if (!jobData) return
 
     if (jobData.status === 'completed') {
-      // Job is done — refetch project state to populate result (only once per jobId)
+      // Invalidate projectState cache so other components pick up the new result
       if (completionInvalidatedForJob.current !== state.jobId) {
         completionInvalidatedForJob.current = state.jobId
         queryClient.invalidateQueries({ queryKey: ['projectState', projectId] })
       }
-      // Keep as 'running' briefly while waiting for projectState to arrive with result
-      // But set a maximum wait — after projectState refetch, the autoLoad effect will set 'completed'
-      setState((prev) => ({
-        ...prev,
-        status: prev.result != null ? 'completed' : 'running',
-        progress: prev.result != null ? 100 : 95,
-        error: null,
-      }))
+      // Use inlined result_data from job response for instant completion,
+      // falling back to waiting for projectState refetch if not available
+      var resultData = jobData.result_data || null
+      setState((prev) => {
+        var result = resultData || prev.result
+        return {
+          ...prev,
+          status: result != null ? 'completed' : 'running',
+          progress: result != null ? 100 : 95,
+          result: result != null ? result : prev.result,
+          error: null,
+        }
+      })
     } else {
       setState((prev) => ({
         ...prev,

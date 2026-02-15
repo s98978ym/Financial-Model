@@ -93,7 +93,13 @@ class AnthropicProvider(LLMProvider):
                     "model": model,
                     "max_tokens": cfg.max_tokens,
                     "temperature": cfg.temperature,
-                    "system": full_system,
+                    "system": [
+                        {
+                            "type": "text",
+                            "text": full_system,
+                            "cache_control": {"type": "ephemeral"},
+                        }
+                    ],
                     "messages": [{"role": "user", "content": user_prompt}],
                     "timeout": cfg.timeout_seconds,
                 }

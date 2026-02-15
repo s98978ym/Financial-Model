@@ -70,7 +70,7 @@ def run_bm_analysis(self, job_id: str):
         def _heartbeat():
             t0 = time.time()
             while not _heartbeat_stop.is_set():
-                _heartbeat_stop.wait(timeout=8)
+                _heartbeat_stop.wait(timeout=4)
                 if _heartbeat_stop.is_set():
                     break
                 elapsed = time.time() - t0
