@@ -261,15 +261,49 @@ function BenchmarkBar({ benchmark, driver, value }: { benchmark: DriverBenchmark
   )
 }
 
+/** FY1-FY5 mini bar for a category */
+function FYMiniBar({ values, color }: { values: number[]; color: string }) {
+  if (!values || values.length < 5) return null
+  var maxVal = Math.max(...values) || 1
+  return (
+    <div className="flex items-end gap-0.5 h-4">
+      {values.map(function(v, i) {
+        var pct = Math.max((v / maxVal) * 100, 4)
+        return (
+          <div key={i} className="flex-1 flex flex-col items-center">
+            <div className={color + ' rounded-sm w-full transition-all'} style={{ height: pct + '%' }} title={'FY' + (i + 1) + ': ' + formatYen(v)} />
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function FYRow({ values }: { values: number[] }) {
+  if (!values || values.length < 5) return null
+  return (
+    <div className="flex gap-0.5 mt-1">
+      {values.map(function(v, i) {
+        return (
+          <div key={i} className="flex-1 text-center">
+            <div className="text-[8px] text-gray-400">{'FY' + (i + 1)}</div>
+            <div className="text-[9px] font-mono text-gray-600">{formatYen(v)}</div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 /** Role-based payroll detail panel */
 function PayrollDetailPanel({
   roles,
   parameters,
-  onChange,
+  onRoleChange,
 }: {
   roles: Record<string, PayrollRoleDetail>
   parameters: Record<string, number>
-  onChange: (key: string, value: number) => void
+  onRoleChange: (subKey: string, value: number) => void
 }) {
   var roleEntries = Object.entries(roles)
   if (roleEntries.length === 0) return null
@@ -279,7 +313,6 @@ function PayrollDetailPanel({
       <div className="text-[11px] text-orange-700 font-medium mb-2">人件費内訳（平均年収 x 人数 = コスト）</div>
       <div className="space-y-2.5">
         {roleEntries.map(function([roleKey, role]) {
-          // Use LOCAL parameter values as source of truth for sliders
           var salaryKey = 'pr_' + roleKey + '_salary'
           var hcKey = 'pr_' + roleKey + '_hc'
           var localSalary = parameters[salaryKey] != null ? parameters[salaryKey] : role.salary
@@ -288,11 +321,13 @@ function PayrollDetailPanel({
 
           return (
             <div key={roleKey} className="bg-white rounded p-2 border border-orange-100">
-              <div className="flex items-center justify-between mb-1.5">
+              <div className="flex items-center justify-between mb-1">
                 <span className="text-xs font-medium text-gray-700">{role.label}</span>
                 <span className="text-xs font-mono text-orange-700">{formatYen(fy1Cost)}/年</span>
               </div>
-              <div className="grid grid-cols-2 gap-2">
+              {/* FY1-FY5 cost row */}
+              <FYRow values={role.cost} />
+              <div className="grid grid-cols-2 gap-2 mt-1.5">
                 <div>
                   <label className="text-[10px] text-gray-500 block mb-0.5">平均年収</label>
                   <input
@@ -301,7 +336,7 @@ function PayrollDetailPanel({
                     max={15_000_000}
                     step={500_000}
                     value={localSalary}
-                    onChange={function(e) { onChange(salaryKey, parseFloat(e.target.value)) }}
+                    onChange={function(e) { onRoleChange(salaryKey, parseFloat(e.target.value)) }}
                     className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-orange-500"
                   />
                   <div className="text-[10px] font-mono text-gray-600 text-center mt-0.5">
@@ -316,7 +351,7 @@ function PayrollDetailPanel({
                     max={50}
                     step={1}
                     value={localHc}
-                    onChange={function(e) { onChange(hcKey, parseFloat(e.target.value)) }}
+                    onChange={function(e) { onRoleChange(hcKey, parseFloat(e.target.value)) }}
                     className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-orange-500"
                   />
                   <div className="text-[10px] font-mono text-gray-600 text-center mt-0.5">
@@ -337,16 +372,21 @@ function MarketingDetailPanel({
   categories,
   total,
   parameters,
-  onChange,
+  onSubChange,
 }: {
   categories: Record<string, number[]>
   total: number[]
   parameters: Record<string, number>
-  onChange: (key: string, value: number) => void
+  onSubChange: (subKey: string, value: number) => void
 }) {
-  var [activeAngle, setActiveAngle] = useState(0)
   var catEntries = Object.entries(categories)
-  var mktgTotal = total[0] || 0
+
+  // Compute local total from subcategory params (source of truth)
+  var localTotal = 0
+  catEntries.forEach(function([catKey, values]) {
+    var localVal = parameters['mk_' + catKey]
+    localTotal += (localVal != null ? localVal : (values[0] || 0))
+  })
 
   // Compute angle-based grouping
   function getAngleData(angleIdx: number) {
@@ -357,7 +397,6 @@ function MarketingDetailPanel({
       group.keys.forEach(function(k) {
         var catVals = categories[k]
         if (catVals) {
-          // Use local parameter if set, otherwise API value
           var localVal = parameters['mk_' + k]
           sum += (localVal != null ? localVal : (catVals[0] || 0))
         }
@@ -371,12 +410,15 @@ function MarketingDetailPanel({
       <div className="flex items-center justify-between mb-2">
         <div className="text-[11px] text-purple-700 font-medium">
           マーケティング費内訳（FY1）
-          <span className="text-[10px] text-purple-500 ml-1">合計: {formatYen(mktgTotal)}</span>
+          <span className="text-[10px] text-purple-500 ml-1">合計: {formatYen(localTotal)}</span>
         </div>
       </div>
 
+      {/* FY1-FY5 summary */}
+      <FYRow values={total} />
+
       {/* Multi-angle composition bars */}
-      <div className="space-y-2 mb-3">
+      <div className="space-y-2 my-3">
         {MKTG_ANGLES.map(function(angle, ai) {
           var data = getAngleData(ai)
           var angleTotal = data.reduce(function(s, d) { return s + d.value }, 0) || 1
@@ -422,15 +464,14 @@ function MarketingDetailPanel({
         })}
       </div>
 
-      {/* Per-category sliders (手段別の詳細) */}
+      {/* Per-category sliders */}
       <div className="border-t border-purple-200 pt-2">
         <div className="text-[10px] text-purple-600 font-medium mb-1.5">カテゴリ別予算配分</div>
-        {/* Composition bar by category */}
         <div className="h-3 rounded-full overflow-hidden flex mb-2">
           {catEntries.map(function([catKey, values]) {
             var localVal = parameters['mk_' + catKey]
             var val = localVal != null ? localVal : (values[0] || 0)
-            var pct = mktgTotal > 0 ? (val / mktgTotal) * 100 : 12.5
+            var pct = localTotal > 0 ? (val / localTotal) * 100 : 12.5
             return (
               <div
                 key={catKey}
@@ -443,7 +484,6 @@ function MarketingDetailPanel({
         </div>
         <div className="space-y-1.5">
           {catEntries.map(function([catKey, values]) {
-            // Use local parameter value as source of truth
             var localVal = parameters['mk_' + catKey]
             var val = localVal != null ? localVal : (values[0] || 0)
             return (
@@ -461,7 +501,7 @@ function MarketingDetailPanel({
                   max={50_000_000}
                   step={500_000}
                   value={val}
-                  onChange={function(e) { onChange('mk_' + catKey, parseFloat(e.target.value)) }}
+                  onChange={function(e) { onSubChange('mk_' + catKey, parseFloat(e.target.value)) }}
                   className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-purple-500"
                 />
               </div>
@@ -471,6 +511,34 @@ function MarketingDetailPanel({
       </div>
     </div>
   )
+}
+
+/** Helper: get current value for an SGA category */
+function getCatVal(parameters: Record<string, number>, catKey: string, opexBase: number, ratio: number): number {
+  return parameters[catKey] != null ? parameters[catKey] : opexBase * ratio
+}
+
+/** Helper: compute total payroll from role parameters */
+function computePayrollTotal(parameters: Record<string, number>, roles?: Record<string, PayrollRoleDetail>): number {
+  if (!roles) return parameters.payroll || 0
+  var total = 0
+  Object.entries(roles).forEach(function([roleKey, role]) {
+    var salary = parameters['pr_' + roleKey + '_salary'] != null ? parameters['pr_' + roleKey + '_salary'] : role.salary
+    var hc = parameters['pr_' + roleKey + '_hc'] != null ? parameters['pr_' + roleKey + '_hc'] : (role.headcount[0] || 0)
+    total += salary * hc
+  })
+  return total
+}
+
+/** Helper: compute total marketing from subcategory parameters */
+function computeMktgTotal(parameters: Record<string, number>, categories?: Record<string, number[]>): number {
+  if (!categories) return parameters.sga_marketing || 0
+  var total = 0
+  Object.entries(categories).forEach(function([catKey, values]) {
+    var localVal = parameters['mk_' + catKey]
+    total += (localVal != null ? localVal : (values[0] || 0))
+  })
+  return total
 }
 
 export function DriverSliders({ parameters, onChange, onBatchChange, industry, sgaDetail }: DriverSlidersProps) {
@@ -485,12 +553,99 @@ export function DriverSliders({ parameters, onChange, onBatchChange, industry, s
 
   var opexBase = parameters.opex_base || 80_000_000
 
+  // --- Batch helper: update multiple params + trigger recalc ---
+  function batchUpdate(changes: Record<string, number>) {
+    if (onBatchChange) {
+      onBatchChange(changes)
+    } else {
+      Object.entries(changes).forEach(function([k, v]) { onChange(k, v) })
+    }
+  }
+
+  // --- Top-down: OPEX total → distribute to categories proportionally ---
+  function handleOpexTotalChange(newTotal: number) {
+    var currentTotal = SGA_CATEGORIES.reduce(function(sum, c) {
+      return sum + getCatVal(parameters, c.key, opexBase, c.ratio)
+    }, 0)
+    var ratio = currentTotal > 0 ? newTotal / currentTotal : 1
+    var batch: Record<string, number> = { opex_base: newTotal }
+    SGA_CATEGORIES.forEach(function(cat) {
+      batch[cat.key] = Math.round(getCatVal(parameters, cat.key, opexBase, cat.ratio) * ratio)
+    })
+    batchUpdate(batch)
+  }
+
+  // --- Category slider → update that category + recompute opex_base as sum ---
+  function handleCategoryChange(catKey: string, newVal: number) {
+    var batch: Record<string, number> = {}
+    batch[catKey] = newVal
+    // Recompute opex_base from all categories
+    var newOpex = SGA_CATEGORIES.reduce(function(sum, c) {
+      return sum + (c.key === catKey ? newVal : getCatVal(parameters, c.key, opexBase, c.ratio))
+    }, 0)
+    batch.opex_base = newOpex
+
+    // If marketing total slider changed, redistribute to subcategories proportionally
+    if (catKey === 'sga_marketing' && sgaDetail) {
+      var oldMktgTotal = computeMktgTotal(parameters, sgaDetail.marketing.categories)
+      if (oldMktgTotal > 0) {
+        var mktgRatio = newVal / oldMktgTotal
+        Object.entries(sgaDetail.marketing.categories).forEach(function([subKey, values]) {
+          var localVal = parameters['mk_' + subKey]
+          var oldVal = localVal != null ? localVal : (values[0] || 0)
+          batch['mk_' + subKey] = Math.round(oldVal * mktgRatio)
+        })
+      }
+    }
+    batchUpdate(batch)
+  }
+
+  // --- Marketing sub → update mk_* + sga_marketing total + opex_base ---
+  function handleMktgSubChange(subParamKey: string, newVal: number) {
+    var batch: Record<string, number> = {}
+    batch[subParamKey] = newVal
+    // Compute new marketing total
+    var newMktgTotal = 0
+    if (sgaDetail) {
+      Object.entries(sgaDetail.marketing.categories).forEach(function([catKey, values]) {
+        var paramKey = 'mk_' + catKey
+        newMktgTotal += (paramKey === subParamKey ? newVal : (parameters[paramKey] != null ? parameters[paramKey] : (values[0] || 0)))
+      })
+    }
+    batch.sga_marketing = newMktgTotal
+    // Recompute opex_base
+    batch.opex_base = SGA_CATEGORIES.reduce(function(sum, c) {
+      return sum + (c.key === 'sga_marketing' ? newMktgTotal : getCatVal(parameters, c.key, opexBase, c.ratio))
+    }, 0)
+    batchUpdate(batch)
+  }
+
+  // --- Payroll role sub → update pr_* + payroll total + opex_base ---
+  function handlePayrollSubChange(subParamKey: string, newVal: number) {
+    var batch: Record<string, number> = {}
+    batch[subParamKey] = newVal
+    // Compute new payroll total from roles
+    if (sgaDetail) {
+      var newPayrollTotal = 0
+      Object.entries(sgaDetail.payroll.roles).forEach(function([roleKey, role]) {
+        var salaryKey = 'pr_' + roleKey + '_salary'
+        var hcKey = 'pr_' + roleKey + '_hc'
+        var salary = salaryKey === subParamKey ? newVal : (parameters[salaryKey] != null ? parameters[salaryKey] : role.salary)
+        var hc = hcKey === subParamKey ? newVal : (parameters[hcKey] != null ? parameters[hcKey] : (role.headcount[0] || 0))
+        newPayrollTotal += salary * hc
+      })
+      batch.payroll = newPayrollTotal
+      // Recompute opex_base
+      batch.opex_base = SGA_CATEGORIES.reduce(function(sum, c) {
+        return sum + (c.key === 'payroll' ? newPayrollTotal : getCatVal(parameters, c.key, opexBase, c.ratio))
+      }, 0)
+    }
+    batchUpdate(batch)
+  }
+
   function handleDeprModeChange(mode: 'manual' | 'auto') {
     setDeprMode(mode)
-    onChange('depreciation_mode' as any, mode === 'auto' ? 1 : 0)
-    if (onBatchChange) {
-      onBatchChange({ depreciation_mode: mode === 'auto' ? 1 : 0 } as any)
-    }
+    batchUpdate({ depreciation_mode: mode === 'auto' ? 1 : 0 } as any)
   }
 
   return (
@@ -580,7 +735,7 @@ export function DriverSliders({ parameters, onChange, onBatchChange, industry, s
         </button>
 
         {!sgaExpanded && (
-          /* Simple OPEX slider when collapsed */
+          /* Simple OPEX slider when collapsed — top-down distribution */
           <div className="mb-2">
             <div className="flex items-center justify-between mb-1">
               <label className="text-sm text-gray-700">OPEX合計</label>
@@ -594,50 +749,78 @@ export function DriverSliders({ parameters, onChange, onBatchChange, industry, s
               max={500_000_000}
               step={5_000_000}
               value={opexBase}
-              onChange={function(e) { onChange('opex_base', parseFloat(e.target.value)) }}
+              onChange={function(e) { handleOpexTotalChange(parseFloat(e.target.value)) }}
               className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-orange-500"
             />
             <div className="flex justify-between text-xs text-gray-400 mt-0.5">
               <span>0.1億円</span>
               <span>5億円</span>
             </div>
+            <p className="text-[10px] text-gray-400 mt-1">合計を変更すると各カテゴリに比例配分されます</p>
           </div>
         )}
 
         {sgaExpanded && (
           <div className="space-y-3">
-            {/* Category composition bar */}
+            {/* Step 1: OPEX total (top-down entry point) */}
+            <div className="bg-orange-50 rounded-lg p-2.5 border border-orange-100">
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-sm font-medium text-orange-800">販管費合計（OPEX）</label>
+                <span className="text-sm font-mono font-bold text-orange-900">
+                  {formatYen(opexBase)}
+                </span>
+              </div>
+              <input
+                type="range"
+                min={10_000_000}
+                max={500_000_000}
+                step={5_000_000}
+                value={opexBase}
+                onChange={function(e) { handleOpexTotalChange(parseFloat(e.target.value)) }}
+                className="w-full h-2 bg-orange-200 rounded-lg appearance-none cursor-pointer accent-orange-600"
+              />
+              <p className="text-[10px] text-orange-500 mt-0.5">合計を変更すると下のカテゴリに比例配分されます</p>
+            </div>
+
+            {/* Step 2: Category composition bar */}
             <div className="h-3 rounded-full overflow-hidden flex">
               {SGA_CATEGORIES.map(function(cat) {
-                var val = parameters[cat.key] != null ? parameters[cat.key] : opexBase * cat.ratio
-                var total = SGA_CATEGORIES.reduce(function(sum, c) {
-                  return sum + (parameters[c.key] != null ? parameters[c.key] : opexBase * c.ratio)
-                }, 0)
-                var pct = total > 0 ? (val / total) * 100 : 20
+                var val = getCatVal(parameters, cat.key, opexBase, cat.ratio)
+                var pct = opexBase > 0 ? (val / opexBase) * 100 : 20
                 return (
                   <div
                     key={cat.key}
                     className={cat.color + ' transition-all'}
                     style={{ width: pct + '%' }}
-                    title={cat.label + ': ' + cat.format(val)}
+                    title={cat.label + ': ' + cat.format(val) + ' (' + pct.toFixed(0) + '%)'}
                   />
                 )
               })}
             </div>
 
-            {/* Category sliders */}
+            {/* Step 3: Category sliders (each updates parent total) */}
             {SGA_CATEGORIES.map(function(cat) {
-              var value = parameters[cat.key] != null ? parameters[cat.key] : opexBase * cat.ratio
+              var value = getCatVal(parameters, cat.key, opexBase, cat.ratio)
               var isPayroll = cat.key === 'payroll'
               var isMktg = cat.key === 'sga_marketing'
+              // FY1-FY5 data from sgaDetail
+              var fyValues: number[] | null = null
+              if (sgaDetail) {
+                if (isPayroll) fyValues = sgaDetail.payroll.total
+                else if (isMktg) fyValues = sgaDetail.marketing.total
+                else if (cat.key === 'sga_office') fyValues = sgaDetail.office
+                else if (cat.key === 'sga_system') fyValues = sgaDetail.system
+                else if (cat.key === 'sga_other') fyValues = sgaDetail.other
+              }
+              var pct = opexBase > 0 ? ((value / opexBase) * 100).toFixed(0) : '—'
 
               return (
                 <div key={cat.key}>
-                  <div className="flex items-center justify-between mb-1">
+                  <div className="flex items-center justify-between mb-0.5">
                     <div className="flex items-center gap-1.5">
                       <div className={'w-2 h-2 rounded-full ' + cat.color} />
                       <label className="text-sm text-gray-700">{cat.label}</label>
-                      {/* Expand toggle for payroll / marketing */}
+                      <span className="text-[10px] text-gray-400">{pct}%</span>
                       {isPayroll && sgaDetail && (
                         <button
                           onClick={function() { setPayrollExpanded(!payrollExpanded) }}
@@ -659,42 +842,44 @@ export function DriverSliders({ parameters, onChange, onBatchChange, industry, s
                       {cat.format(value)}
                     </span>
                   </div>
+                  {/* FY1-FY5 mini bar */}
+                  {fyValues && <FYMiniBar values={fyValues} color={cat.color} />}
                   <input
                     type="range"
                     min={cat.min}
                     max={cat.max}
                     step={cat.step}
                     value={value}
-                    onChange={function(e) { onChange(cat.key, parseFloat(e.target.value)) }}
+                    onChange={function(e) { handleCategoryChange(cat.key, parseFloat(e.target.value)) }}
                     className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-orange-500"
                   />
 
-                  {/* Payroll role-level detail */}
+                  {/* Payroll role-level detail → updates payroll total + opex */}
                   {isPayroll && payrollExpanded && sgaDetail && (
                     <PayrollDetailPanel
                       roles={sgaDetail.payroll.roles}
                       parameters={parameters}
-                      onChange={onChange}
+                      onRoleChange={handlePayrollSubChange}
                     />
                   )}
 
-                  {/* Marketing subcategory detail */}
+                  {/* Marketing subcategory detail → updates sga_marketing total + opex */}
                   {isMktg && mktgExpanded && sgaDetail && (
                     <MarketingDetailPanel
                       categories={sgaDetail.marketing.categories}
                       total={sgaDetail.marketing.total}
                       parameters={parameters}
-                      onChange={onChange}
+                      onSubChange={handleMktgSubChange}
                     />
                   )}
                 </div>
               )
             })}
 
-            {/* OPEX growth rate */}
-            <div>
+            {/* OPEX growth rate (affects FY2-FY5) */}
+            <div className="bg-gray-50 rounded-lg p-2.5 border border-gray-100">
               <div className="flex items-center justify-between mb-1">
-                <label className="text-sm text-gray-700">OPEX 増加率（年率）</label>
+                <label className="text-sm text-gray-700">OPEX 年間増加率</label>
                 <span className="text-sm font-mono font-medium text-gray-900">
                   {((parameters.opex_growth || 0.1) * 100).toFixed(0)}%
                 </span>
@@ -708,6 +893,7 @@ export function DriverSliders({ parameters, onChange, onBatchChange, industry, s
                 onChange={function(e) { onChange('opex_growth', parseFloat(e.target.value)) }}
                 className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-orange-500"
               />
+              <p className="text-[10px] text-gray-400 mt-0.5">FY2〜FY5の各カテゴリに年率で適用されます</p>
             </div>
           </div>
         )}
