@@ -2,12 +2,17 @@
 
 Applies parameter changes and scenario multipliers to compute
 the 5-year PL summary, KPIs, and chart data.
+
+Supports:
+  - Per-segment revenue & gross profit with model sheet linkage
+  - Detailed SGA categories (payroll, marketing, office, system, other)
+  - Depreciation auto-calculation from CAPEX with amortization settings
 """
 
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter
 
@@ -38,6 +43,15 @@ _PARAM_KEY_MAP = {
     "opex": "opex_base",
     # Payroll → payroll (component, not total OPEX)
     "人件費": "payroll",
+    # Marketing → sga_marketing
+    "マーケティング": "sga_marketing",
+    "広告宣伝費": "sga_marketing",
+    # Office → sga_office
+    "オフィス": "sga_office",
+    "一般管理費": "sga_office",
+    # System → sga_system
+    "システム": "sga_system",
+    "開発費": "sga_system",
     # OPEX growth → opex_growth
     "opex増加率": "opex_growth",
     # Depreciation → depreciation
@@ -69,6 +83,11 @@ def _extract_params_from_phase5(phase5_result: dict) -> Dict[str, Any]:
                     pass
                 break
 
+    # Extract segment-level data from Phase 5 sheet-based extractions
+    segments = phase5_result.get("segments", [])
+    if segments:
+        params["_segments"] = segments
+
     return params
 
 
@@ -88,62 +107,311 @@ def _apply_scenario_multipliers(
 
     adjusted = dict(parameters)
     for key, value in adjusted.items():
+        if key.startswith("_"):
+            continue  # skip internal keys like _segments
         if not isinstance(value, (int, float)):
             continue
         key_lower = key.lower()
         if any(w in key_lower for w in ["revenue", "売上", "単価", "price"]):
             adjusted[key] = value * mult.get("revenue", 1.0)
-        elif any(w in key_lower for w in ["cost", "原価", "費用", "opex"]):
+        elif any(w in key_lower for w in ["cost", "原価", "費用", "opex", "sga_", "payroll"]):
             adjusted[key] = value * mult.get("cost", 1.0)
 
     return adjusted
 
 
+# ---------------------------------------------------------------------------
+# Depreciation auto-calculation from CAPEX
+# ---------------------------------------------------------------------------
+
+def _compute_depreciation_from_capex(
+    capex_per_year: List[float],
+    useful_life: int,
+    method: str = "straight_line",
+    existing_depreciation: float = 0,
+) -> List[float]:
+    """Compute annual depreciation from CAPEX schedule.
+
+    Each year's CAPEX is spread over `useful_life` years using the chosen method.
+    Returns 5-year depreciation schedule.
+
+    Parameters
+    ----------
+    capex_per_year : list[float]
+        CAPEX for each of the 5 fiscal years.
+    useful_life : int
+        Useful life in years (typically 3-10 for software/equipment).
+    method : str
+        "straight_line" (default) or "declining_balance"
+    existing_depreciation : float
+        Depreciation from assets acquired before the projection period.
+    """
+    depr = [existing_depreciation] * 5
+
+    for invest_year in range(5):
+        cx = capex_per_year[invest_year]
+        if cx <= 0:
+            continue
+
+        if method == "declining_balance":
+            # 200% declining balance
+            db_rate = min(2.0 / useful_life, 1.0)
+            remaining = cx
+            for dep_year in range(invest_year, 5):
+                annual = remaining * db_rate
+                # Switch to straight-line if it gives a larger amount
+                years_left = useful_life - (dep_year - invest_year)
+                if years_left > 0:
+                    sl_annual = remaining / years_left
+                    if sl_annual >= annual:
+                        annual = sl_annual
+                depr[dep_year] += round(annual)
+                remaining -= annual
+                if remaining <= 0:
+                    break
+        else:
+            # Straight-line
+            annual = cx / useful_life
+            for dep_year in range(invest_year, min(invest_year + useful_life, 5)):
+                depr[dep_year] += round(annual)
+
+    return [round(d) for d in depr]
+
+
+# ---------------------------------------------------------------------------
+# SGA category breakdown
+# ---------------------------------------------------------------------------
+
+def _compute_sga_breakdown(
+    parameters: Dict[str, Any],
+    opex_total_per_year: List[float],
+) -> Dict[str, List[int]]:
+    """Break down OPEX into SGA categories.
+
+    If individual categories (payroll, marketing, etc.) are provided,
+    use them directly. Otherwise, derive from opex_total using default ratios.
+    """
+    opex_growth = float(parameters.get("opex_growth", 0.1))
+
+    # Check if individual SGA categories are provided
+    payroll_fy1 = parameters.get("payroll")
+    marketing_fy1 = parameters.get("sga_marketing")
+    office_fy1 = parameters.get("sga_office")
+    system_fy1 = parameters.get("sga_system")
+    other_fy1 = parameters.get("sga_other")
+
+    has_categories = any(v is not None for v in [payroll_fy1, marketing_fy1, office_fy1, system_fy1, other_fy1])
+
+    if has_categories:
+        # Use provided values with growth rate
+        base_total = opex_total_per_year[0]
+
+        # Default ratios for missing categories
+        ratios = {"payroll": 0.45, "sga_marketing": 0.20, "sga_office": 0.15, "sga_system": 0.10, "sga_other": 0.10}
+        cat_values = {
+            "payroll": float(payroll_fy1) if payroll_fy1 is not None else base_total * ratios["payroll"],
+            "marketing": float(marketing_fy1) if marketing_fy1 is not None else base_total * ratios["sga_marketing"],
+            "office": float(office_fy1) if office_fy1 is not None else base_total * ratios["sga_office"],
+            "system": float(system_fy1) if system_fy1 is not None else base_total * ratios["sga_system"],
+            "other": float(other_fy1) if other_fy1 is not None else base_total * ratios["sga_other"],
+        }
+
+        # Apply per-category growth rates (use category-specific or general opex_growth)
+        payroll_growth = float(parameters.get("payroll_growth", opex_growth))
+        marketing_growth = float(parameters.get("marketing_growth", opex_growth))
+        office_growth = float(parameters.get("office_growth", opex_growth * 0.5))  # office grows slower
+        system_growth = float(parameters.get("system_growth", opex_growth))
+        other_growth = float(parameters.get("other_growth", opex_growth * 0.5))
+
+        result: Dict[str, List[int]] = {
+            "payroll": [], "marketing": [], "office": [], "system": [], "other": [],
+        }
+        for year in range(5):
+            result["payroll"].append(round(cat_values["payroll"] * ((1 + payroll_growth) ** year)))
+            result["marketing"].append(round(cat_values["marketing"] * ((1 + marketing_growth) ** year)))
+            result["office"].append(round(cat_values["office"] * ((1 + office_growth) ** year)))
+            result["system"].append(round(cat_values["system"] * ((1 + system_growth) ** year)))
+            result["other"].append(round(cat_values["other"] * ((1 + other_growth) ** year)))
+
+        return result
+    else:
+        # Derive from total OPEX using standard ratios
+        result = {"payroll": [], "marketing": [], "office": [], "system": [], "other": []}
+        for year_total in opex_total_per_year:
+            result["payroll"].append(round(year_total * 0.45))
+            result["marketing"].append(round(year_total * 0.20))
+            result["office"].append(round(year_total * 0.15))
+            result["system"].append(round(year_total * 0.10))
+            result["other"].append(round(year_total * 0.10))
+        return result
+
+
+# ---------------------------------------------------------------------------
+# Segment revenue breakdown
+# ---------------------------------------------------------------------------
+
+def _compute_segments(parameters: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Compute per-segment revenue and gross profit.
+
+    Supports up to 10 segments. Each segment can have:
+      - seg_{n}_name: segment name
+      - seg_{n}_revenue_fy1: initial revenue
+      - seg_{n}_growth: growth rate
+      - seg_{n}_cogs_rate: variable cost rate
+
+    If no segments are provided, creates a single "全体" segment from totals.
+    """
+    segments_data = parameters.get("_segments", [])
+    segments_input = parameters.get("segments", [])
+
+    # Try structured segment input first
+    if segments_input:
+        segments_data = segments_input
+
+    # Check for per-segment parameters (seg_1_revenue_fy1, etc.)
+    param_segments = []
+    for n in range(1, 11):
+        prefix = f"seg_{n}_"
+        rev_key = f"{prefix}revenue_fy1"
+        if rev_key in parameters:
+            param_segments.append({
+                "name": parameters.get(f"{prefix}name", f"セグメント{n}"),
+                "revenue_fy1": float(parameters[rev_key]),
+                "growth_rate": float(parameters.get(f"{prefix}growth", parameters.get("growth_rate", 0.3))),
+                "cogs_rate": float(parameters.get(f"{prefix}cogs_rate", parameters.get("cogs_rate", 0.3))),
+            })
+
+    if param_segments:
+        segments_data = param_segments
+
+    if not segments_data:
+        # Single segment from aggregated values
+        revenue_fy1 = float(parameters.get("revenue_fy1", 100_000_000))
+        growth_rate = float(parameters.get("growth_rate", 0.3))
+        cogs_rate = float(parameters.get("cogs_rate", 0.3))
+        segments_data = [{
+            "name": "全体",
+            "revenue_fy1": revenue_fy1,
+            "growth_rate": growth_rate,
+            "cogs_rate": cogs_rate,
+        }]
+
+    result = []
+    for seg in segments_data:
+        name = seg.get("name", "セグメント")
+        rev_fy1 = float(seg.get("revenue_fy1", 0))
+        growth = float(seg.get("growth_rate", 0.3))
+        cogs_rate = float(seg.get("cogs_rate", 0.3))
+
+        revenue = []
+        cogs = []
+        gross_profit = []
+        for year in range(5):
+            rev = rev_fy1 * ((1 + growth) ** year)
+            cost = rev * cogs_rate
+            gp = rev - cost
+            revenue.append(round(rev))
+            cogs.append(round(cost))
+            gross_profit.append(round(gp))
+
+        result.append({
+            "name": name,
+            "revenue": revenue,
+            "cogs": cogs,
+            "gross_profit": gross_profit,
+            "cogs_rate": round(cogs_rate, 4),
+            "growth_rate": round(growth, 4),
+        })
+
+    return result
+
+
 def _compute_pl(parameters: Dict[str, Any]) -> Dict[str, Any]:
-    """Compute 5-year PL from parameters."""
-    revenue_fy1 = float(parameters.get("revenue_fy1", 100_000_000))
+    """Compute 5-year PL from parameters.
+
+    Enhanced with:
+      - Per-segment revenue/GP breakdown
+      - SGA category detail (payroll, marketing, office, system, other)
+      - Depreciation auto-calculation from CAPEX
+    """
     growth_rate = float(parameters.get("growth_rate", 0.3))
     cogs_rate = float(parameters.get("cogs_rate", 0.3))
     opex_base = float(parameters.get("opex_base", 80_000_000))
     opex_growth = float(parameters.get("opex_growth", 0.1))
-    depreciation_val = float(parameters.get("depreciation", 0))
-    capex_val = float(parameters.get("capex", 0))
+
+    # --- Segment-level revenue ---
+    segments = _compute_segments(parameters)
+
+    # Aggregate from segments
+    revenue = [0] * 5
+    cogs = [0] * 5
+    gross_profit = [0] * 5
+    for seg in segments:
+        for y in range(5):
+            revenue[y] += seg["revenue"][y]
+            cogs[y] += seg["cogs"][y]
+            gross_profit[y] += seg["gross_profit"][y]
 
     # If payroll is provided but opex_base is default, use payroll as a component
     payroll = parameters.get("payroll")
     if payroll is not None and "opex_base" not in parameters:
-        # Estimate total OPEX from payroll (payroll is ~45% of OPEX)
         opex_base = float(payroll) / 0.45
 
-    revenue = []
-    cogs = []
-    gross_profit = []
+    # --- OPEX with SGA breakdown ---
     opex = []
-    depreciation_list = []
-    capex_list = []
+    for year in range(5):
+        ox = opex_base * ((1 + opex_growth) ** year)
+        opex.append(round(ox))
+
+    sga_breakdown = _compute_sga_breakdown(parameters, opex)
+
+    # If categories were provided, recompute opex from category sum
+    has_categories = any(
+        parameters.get(k) is not None
+        for k in ["payroll", "sga_marketing", "sga_office", "sga_system", "sga_other"]
+    )
+    if has_categories:
+        opex = [
+            sga_breakdown["payroll"][y] + sga_breakdown["marketing"][y]
+            + sga_breakdown["office"][y] + sga_breakdown["system"][y]
+            + sga_breakdown["other"][y]
+            for y in range(5)
+        ]
+
+    # --- Depreciation (auto-calc or manual) ---
+    depreciation_mode = parameters.get("depreciation_mode", "manual")
+    capex_val = float(parameters.get("capex", 0))
+    capex_per_year = parameters.get("capex_schedule", [capex_val] * 5)
+    capex_per_year = [float(c) for c in capex_per_year[:5]]
+    while len(capex_per_year) < 5:
+        capex_per_year.append(capex_val)
+
+    if depreciation_mode == "auto":
+        useful_life = int(parameters.get("useful_life", 5))
+        depr_method = parameters.get("depreciation_method", "straight_line")
+        existing_depr = float(parameters.get("existing_depreciation", 0))
+        depreciation_list = _compute_depreciation_from_capex(
+            capex_per_year, useful_life, method=depr_method, existing_depreciation=existing_depr,
+        )
+    else:
+        depreciation_val = float(parameters.get("depreciation", 0))
+        depreciation_list = [round(depreciation_val)] * 5
+
+    capex_list = [round(c) for c in capex_per_year]
+
+    # --- P&L ---
     operating_profit = []
     fcf = []
     cumulative_fcf = []
 
     cum = 0.0
     for year in range(5):
-        rev = revenue_fy1 * ((1 + growth_rate) ** year)
-        cost = rev * cogs_rate
-        gp = rev - cost
-        ox = opex_base * ((1 + opex_growth) ** year)
-        depr = depreciation_val
-        cx = capex_val
-        op = gp - ox - depr
-        # FCF = OP + depreciation - CAPEX (matches Excel template formula)
+        depr = depreciation_list[year]
+        cx = capex_list[year]
+        op = gross_profit[year] - opex[year] - depr
         cf = op + depr - cx
         cum += cf
 
-        revenue.append(round(rev))
-        cogs.append(round(cost))
-        gross_profit.append(round(gp))
-        opex.append(round(ox))
-        depreciation_list.append(round(depr))
-        capex_list.append(round(cx))
         operating_profit.append(round(op))
         fcf.append(round(cf))
         cumulative_fcf.append(round(cum))
@@ -151,15 +419,18 @@ def _compute_pl(parameters: Dict[str, Any]) -> Dict[str, Any]:
     # KPIs
     break_even = None
     cum_break_even = None
-    for i, op in enumerate(operating_profit):
-        if op > 0 and break_even is None:
+    for i, op_val in enumerate(operating_profit):
+        if op_val > 0 and break_even is None:
             break_even = f"FY{i + 1}"
-    for i, cf in enumerate(cumulative_fcf):
-        if cf > 0 and cum_break_even is None:
+    for i, cf_val in enumerate(cumulative_fcf):
+        if cf_val > 0 and cum_break_even is None:
             cum_break_even = f"FY{i + 1}"
 
     rev_cagr = ((revenue[-1] / revenue[0]) ** (1 / 4) - 1) if revenue[0] > 0 else 0
     fy5_margin = operating_profit[-1] / revenue[-1] if revenue[-1] > 0 else 0
+
+    # Gross margin
+    gp_margin = gross_profit[-1] / revenue[-1] if revenue[-1] > 0 else 0
 
     return {
         "pl_summary": {
@@ -172,16 +443,37 @@ def _compute_pl(parameters: Dict[str, Any]) -> Dict[str, Any]:
             "operating_profit": operating_profit,
             "fcf": fcf,
             "cumulative_fcf": cumulative_fcf,
+            # New: segment breakdown
+            "segments": [
+                {
+                    "name": seg["name"],
+                    "revenue": seg["revenue"],
+                    "cogs": seg["cogs"],
+                    "gross_profit": seg["gross_profit"],
+                    "cogs_rate": seg["cogs_rate"],
+                    "growth_rate": seg["growth_rate"],
+                }
+                for seg in segments
+            ],
+            # New: SGA category breakdown
+            "sga_breakdown": sga_breakdown,
         },
         "kpis": {
             "break_even_year": break_even,
             "cumulative_break_even_year": cum_break_even,
             "revenue_cagr": round(rev_cagr, 4),
             "fy5_op_margin": round(fy5_margin, 4),
+            "gp_margin": round(gp_margin, 4),
         },
         "charts_data": {
             "waterfall": [],
             "revenue_stack": [],
+        },
+        "depreciation_settings": {
+            "mode": depreciation_mode,
+            "useful_life": int(parameters.get("useful_life", 5)),
+            "method": parameters.get("depreciation_method", "straight_line"),
+            "existing_depreciation": float(parameters.get("existing_depreciation", 0)),
         },
     }
 

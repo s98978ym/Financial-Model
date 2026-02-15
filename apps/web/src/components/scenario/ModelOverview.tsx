@@ -4,21 +4,43 @@ import { useState, useRef, useEffect } from 'react'
 import type { IndustryKey } from '@/data/industryBenchmarks'
 import { INDUSTRY_BENCHMARKS } from '@/data/industryBenchmarks'
 
+interface SegmentData {
+  name: string
+  revenue: number[]
+  cogs: number[]
+  gross_profit: number[]
+  cogs_rate: number
+  growth_rate: number
+}
+
+interface SGABreakdown {
+  payroll: number[]
+  marketing: number[]
+  office: number[]
+  system: number[]
+  other: number[]
+}
+
 interface ModelOverviewProps {
   parameters: Record<string, number>
   kpis?: {
     break_even_year?: string | null
     revenue_cagr?: number
     fy5_op_margin?: number
+    gp_margin?: number
   }
   plSummary?: {
     revenue: number[]
     cogs: number[]
     gross_profit: number[]
     opex: number[]
+    depreciation?: number[]
+    capex?: number[]
     operating_profit: number[]
     fcf: number[]
     cumulative_fcf: number[]
+    segments?: SegmentData[]
+    sga_breakdown?: SGABreakdown
   }
   industry: IndustryKey
   onParameterChange: (key: string, value: number) => void
@@ -126,6 +148,22 @@ function parsePctInput(raw: string): number | null {
   return num > 1 ? num / 100 : num
 }
 
+var SGA_LABELS: Record<string, string> = {
+  payroll: '人件費',
+  marketing: 'マーケ',
+  office: 'オフィス',
+  system: 'システム',
+  other: 'その他',
+}
+
+var SGA_COLORS: Record<string, string> = {
+  payroll: 'bg-orange-400',
+  marketing: 'bg-purple-400',
+  office: 'bg-gray-400',
+  system: 'bg-cyan-400',
+  other: 'bg-gray-300',
+}
+
 export function ModelOverview({ parameters, kpis, plSummary, industry, onParameterChange }: ModelOverviewProps) {
   var industryInfo = INDUSTRY_BENCHMARKS[industry]
   var revFy1 = parameters.revenue_fy1 || 100_000_000
@@ -138,6 +176,10 @@ export function ModelOverview({ parameters, kpis, plSummary, industry, onParamet
   var revFy5 = revFy1 * Math.pow(1 + growthRate, 4)
   var grossMargin = 1 - cogsRate
   var opexFy5 = opexBase * Math.pow(1 + opexGrowth, 4)
+
+  var segments = plSummary?.segments
+  var hasMultipleSegments = segments && segments.length > 1
+  var sgaBreakdown = plSummary?.sga_breakdown
 
   return (
     <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
@@ -177,6 +219,39 @@ export function ModelOverview({ parameters, kpis, plSummary, industry, onParamet
               <span className="font-bold text-blue-700">{formatYen(revFy5)}</span>
               {' '}に到達する見込みです。
             </p>
+
+            {/* Segment breakdown */}
+            {hasMultipleSegments && (
+              <div className="mt-3 pt-2 border-t border-blue-200">
+                <div className="text-[11px] text-blue-600 font-medium mb-1.5">セグメント別売上（FY1→FY5）</div>
+                <div className="space-y-1">
+                  {segments!.map(function(seg, i) {
+                    var revShare = revFy1 > 0 ? (seg.revenue[0] / revFy1) * 100 : 0
+                    return (
+                      <div key={i} className="flex items-center gap-2">
+                        <div className="w-20 text-[11px] text-gray-600 truncate">{seg.name}</div>
+                        <div className="flex-1 h-2 bg-blue-100 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-blue-400 rounded-full"
+                            style={{ width: Math.min(revShare, 100) + '%' }}
+                          />
+                        </div>
+                        <div className="text-[11px] font-mono text-gray-700 w-16 text-right">
+                          {formatYen(seg.revenue[0])}
+                        </div>
+                        <div className="text-[10px] text-gray-400">→</div>
+                        <div className="text-[11px] font-mono text-blue-700 w-16 text-right">
+                          {formatYen(seg.revenue[4])}
+                        </div>
+                        <div className="text-[10px] text-green-600 w-10 text-right">
+                          粗利{((1 - seg.cogs_rate) * 100).toFixed(0)}%
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -222,6 +297,11 @@ export function ModelOverview({ parameters, kpis, plSummary, industry, onParamet
               <span className="font-bold text-red-600">{formatYen(opexFy5)}</span>
               {' '}になります。
             </p>
+
+            {/* SGA breakdown bar */}
+            {sgaBreakdown != null && (
+              <SGABreakdownBar breakdown={sgaBreakdown} />
+            )}
           </div>
         </div>
 
@@ -238,7 +318,7 @@ export function ModelOverview({ parameters, kpis, plSummary, industry, onParamet
           </div>
           <div className="ml-4 bg-green-50 rounded-lg p-3 border border-green-100">
             {kpis ? (
-              <div className="grid grid-cols-3 gap-3 text-center">
+              <div className="grid grid-cols-4 gap-3 text-center">
                 <div>
                   <div className="text-xs text-gray-500 mb-0.5">黒字化</div>
                   <div className={'text-sm font-bold ' + (kpis.break_even_year ? 'text-green-700' : 'text-red-500')}>
@@ -249,6 +329,12 @@ export function ModelOverview({ parameters, kpis, plSummary, industry, onParamet
                   <div className="text-xs text-gray-500 mb-0.5">売上CAGR</div>
                   <div className="text-sm font-bold text-gray-900">
                     {kpis.revenue_cagr != null ? formatPct(kpis.revenue_cagr) : '-'}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs text-gray-500 mb-0.5">粗利率</div>
+                  <div className="text-sm font-bold text-gray-900">
+                    {kpis.gp_margin != null ? formatPct(kpis.gp_margin) : '-'}
                   </div>
                 </div>
                 <div>
@@ -292,8 +378,63 @@ export function ModelOverview({ parameters, kpis, plSummary, industry, onParamet
                 )
               })}
             </div>
+
+            {/* Depreciation & CAPEX summary */}
+            {plSummary.depreciation && plSummary.capex && (
+              <div className="mt-2 pt-2 border-t border-gray-50 flex gap-4 text-[10px] text-gray-500">
+                <div>
+                  減価償却: {formatYen(plSummary.depreciation[0])}
+                  {plSummary.depreciation[4] !== plSummary.depreciation[0] && (
+                    <span> → {formatYen(plSummary.depreciation[4])}</span>
+                  )}
+                </div>
+                <div>
+                  CAPEX: {formatYen(plSummary.capex[0])}/年
+                </div>
+              </div>
+            )}
           </div>
         )}
+      </div>
+    </div>
+  )
+}
+
+function SGABreakdownBar({ breakdown }: { breakdown: SGABreakdown }) {
+  var cats = ['payroll', 'marketing', 'office', 'system', 'other'] as const
+  var total = cats.reduce(function(s: number, cat) { return s + (breakdown[cat][0] || 0) }, 0)
+
+  return (
+    <div className="mt-3 pt-2 border-t border-red-200">
+      <div className="text-[11px] text-red-600 font-medium mb-1.5">販管費内訳（FY1）</div>
+      <div className="h-4 rounded-full overflow-hidden flex mb-1">
+        {cats.map(function(cat) {
+          var val = breakdown[cat][0] || 0
+          var pct = total > 0 ? (val / total) * 100 : 20
+          return (
+            <div
+              key={cat}
+              className={SGA_COLORS[cat] + ' transition-all relative group'}
+              style={{ width: pct + '%' }}
+            >
+              <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                <span className="text-[9px] text-white font-bold drop-shadow">{pct.toFixed(0)}%</span>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+      <div className="flex flex-wrap gap-x-3 gap-y-0.5">
+        {cats.map(function(cat) {
+          var val = breakdown[cat][0] || 0
+          return (
+            <div key={cat} className="flex items-center gap-1">
+              <div className={'w-1.5 h-1.5 rounded-full ' + SGA_COLORS[cat]} />
+              <span className="text-[10px] text-gray-500">{SGA_LABELS[cat]}</span>
+              <span className="text-[10px] font-mono text-gray-700">{formatYen(val)}</span>
+            </div>
+          )
+        })}
       </div>
     </div>
   )
