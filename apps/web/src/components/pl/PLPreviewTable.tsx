@@ -49,11 +49,129 @@ interface EnrichedItem {
   reasoning: string
 }
 
+/** Determine year index (0-4) from cell column or period field */
+function getYearIndex(item: EnrichedItem): number | null {
+  // From period field: "FY1" → 0, "FY2" → 1, etc.
+  if (item.period) {
+    var match = item.period.match(/FY(\d+)/i)
+    if (match) {
+      var idx = parseInt(match[1]) - 1
+      if (idx >= 0 && idx < 5) return idx
+    }
+  }
+  // From cell column: C=0, D=1, E=2, F=3, G=4
+  var col = item.cell.replace(/\d/g, '').toUpperCase()
+  var colMap: Record<string, number> = { C: 0, D: 1, E: 2, F: 3, G: 4 }
+  if (col in colMap) return colMap[col]
+  return null
+}
+
+/** Get row number from cell address: "C5" → 5 */
+function getRowNumber(cell: string): number {
+  return parseInt(cell.replace(/[A-Z]/gi, '')) || 0
+}
+
+/** Year-grouped row: one metric across FY1-FY5 */
+interface YearGroupedRow {
+  label: string
+  category: string
+  unit: string
+  assignedConcept: string
+  /** Per-year values: index 0=FY1 .. 4=FY5. null if no data */
+  yearValues: (EnrichedItem | null)[]
+  /** Average confidence across available years */
+  avgConfidence: number
+  /** Primary source type */
+  primarySource: string
+  /** Is estimated */
+  isEstimated: boolean
+  /** Row number in Excel for sorting */
+  rowNumber: number
+}
+
+/** Group enriched items into year-grouped rows */
+function groupByYears(items: EnrichedItem[]): YearGroupedRow[] {
+  // Group by row number (same Excel row = same metric)
+  var rowGroups: Record<number, EnrichedItem[]> = {}
+  items.forEach(function(item) {
+    var rowNum = getRowNumber(item.cell)
+    if (!rowGroups[rowNum]) rowGroups[rowNum] = []
+    rowGroups[rowNum].push(item)
+  })
+
+  var rows: YearGroupedRow[] = []
+  var rowNums = Object.keys(rowGroups).map(Number).sort(function(a, b) { return a - b })
+
+  rowNums.forEach(function(rowNum) {
+    var group = rowGroups[rowNum]
+    // Use first item's label, or find best label
+    var bestLabel = ''
+    var bestCategory = ''
+    var bestUnit = ''
+    var bestConcept = ''
+    var yearValues: (EnrichedItem | null)[] = [null, null, null, null, null]
+    var totalConf = 0
+    var confCount = 0
+    var sources: Record<string, number> = {}
+    var isEstimated = false
+
+    group.forEach(function(item) {
+      // Best label = first non-empty
+      if (!bestLabel && item.label) bestLabel = item.label
+      if (!bestCategory && item.category) bestCategory = item.category
+      if (!bestUnit && item.unit) bestUnit = item.unit
+      if (!bestConcept && item.assignedConcept) bestConcept = item.assignedConcept
+      if (item.derivation === 'estimated') isEstimated = true
+
+      var yearIdx = getYearIndex(item)
+      if (yearIdx !== null && yearIdx >= 0 && yearIdx < 5) {
+        yearValues[yearIdx] = item
+      } else if (group.length === 1) {
+        // Single item with no year info - show in first column
+        yearValues[0] = item
+      }
+
+      totalConf += item.confidence
+      confCount++
+      var src = item.source || 'unknown'
+      sources[src] = (sources[src] || 0) + 1
+    })
+
+    // Primary source: most common
+    var primarySource = ''
+    var maxSrcCount = 0
+    Object.keys(sources).forEach(function(src) {
+      if (sources[src] > maxSrcCount) {
+        maxSrcCount = sources[src]
+        primarySource = src
+      }
+    })
+
+    rows.push({
+      label: bestLabel || bestConcept || '—',
+      category: bestCategory,
+      unit: bestUnit,
+      assignedConcept: bestConcept,
+      yearValues: yearValues,
+      avgConfidence: confCount > 0 ? totalConf / confCount : 0,
+      primarySource: primarySource,
+      isEstimated: isEstimated,
+      rowNumber: rowNum,
+    })
+  })
+
+  return rows
+}
+
+var YEAR_HEADERS = ['1年目', '2年目', '3年目', '4年目', '5年目']
+var YEAR_HEADERS_SHORT = ['1Y', '2Y', '3Y', '4Y', '5Y']
+
 /**
  * PLPreviewTable renders financial data in a hierarchical P&L structure,
  * grouped by sheet/category with color coding and formatted values.
  *
- * Replaces the flat AG-Grid with a financial-professional-grade table.
+ * In extraction mode: year-grouped view with FY1-FY5 columns.
+ * In assignment mode: concept mapping view.
  */
 export function PLPreviewTable({
   items,
@@ -63,20 +181,20 @@ export function PLPreviewTable({
   onRowClick,
   selectedItem,
 }: PLPreviewTableProps) {
-  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({})
+  var [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({})
 
   // Build lookups
-  const { sections, totalItems } = useMemo(() => {
+  var { sections, totalItems } = useMemo(function() {
     // Phase 4 assignment lookup: sheet:cell → assignment
-    const assignmentLookup: Record<string, any> = {};
+    var assignmentLookup: Record<string, any> = {};
     (assignments || []).forEach(function(a: any) {
       assignmentLookup[a.sheet + ':' + a.cell] = a
     })
 
     // Phase 3 sheet purpose lookup: sheetName → { purpose, segment }
-    const sheetInfoLookup: Record<string, { purpose: string; segment: string }> = {};
+    var sheetInfoLookup: Record<string, { purpose: string; segment: string }> = {};
     (sheetMappings || []).forEach(function(sm: any) {
-      const name = sm.sheet_name || sm.sheet || ''
+      var name = sm.sheet_name || sm.sheet || ''
       sheetInfoLookup[name] = {
         purpose: sm.sheet_purpose || sm.purpose || 'other',
         segment: sm.mapped_segment || sm.segment || '',
@@ -84,18 +202,18 @@ export function PLPreviewTable({
     })
 
     // Enrich items
-    const enriched: EnrichedItem[] = items.map(function(item: any) {
-      const sheet = item.sheet || ''
-      const cell = item.cell || ''
-      const key = sheet + ':' + cell
-      const assignment = assignmentLookup[key]
-      const sheetInfo = sheetInfoLookup[sheet]
+    var enriched: EnrichedItem[] = items.map(function(item: any) {
+      var sheet = item.sheet || ''
+      var cell = item.cell || ''
+      var key = sheet + ':' + cell
+      var assignment = assignmentLookup[key]
+      var sheetInfo = sheetInfoLookup[sheet]
 
-      const label = item.label || (assignment && assignment.label) || (assignment && assignment.assigned_concept) || ''
-      const category = item.category || (assignment && assignment.category) || ''
-      const segment = item.segment || (assignment && assignment.segment) || (sheetInfo && sheetInfo.segment) || ''
-      const period = item.period || (assignment && assignment.period) || ''
-      const unit = item.unit || (assignment && assignment.unit) || ''
+      var label = item.label || (assignment && assignment.label) || (assignment && assignment.assigned_concept) || ''
+      var category = item.category || (assignment && assignment.category) || ''
+      var segment = item.segment || (assignment && assignment.segment) || (sheetInfo && sheetInfo.segment) || ''
+      var period = item.period || (assignment && assignment.period) || ''
+      var unit = item.unit || (assignment && assignment.unit) || ''
 
       return {
         raw: item,
@@ -120,7 +238,7 @@ export function PLPreviewTable({
     })
 
     // Group by sheet
-    const sheetGroupsObj: Record<string, EnrichedItem[]> = {}
+    var sheetGroupsObj: Record<string, EnrichedItem[]> = {}
     enriched.forEach(function(item) {
       if (!sheetGroupsObj[item.sheet]) {
         sheetGroupsObj[item.sheet] = []
@@ -129,43 +247,42 @@ export function PLPreviewTable({
     })
 
     // Sort and categorize sections
-    const sections: GroupedSection[] = []
-    const categoryOrder: PLCategory[] = ['revenue', 'cogs', 'opex', 'assumption', 'profit', 'other']
+    var sectionsList: GroupedSection[] = []
+    var categoryOrder: PLCategory[] = ['revenue', 'cogs', 'opex', 'assumption', 'profit', 'other']
 
     Object.keys(sheetGroupsObj).forEach(function(sheetName) {
-      const sheetItems = sheetGroupsObj[sheetName]
-      const sheetInfo = sheetInfoLookup[sheetName]
-      const purpose = (sheetInfo && sheetInfo.purpose) || 'other'
-      const segment = (sheetInfo && sheetInfo.segment) || ''
+      var sheetItems = sheetGroupsObj[sheetName]
+      var sheetInfo = sheetInfoLookup[sheetName]
+      var purpose = (sheetInfo && sheetInfo.purpose) || 'other'
+      var segment = (sheetInfo && sheetInfo.segment) || ''
 
-      // Determine PL category from first item or sheet purpose
-      const firstCategory = (sheetItems[0] && sheetItems[0].category) || ''
-      const plCategory = categorizePL(firstCategory, purpose)
+      var firstCategory = (sheetItems[0] && sheetItems[0].category) || ''
+      var plCategory = categorizePL(firstCategory, purpose)
 
       // Sort items by cell address
       sheetItems.sort(function(a, b) {
-        const aRow = parseInt(a.cell.replace(/[A-Z]/g, '')) || 0
-        const bRow = parseInt(b.cell.replace(/[A-Z]/g, '')) || 0
+        var aRow = getRowNumber(a.cell)
+        var bRow = getRowNumber(b.cell)
         if (aRow !== bRow) return aRow - bRow
         return a.cell.localeCompare(b.cell)
       })
 
-      sections.push({ sheetName: sheetName, purpose: purpose, segment: segment, plCategory: plCategory, items: sheetItems })
+      sectionsList.push({ sheetName: sheetName, purpose: purpose, segment: segment, plCategory: plCategory, items: sheetItems })
     })
 
     // Sort sections by P&L order
-    sections.sort(function(a, b) {
-      const aIdx = categoryOrder.indexOf(a.plCategory)
-      const bIdx = categoryOrder.indexOf(b.plCategory)
+    sectionsList.sort(function(a, b) {
+      var aIdx = categoryOrder.indexOf(a.plCategory)
+      var bIdx = categoryOrder.indexOf(b.plCategory)
       return aIdx - bIdx
     })
 
-    return { sections: sections, totalItems: enriched.length }
+    return { sections: sectionsList, totalItems: enriched.length }
   }, [items, assignments, sheetMappings, mode])
 
-  const toggleSection = (sheetName: string) => {
+  function toggleSection(sheetName: string) {
     setCollapsedSections(function(prev) {
-      const next = Object.assign({}, prev)
+      var next = Object.assign({}, prev)
       if (next[sheetName]) {
         delete next[sheetName]
       } else {
@@ -185,20 +302,20 @@ export function PLPreviewTable({
 
   return (
     <div className="space-y-4">
-      {sections.map((section) => {
-        const colors = PL_COLORS[section.plCategory]
-        const isCollapsed = collapsedSections[section.sheetName]
-        const purposeLabel = PURPOSE_LABELS[section.purpose] || section.purpose
+      {sections.map(function(section) {
+        var colors = PL_COLORS[section.plCategory]
+        var isCollapsed = collapsedSections[section.sheetName]
+        var purposeLabel = PURPOSE_LABELS[section.purpose] || section.purpose
 
         return (
           <div
             key={section.sheetName}
-            className={`rounded-xl border ${colors.border} overflow-hidden shadow-sm`}
+            className={'rounded-xl border ' + colors.border + ' overflow-hidden shadow-sm'}
           >
             {/* Section Header */}
             <button
-              onClick={() => toggleSection(section.sheetName)}
-              className={`w-full flex items-center justify-between px-4 py-3 ${colors.headerBg} ${colors.headerText} transition-colors hover:opacity-90`}
+              onClick={function() { toggleSection(section.sheetName) }}
+              className={'w-full flex items-center justify-between px-4 py-3 ' + colors.headerBg + ' ' + colors.headerText + ' transition-colors hover:opacity-90'}
             >
               <div className="flex items-center gap-3">
                 <span className="text-lg">{colors.icon}</span>
@@ -221,7 +338,7 @@ export function PLPreviewTable({
                   {isCollapsed ? '展開' : '折りたたむ'}
                 </span>
                 <svg
-                  className={`w-4 h-4 transition-transform ${isCollapsed ? '' : 'rotate-180'}`}
+                  className={'w-4 h-4 transition-transform ' + (isCollapsed ? '' : 'rotate-180')}
                   fill="none" viewBox="0 0 24 24" stroke="currentColor"
                 >
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -232,131 +349,20 @@ export function PLPreviewTable({
             {/* Section Content */}
             {!isCollapsed && (
               <div className={colors.bg}>
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-gray-200">
-                      <th className="text-left px-4 py-2 text-xs font-medium text-gray-500 w-12">
-                        セル
-                      </th>
-                      <th className="text-left px-4 py-2 text-xs font-medium text-gray-500">
-                        {mode === 'extraction' ? 'ラベル / コンセプト' : 'コンセプト'}
-                      </th>
-                      {mode === 'extraction' && (
-                        <th className="text-right px-4 py-2 text-xs font-medium text-gray-500 w-36">
-                          値
-                        </th>
-                      )}
-                      {mode === 'assignment' && (
-                        <>
-                          <th className="text-left px-4 py-2 text-xs font-medium text-gray-500 w-24">
-                            カテゴリ
-                          </th>
-                          <th className="text-left px-4 py-2 text-xs font-medium text-gray-500 w-20">
-                            期間
-                          </th>
-                        </>
-                      )}
-                      <th className="text-center px-4 py-2 text-xs font-medium text-gray-500 w-20">
-                        ソース
-                      </th>
-                      <th className="text-right px-4 py-2 text-xs font-medium text-gray-500 w-24">
-                        確信度
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {section.items.map((item, idx) => {
-                      const isSelected = selectedItem &&
-                        selectedItem.sheet === item.sheet &&
-                        selectedItem.cell === item.cell
-                      const isEstimated = item.derivation === 'estimated'
-
-                      return (
-                        <tr
-                          key={`${item.sheet}-${item.cell}-${idx}`}
-                          onClick={() => onRowClick?.(item.raw)}
-                          className={`
-                            border-b border-gray-100 last:border-b-0 cursor-pointer
-                            transition-colors
-                            ${isSelected
-                              ? 'bg-blue-100 ring-1 ring-inset ring-blue-300'
-                              : 'hover:bg-white/60'
-                            }
-                            ${isEstimated ? 'opacity-80' : ''}
-                          `}
-                        >
-                          {/* Cell reference */}
-                          <td className="px-4 py-2.5 font-mono text-xs text-gray-400">
-                            {item.cell}
-                          </td>
-
-                          {/* Label / Concept */}
-                          <td className="px-4 py-2.5">
-                            <div className="flex items-center gap-2">
-                              {isEstimated && (
-                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-700 flex-shrink-0">
-                                  推定
-                                </span>
-                              )}
-                              <div>
-                                <div className={`font-medium ${colors.text}`}>
-                                  {item.label || item.assignedConcept || '—'}
-                                </div>
-                                {item.label && item.assignedConcept && item.label !== item.assignedConcept && (
-                                  <div className="text-xs text-gray-400 mt-0.5">
-                                    {item.assignedConcept.replace('【推定】', '')}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </td>
-
-                          {/* Value (extraction mode) */}
-                          {mode === 'extraction' && (
-                            <td className="px-4 py-2.5 text-right">
-                              <span className={`font-mono font-semibold ${
-                                item.source === 'document' ? 'text-blue-700' :
-                                item.source === 'inferred' ? 'text-amber-700' :
-                                'text-gray-500'
-                              }`}>
-                                {item.formattedValue}
-                              </span>
-                              {item.originalText && item.originalText !== String(item.value) && (
-                                <div className="text-[10px] text-gray-400 mt-0.5 truncate max-w-[130px]">
-                                  {item.originalText}
-                                </div>
-                              )}
-                            </td>
-                          )}
-
-                          {/* Category & Period (assignment mode) */}
-                          {mode === 'assignment' && (
-                            <>
-                              <td className="px-4 py-2.5">
-                                <span className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-medium ${colors.bg} ${colors.text}`}>
-                                  {item.category || '—'}
-                                </span>
-                              </td>
-                              <td className="px-4 py-2.5 text-xs text-gray-500">
-                                {item.period || '—'}
-                              </td>
-                            </>
-                          )}
-
-                          {/* Source */}
-                          <td className="px-4 py-2.5 text-center">
-                            <SourceBadge source={item.source} />
-                          </td>
-
-                          {/* Confidence */}
-                          <td className="px-4 py-2.5">
-                            <ConfidenceBar confidence={item.confidence} />
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
+                {mode === 'extraction'
+                  ? <YearGroupedTable
+                      items={section.items}
+                      colors={colors}
+                      onRowClick={onRowClick}
+                      selectedItem={selectedItem}
+                    />
+                  : <AssignmentTable
+                      items={section.items}
+                      colors={colors}
+                      onRowClick={onRowClick}
+                      selectedItem={selectedItem}
+                    />
+                }
               </div>
             )}
           </div>
@@ -366,11 +372,258 @@ export function PLPreviewTable({
   )
 }
 
+/** Year-grouped table for extraction mode: shows FY1-FY5 in columns */
+function YearGroupedTable({
+  items,
+  colors,
+  onRowClick,
+  selectedItem,
+}: {
+  items: EnrichedItem[]
+  colors: typeof PL_COLORS[PLCategory]
+  onRowClick?: (item: any) => void
+  selectedItem?: any
+}) {
+  var groupedRows = useMemo(function() {
+    return groupByYears(items)
+  }, [items])
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b border-gray-200">
+            <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500 min-w-[160px]">
+              項目
+            </th>
+            {YEAR_HEADERS.map(function(header, i) {
+              return (
+                <th key={i} className="text-right px-3 py-2.5 text-xs font-medium text-gray-500 min-w-[90px]">
+                  <div className="flex flex-col items-end">
+                    <span className="text-[10px] text-gray-400">FY{i + 1}</span>
+                    <span>{header}</span>
+                  </div>
+                </th>
+              )
+            })}
+            <th className="text-center px-3 py-2.5 text-xs font-medium text-gray-500 w-16">
+              ソース
+            </th>
+            <th className="text-right px-3 py-2.5 text-xs font-medium text-gray-500 w-16">
+              確信度
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {groupedRows.map(function(row, idx) {
+            // Check if any year cell in this row is selected
+            var isRowSelected = false
+            row.yearValues.forEach(function(yv) {
+              if (yv && selectedItem && selectedItem.sheet === yv.sheet && selectedItem.cell === yv.cell) {
+                isRowSelected = true
+              }
+            })
+
+            return (
+              <tr
+                key={idx}
+                className={
+                  'border-b border-gray-100 last:border-b-0 transition-colors ' +
+                  (isRowSelected ? 'bg-blue-50 ring-1 ring-inset ring-blue-200' : 'hover:bg-white/60') +
+                  (row.isEstimated ? ' opacity-80' : '')
+                }
+              >
+                {/* Label */}
+                <td className="px-4 py-2.5">
+                  <div className="flex items-center gap-2">
+                    {row.isEstimated && (
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-700 flex-shrink-0">
+                        推定
+                      </span>
+                    )}
+                    <div>
+                      <div className={'font-medium text-sm ' + colors.text}>
+                        {row.label}
+                      </div>
+                      {row.unit && (
+                        <div className="text-[10px] text-gray-400">
+                          単位: {row.unit}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </td>
+
+                {/* Year values FY1-FY5 */}
+                {row.yearValues.map(function(yv, yi) {
+                  if (!yv) {
+                    return (
+                      <td key={yi} className="px-3 py-2.5 text-right">
+                        <span className="text-gray-300">—</span>
+                      </td>
+                    )
+                  }
+
+                  var isThisCellSelected = selectedItem &&
+                    selectedItem.sheet === yv.sheet &&
+                    selectedItem.cell === yv.cell
+
+                  return (
+                    <td
+                      key={yi}
+                      onClick={function() { onRowClick?.(yv.raw) }}
+                      className={
+                        'px-3 py-2.5 text-right cursor-pointer transition-colors ' +
+                        (isThisCellSelected
+                          ? 'bg-blue-100 rounded'
+                          : 'hover:bg-blue-50 rounded')
+                      }
+                    >
+                      <span className={
+                        'font-mono font-semibold text-sm ' +
+                        (yv.source === 'document' ? 'text-blue-700' :
+                         yv.source === 'inferred' ? 'text-amber-700' :
+                         'text-gray-600')
+                      }>
+                        {yv.formattedValue}
+                      </span>
+                    </td>
+                  )
+                })}
+
+                {/* Source */}
+                <td className="px-3 py-2.5 text-center">
+                  <SourceBadge source={row.primarySource} />
+                </td>
+
+                {/* Confidence */}
+                <td className="px-3 py-2.5">
+                  <ConfidenceBar confidence={row.avgConfidence} />
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+/** Assignment table for Phase 4 (concept mapping mode) */
+function AssignmentTable({
+  items,
+  colors,
+  onRowClick,
+  selectedItem,
+}: {
+  items: EnrichedItem[]
+  colors: typeof PL_COLORS[PLCategory]
+  onRowClick?: (item: any) => void
+  selectedItem?: any
+}) {
+  return (
+    <table className="w-full text-sm">
+      <thead>
+        <tr className="border-b border-gray-200">
+          <th className="text-left px-4 py-2 text-xs font-medium text-gray-500 w-12">
+            セル
+          </th>
+          <th className="text-left px-4 py-2 text-xs font-medium text-gray-500">
+            コンセプト
+          </th>
+          <th className="text-left px-4 py-2 text-xs font-medium text-gray-500 w-24">
+            カテゴリ
+          </th>
+          <th className="text-left px-4 py-2 text-xs font-medium text-gray-500 w-20">
+            期間
+          </th>
+          <th className="text-center px-4 py-2 text-xs font-medium text-gray-500 w-20">
+            ソース
+          </th>
+          <th className="text-right px-4 py-2 text-xs font-medium text-gray-500 w-24">
+            確信度
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        {items.map(function(item, idx) {
+          var isSelected = selectedItem &&
+            selectedItem.sheet === item.sheet &&
+            selectedItem.cell === item.cell
+          var isEstimated = item.derivation === 'estimated'
+
+          return (
+            <tr
+              key={item.sheet + '-' + item.cell + '-' + idx}
+              onClick={function() { onRowClick?.(item.raw) }}
+              className={
+                'border-b border-gray-100 last:border-b-0 cursor-pointer transition-colors ' +
+                (isSelected
+                  ? 'bg-blue-100 ring-1 ring-inset ring-blue-300'
+                  : 'hover:bg-white/60') +
+                (isEstimated ? ' opacity-80' : '')
+              }
+            >
+              {/* Cell reference */}
+              <td className="px-4 py-2.5 font-mono text-xs text-gray-400">
+                {item.cell}
+              </td>
+
+              {/* Concept */}
+              <td className="px-4 py-2.5">
+                <div className="flex items-center gap-2">
+                  {isEstimated && (
+                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-700 flex-shrink-0">
+                      推定
+                    </span>
+                  )}
+                  <div>
+                    <div className={'font-medium ' + colors.text}>
+                      {item.label || item.assignedConcept || '—'}
+                    </div>
+                    {item.label && item.assignedConcept && item.label !== item.assignedConcept && (
+                      <div className="text-xs text-gray-400 mt-0.5">
+                        {item.assignedConcept.replace('【推定】', '')}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </td>
+
+              {/* Category */}
+              <td className="px-4 py-2.5">
+                <span className={'inline-flex px-2 py-0.5 rounded-full text-[11px] font-medium ' + colors.bg + ' ' + colors.text}>
+                  {item.category || '—'}
+                </span>
+              </td>
+
+              {/* Period */}
+              <td className="px-4 py-2.5 text-xs text-gray-500">
+                {item.period || '—'}
+              </td>
+
+              {/* Source */}
+              <td className="px-4 py-2.5 text-center">
+                <SourceBadge source={item.source} />
+              </td>
+
+              {/* Confidence */}
+              <td className="px-4 py-2.5">
+                <ConfidenceBar confidence={item.confidence} />
+              </td>
+            </tr>
+          )
+        })}
+      </tbody>
+    </table>
+  )
+}
+
 /** Source badge with Japanese labels */
 function SourceBadge({ source }: { source: string }) {
   if (!source) return <span className="text-gray-300">—</span>
 
-  const config: Record<string, { bg: string; text: string; label: string }> = {
+  var config: Record<string, { bg: string; text: string; label: string }> = {
     document: { bg: 'bg-blue-100', text: 'text-blue-700', label: '文書' },
     inferred: { bg: 'bg-amber-100', text: 'text-amber-700', label: '推定' },
     default: { bg: 'bg-gray-100', text: 'text-gray-500', label: '初期値' },
@@ -380,10 +633,10 @@ function SourceBadge({ source }: { source: string }) {
     assumption: { bg: 'bg-slate-100', text: 'text-slate-600', label: '前提' },
   }
 
-  const c = config[source] || { bg: 'bg-gray-100', text: 'text-gray-500', label: source }
+  var c = config[source] || { bg: 'bg-gray-100', text: 'text-gray-500', label: source }
 
   return (
-    <span className={`inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium ${c.bg} ${c.text}`}>
+    <span className={'inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium ' + c.bg + ' ' + c.text}>
       {c.label}
     </span>
   )
@@ -391,19 +644,19 @@ function SourceBadge({ source }: { source: string }) {
 
 /** Confidence bar with percentage and color */
 function ConfidenceBar({ confidence }: { confidence: number }) {
-  const pct = Math.round(confidence * 100)
-  const color = pct >= 80 ? 'bg-green-500' : pct >= 50 ? 'bg-yellow-500' : 'bg-red-400'
-  const textColor = pct >= 80 ? 'text-green-700' : pct >= 50 ? 'text-yellow-700' : 'text-red-600'
+  var pct = Math.round(confidence * 100)
+  var color = pct >= 80 ? 'bg-green-500' : pct >= 50 ? 'bg-yellow-500' : 'bg-red-400'
+  var textColor = pct >= 80 ? 'text-green-700' : pct >= 50 ? 'text-yellow-700' : 'text-red-600'
 
   return (
-    <div className="flex items-center gap-2 justify-end">
-      <div className="w-16 bg-gray-200 rounded-full h-1.5 hidden sm:block">
+    <div className="flex items-center gap-1.5 justify-end">
+      <div className="w-10 bg-gray-200 rounded-full h-1.5 hidden sm:block">
         <div
-          className={`${color} h-1.5 rounded-full transition-all`}
-          style={{ width: `${pct}%` }}
+          className={color + ' h-1.5 rounded-full transition-all'}
+          style={{ width: pct + '%' }}
         />
       </div>
-      <span className={`text-xs font-mono font-semibold ${textColor} w-8 text-right`}>
+      <span className={'text-xs font-mono font-semibold ' + textColor + ' w-8 text-right'}>
         {pct}%
       </span>
     </div>

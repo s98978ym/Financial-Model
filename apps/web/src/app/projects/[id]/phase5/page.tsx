@@ -136,7 +136,7 @@ export default function Phase5Page() {
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
-                PL構造ビュー
+                年次ビュー（1〜5年目）
               </button>
               <button
                 onClick={() => setViewMode('flat')}
@@ -146,7 +146,7 @@ export default function Phase5Page() {
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
-                フラットビュー
+                セル一覧
               </button>
             </div>
           </div>
@@ -251,6 +251,18 @@ function FlatExtractionTable({
   onRowClick?: (item: any) => void
   selectedItem?: any
 }) {
+  function getPeriodLabel(ext: any): string {
+    // From period field
+    if (ext.period) {
+      const m = ext.period.match(/FY(\d+)/i)
+      if (m) return m[1] + '年目'
+    }
+    // From cell column
+    const col = (ext.cell || '').replace(/\d/g, '').toUpperCase()
+    const map: Record<string, string> = { C: '1年目', D: '2年目', E: '3年目', F: '4年目', G: '5年目' }
+    return map[col] || '—'
+  }
+
   return (
     <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
       <table className="w-full text-sm">
@@ -258,10 +270,11 @@ function FlatExtractionTable({
           <tr>
             <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">シート</th>
             <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">セル</th>
+            <th className="text-left px-3 py-3 text-xs font-medium text-gray-500">ラベル</th>
+            <th className="text-center px-3 py-3 text-xs font-medium text-gray-500">年次</th>
             <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">値</th>
-            <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">原文</th>
-            <th className="text-center px-4 py-3 text-xs font-medium text-gray-500">ソース</th>
-            <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">確信度</th>
+            <th className="text-center px-3 py-3 text-xs font-medium text-gray-500">ソース</th>
+            <th className="text-right px-3 py-3 text-xs font-medium text-gray-500">確信度</th>
           </tr>
         </thead>
         <tbody>
@@ -269,6 +282,7 @@ function FlatExtractionTable({
             const isSelected = selectedItem?.sheet === ext.sheet && selectedItem?.cell === ext.cell
             const pct = Math.round((ext.confidence || 0) * 100)
             const confColor = pct >= 80 ? 'text-green-700' : pct >= 50 ? 'text-yellow-700' : 'text-red-600'
+            const periodLabel = getPeriodLabel(ext)
             return (
               <tr
                 key={`${ext.sheet}-${ext.cell}-${idx}`}
@@ -277,13 +291,22 @@ function FlatExtractionTable({
                   isSelected ? 'bg-blue-50' : 'hover:bg-gray-50'
                 }`}
               >
-                <td className="px-4 py-2.5 text-gray-700 whitespace-nowrap">{ext.sheet}</td>
+                <td className="px-4 py-2.5 text-gray-700 whitespace-nowrap text-xs">{ext.sheet}</td>
                 <td className="px-4 py-2.5 font-mono text-xs text-gray-400">{ext.cell}</td>
+                <td className="px-3 py-2.5 text-gray-700 text-xs truncate max-w-[140px]">
+                  {ext.label || ext.original_text || '—'}
+                </td>
+                <td className="px-3 py-2.5 text-center">
+                  <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                    periodLabel === '—' ? 'bg-gray-100 text-gray-400' : 'bg-indigo-100 text-indigo-700'
+                  }`}>
+                    {periodLabel}
+                  </span>
+                </td>
                 <td className="px-4 py-2.5 text-right font-mono font-semibold text-blue-700">
                   {typeof ext.value === 'number' ? ext.value.toLocaleString() : ext.value}
                 </td>
-                <td className="px-4 py-2.5 text-gray-500 truncate max-w-[200px]">{ext.original_text}</td>
-                <td className="px-4 py-2.5 text-center">
+                <td className="px-3 py-2.5 text-center">
                   <span className={`inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium ${
                     ext.source === 'document' ? 'bg-blue-100 text-blue-700' :
                     ext.source === 'inferred' ? 'bg-amber-100 text-amber-700' :
@@ -292,7 +315,7 @@ function FlatExtractionTable({
                     {ext.source === 'document' ? '文書' : ext.source === 'inferred' ? '推定' : '初期値'}
                   </span>
                 </td>
-                <td className={`px-4 py-2.5 text-right font-mono text-xs font-semibold ${confColor}`}>
+                <td className={`px-3 py-2.5 text-right font-mono text-xs font-semibold ${confColor}`}>
                   {pct}%
                 </td>
               </tr>
