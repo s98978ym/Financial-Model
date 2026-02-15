@@ -59,16 +59,17 @@ class JSONOutputGuard:
         try:
             return json.loads(text)
         except json.JSONDecodeError:
-            if stop_reason == "max_tokens":
-                logger.warning(
-                    "Response truncated at max_tokens (%d chars). Attempting repair.",
-                    len(text),
-                )
-                repaired = JSONOutputGuard._repair_truncated(text)
-                if repaired is not None:
-                    return repaired
+            # Always try truncated repair (not just for max_tokens).
+            # The LLM may produce broken JSON even with stop_reason=end_turn.
+            logger.warning(
+                "JSON parse failed (stop_reason=%s, %d chars). Attempting repair.",
+                stop_reason, len(text),
+            )
+            repaired = JSONOutputGuard._repair_truncated(text)
+            if repaired is not None:
+                return repaired
 
-            # Fallback: try regex extraction
+            # Fallback: try regex extraction and additional strategies
             return JSONOutputGuard._try_extract(raw_text)
 
     @staticmethod
@@ -122,6 +123,7 @@ class JSONOutputGuard:
     @staticmethod
     def _try_extract(text: str) -> Dict[str, Any]:
         """Last-resort extraction strategies."""
+        # Strategy 1: regex for well-formed markdown-fenced JSON
         patterns = [r'```json\s*(.*?)\s*```', r'```\s*(.*?)\s*```', r'\{.*\}']
         for pattern in patterns:
             match = re.search(pattern, text, re.DOTALL)
@@ -131,6 +133,35 @@ class JSONOutputGuard:
                     return json.loads(candidate)
                 except (json.JSONDecodeError, IndexError):
                     continue
+
+        # Strategy 2: strip markdown fences manually (handles truncated
+        # responses where the closing ``` is missing so regex won't match)
+        stripped = text.strip()
+        if stripped.startswith("```"):
+            first_nl = stripped.find("\n")
+            if first_nl > 0:
+                stripped = stripped[first_nl + 1:]
+            if stripped.rstrip().endswith("```"):
+                stripped = stripped.rstrip()[:-3].rstrip()
+            try:
+                return json.loads(stripped)
+            except json.JSONDecodeError:
+                pass
+
+        # Strategy 3: find first '{' and try direct parse
+        brace_pos = text.find("{")
+        if brace_pos >= 0:
+            candidate = text[brace_pos:]
+            try:
+                return json.loads(candidate)
+            except json.JSONDecodeError:
+                pass
+
+            # Strategy 4: truncated JSON repair (close open brackets/braces)
+            repaired = JSONOutputGuard._repair_truncated(candidate)
+            if repaired is not None:
+                logger.info("Repaired truncated JSON in _try_extract fallback")
+                return repaired
 
         from .base import LLMJSONError
         raise LLMJSONError(
