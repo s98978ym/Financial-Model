@@ -42,13 +42,24 @@ interface SGADetail {
   other: number[]
 }
 
+interface BreakevenGapData {
+  target_fy: number
+  actual_fy: number | null
+  achieved: boolean
+  gap_years: number
+  required_opex_change_pct: number | null
+}
+
 interface ModelOverviewProps {
   parameters: Record<string, number>
   kpis?: {
     break_even_year?: string | null
+    cumulative_break_even_year?: string | null
     revenue_cagr?: number
     fy5_op_margin?: number
     gp_margin?: number
+    breakeven_gap?: BreakevenGapData | null
+    cum_breakeven_gap?: BreakevenGapData | null
   }
   plSummary?: {
     revenue: number[]
@@ -333,37 +344,54 @@ export function ModelOverview({ parameters, kpis, plSummary, industry, onParamet
           <div className="w-px h-4 bg-gray-300" />
         </div>
 
-        {/* Profit / KPI Summary */}
+        {/* Profit / KPI Summary with Breakeven Targets */}
         <div>
           <div className="flex items-center gap-2 mb-2">
             <div className="w-2 h-2 rounded-full bg-green-500" />
-            <span className="text-xs font-medium text-gray-600 uppercase tracking-wide">収益性</span>
+            <span className="text-xs font-medium text-gray-600 uppercase tracking-wide">収益性・目標設定</span>
           </div>
           <div className="ml-4 bg-green-50 rounded-lg p-3 border border-green-100">
             {kpis ? (
-              <div className="grid grid-cols-4 gap-3 text-center">
-                <div>
-                  <div className="text-xs text-gray-500 mb-0.5">黒字化</div>
-                  <div className={'text-sm font-bold ' + (kpis.break_even_year ? 'text-green-700' : 'text-red-500')}>
-                    {kpis.break_even_year || '未達'}
-                  </div>
+              <div className="space-y-3">
+                {/* Breakeven target selectors */}
+                <div className="grid grid-cols-2 gap-3">
+                  <BreakevenTargetSelector
+                    label="単年黒字化"
+                    paramKey="target_breakeven_fy"
+                    actualYear={kpis.break_even_year}
+                    targetFy={parameters.target_breakeven_fy}
+                    gap={kpis.breakeven_gap}
+                    onParameterChange={onParameterChange}
+                  />
+                  <BreakevenTargetSelector
+                    label="累積黒字化"
+                    paramKey="target_cum_breakeven_fy"
+                    actualYear={kpis.cumulative_break_even_year}
+                    targetFy={parameters.target_cum_breakeven_fy}
+                    gap={kpis.cum_breakeven_gap}
+                    onParameterChange={onParameterChange}
+                  />
                 </div>
-                <div>
-                  <div className="text-xs text-gray-500 mb-0.5">売上CAGR</div>
-                  <div className="text-sm font-bold text-gray-900">
-                    {kpis.revenue_cagr != null ? formatPct(kpis.revenue_cagr) : '-'}
+
+                {/* Compact KPI row */}
+                <div className="grid grid-cols-3 gap-2 pt-2 border-t border-green-200">
+                  <div className="text-center">
+                    <div className="text-[10px] text-gray-500">売上CAGR</div>
+                    <div className="text-sm font-bold text-gray-900">
+                      {kpis.revenue_cagr != null ? formatPct(kpis.revenue_cagr) : '-'}
+                    </div>
                   </div>
-                </div>
-                <div>
-                  <div className="text-xs text-gray-500 mb-0.5">粗利率</div>
-                  <div className="text-sm font-bold text-gray-900">
-                    {kpis.gp_margin != null ? formatPct(kpis.gp_margin) : '-'}
+                  <div className="text-center">
+                    <div className="text-[10px] text-gray-500">粗利率</div>
+                    <div className="text-sm font-bold text-gray-900">
+                      {kpis.gp_margin != null ? formatPct(kpis.gp_margin) : '-'}
+                    </div>
                   </div>
-                </div>
-                <div>
-                  <div className="text-xs text-gray-500 mb-0.5">FY5営業利益率</div>
-                  <div className={'text-sm font-bold ' + ((kpis.fy5_op_margin || 0) >= 0 ? 'text-green-700' : 'text-red-500')}>
-                    {kpis.fy5_op_margin != null ? formatPct(kpis.fy5_op_margin) : '-'}
+                  <div className="text-center">
+                    <div className="text-[10px] text-gray-500">FY5営業利益率</div>
+                    <div className={'text-sm font-bold ' + ((kpis.fy5_op_margin || 0) >= 0 ? 'text-green-700' : 'text-red-500')}>
+                      {kpis.fy5_op_margin != null ? formatPct(kpis.fy5_op_margin) : '-'}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -419,6 +447,107 @@ export function ModelOverview({ parameters, kpis, plSummary, industry, onParamet
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+/** Breakeven target FY selector with gap analysis */
+function BreakevenTargetSelector({
+  label,
+  paramKey,
+  actualYear,
+  targetFy,
+  gap,
+  onParameterChange,
+}: {
+  label: string
+  paramKey: string
+  actualYear?: string | null
+  targetFy?: number
+  gap?: BreakevenGapData | null
+  onParameterChange: (key: string, value: number) => void
+}) {
+  var actualFy = actualYear ? parseInt(actualYear.replace('FY', ''), 10) : null
+  var currentTarget = targetFy || 0  // 0 = not set
+
+  // Status determination
+  var hasTarget = currentTarget >= 1 && currentTarget <= 5
+  var achieved = gap ? gap.achieved : (actualFy !== null && hasTarget && actualFy <= currentTarget)
+  var opexChangePct = gap?.required_opex_change_pct
+
+  return (
+    <div className="bg-white rounded-lg p-2.5 border border-green-200">
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="text-[11px] font-medium text-gray-700">{label}</span>
+        <span className={'text-xs font-bold ' + (actualFy ? 'text-green-700' : 'text-red-500')}>
+          {actualFy ? 'FY' + actualFy : '未達'}
+        </span>
+      </div>
+
+      {/* FY selector buttons */}
+      <div className="flex gap-1 mb-1.5">
+        {[1, 2, 3, 4, 5].map(function(fy) {
+          var isTarget = currentTarget === fy
+          var isActual = actualFy === fy
+          var isPast = actualFy !== null && fy > actualFy  // already profitable before this FY
+
+          var btnClass = 'flex-1 py-1 text-[10px] rounded border transition-all '
+          if (isTarget && achieved) {
+            btnClass += 'bg-green-500 text-white border-green-500 font-bold'
+          } else if (isTarget && !achieved) {
+            btnClass += 'bg-amber-400 text-white border-amber-400 font-bold'
+          } else if (isActual) {
+            btnClass += 'bg-green-100 text-green-700 border-green-300 font-medium'
+          } else {
+            btnClass += 'bg-gray-50 text-gray-500 border-gray-200 hover:border-gray-400 hover:bg-gray-100'
+          }
+
+          return (
+            <button
+              key={fy}
+              onClick={function() { onParameterChange(paramKey, fy) }}
+              className={btnClass}
+              title={
+                isActual ? 'FY' + fy + '（実績）'
+                : isTarget ? 'FY' + fy + '（目標）'
+                : 'FY' + fy + 'を目標に設定'
+              }
+            >
+              {fy}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Status indicator */}
+      {hasTarget && (
+        <div className="text-[10px]">
+          {achieved ? (
+            <span className="text-green-600 font-medium">
+              目標達成 (FY{currentTarget}以前に黒字化)
+            </span>
+          ) : (
+            <div>
+              <span className="text-amber-600 font-medium">
+                目標FY{currentTarget}
+                {actualFy ? ' — 実績FY' + actualFy + ' (' + (actualFy - currentTarget) + '年遅延)' : ' — 5年間未達'}
+              </span>
+              {opexChangePct != null && opexChangePct < 0 && (
+                <div className="text-red-500 mt-0.5">
+                  達成には販管費を{Math.abs(opexChangePct * 100).toFixed(0)}%削減が必要
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* No target set hint */}
+      {!hasTarget && (
+        <div className="text-[10px] text-gray-400">
+          FYボタンで目標年度を設定
+        </div>
+      )}
     </div>
   )
 }
