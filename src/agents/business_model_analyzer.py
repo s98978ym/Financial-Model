@@ -558,6 +558,24 @@ class BusinessModelAnalyzer:
             logger.warning("Failed to parse financial_targets: %s", e)
             return None
 
+    # Pre-compiled pattern for extracting quoted text (「…」)
+    _QUOTE_RE = re.compile(r'「(.+?)」')
+
+    @staticmethod
+    def _check_evidence(evidence: str, doc_lower: str) -> bool:
+        """Check if an evidence string is grounded in the document.
+
+        Returns True if grounded, False otherwise.
+        """
+        quotes = BusinessModelAnalyzer._QUOTE_RE.findall(evidence)
+        if quotes:
+            for quote in quotes:
+                if quote.lower() in doc_lower:
+                    return True
+            return False
+        # No quoted text — check if first 30 chars of evidence appear
+        return evidence[:30].lower() in doc_lower
+
     @staticmethod
     def _validate_grounding(
         analysis: BusinessModelAnalysis,
@@ -570,63 +588,32 @@ class BusinessModelAnalyzer:
         evidence fields actually match text found in the document.
         """
         doc_lower = document_text.lower()
+        _check = BusinessModelAnalyzer._check_evidence
 
         for proposal in analysis.proposals:
             total_evidence = 0
             grounded_evidence = 0
 
+            # Check drivers and costs in a single pass
+            evidence_items = []
             for seg in proposal.segments:
                 for driver in seg.revenue_drivers:
-                    if driver.evidence and driver.evidence != "文書に記載なし":
-                        total_evidence += 1
-                        # Extract quoted text from evidence (between 「」)
-                        quotes = re.findall(r'「(.+?)」', driver.evidence)
-                        if quotes:
-                            for quote in quotes:
-                                if quote.lower() in doc_lower:
-                                    grounded_evidence += 1
-                                    driver.is_from_document = True
-                                    break
-                            else:
-                                driver.is_from_document = False
-                                logger.warning(
-                                    "Grounding check: evidence quote not found in document: %s",
-                                    driver.evidence[:80],
-                                )
-                        else:
-                            # No quoted text — check if evidence text appears
-                            evidence_snippet = driver.evidence[:30]
-                            if evidence_snippet.lower() in doc_lower:
-                                grounded_evidence += 1
-                                driver.is_from_document = True
-                            else:
-                                driver.is_from_document = False
-
+                    evidence_items.append(driver)
             for cost in proposal.shared_costs:
-                if cost.evidence and cost.evidence != "文書に記載なし":
-                    total_evidence += 1
-                    quotes = re.findall(r'「(.+?)」', cost.evidence)
-                    if quotes:
-                        for quote in quotes:
-                            if quote.lower() in doc_lower:
-                                grounded_evidence += 1
-                                cost.is_from_document = True
-                                break
-                        else:
-                            cost.is_from_document = False
-                    else:
-                        evidence_snippet = cost.evidence[:30]
-                        if evidence_snippet.lower() in doc_lower:
-                            grounded_evidence += 1
-                            cost.is_from_document = True
-                        else:
-                            cost.is_from_document = False
+                evidence_items.append(cost)
+
+            for item in evidence_items:
+                if not item.evidence or item.evidence == "文書に記載なし":
+                    continue
+                total_evidence += 1
+                if _check(item.evidence, doc_lower):
+                    grounded_evidence += 1
+                    item.is_from_document = True
+                else:
+                    item.is_from_document = False
 
             # Calculate grounding score
-            if total_evidence > 0:
-                proposal.grounding_score = grounded_evidence / total_evidence
-            else:
-                proposal.grounding_score = 0.0
+            proposal.grounding_score = (grounded_evidence / total_evidence) if total_evidence > 0 else 0.0
 
             # Penalize confidence if grounding is low
             if proposal.grounding_score < 0.5:

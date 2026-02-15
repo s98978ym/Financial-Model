@@ -205,9 +205,9 @@ class ModelDesigner:
             logger.info("ModelDesigner: catalog_items is empty, generating estimated assignments")
             return self._generate_fallback_assignments(analysis_json, template_structure_json)
 
-        analysis_str = json.dumps(analysis_json, ensure_ascii=False, indent=2)
-        structure_str = json.dumps(template_structure_json, ensure_ascii=False, indent=2)
-        catalog_str = json.dumps(catalog_items, ensure_ascii=False, indent=2)
+        analysis_str = json.dumps(analysis_json, ensure_ascii=False, separators=(",", ":"))
+        structure_str = json.dumps(template_structure_json, ensure_ascii=False, separators=(",", ":"))
+        catalog_str = json.dumps(catalog_items, ensure_ascii=False, separators=(",", ":"))
 
         feedback_section = ""
         if feedback:
@@ -424,8 +424,8 @@ PL（損益計算書）の概念マッピングを推定します。
         This produces higher-quality estimates than the static fallback by
         leveraging the LLM's understanding of the business model.
         """
-        analysis_str = json.dumps(analysis_json, ensure_ascii=False, indent=2)
-        structure_str = json.dumps(template_structure_json, ensure_ascii=False, indent=2)
+        analysis_str = json.dumps(analysis_json, ensure_ascii=False, separators=(",", ":"))
+        structure_str = json.dumps(template_structure_json, ensure_ascii=False, separators=(",", ":"))
 
         feedback_section = ""
         if feedback:

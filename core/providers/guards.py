@@ -331,7 +331,14 @@ class DocumentTruncation:
 
     @staticmethod
     def for_phase5(text: str, max_chars: int = 10000) -> str:
-        """Phase 5: First 10,000 characters only."""
+        """Phase 5: First 70% + Last 25% (with overlap marker).
+
+        Financial targets and growth data are often at the end of
+        business plan documents, so the same smart truncation strategy
+        as Phase 2 is used to preserve both ends.
+        """
         if len(text) <= max_chars:
             return text
-        return text[:max_chars] + "\n\n[...以降省略...]"
+        head = int(max_chars * 0.70)
+        tail = int(max_chars * 0.25)
+        return text[:head] + "\n\n[...中略...]\n\n" + text[-tail:]

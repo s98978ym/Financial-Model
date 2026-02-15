@@ -6,6 +6,7 @@ import json
 import logging
 
 from services.worker.celery_app import app
+from services.worker.tasks.heartbeat import heartbeat
 
 logger = logging.getLogger(__name__)
 
@@ -64,12 +65,16 @@ def run_template_mapping(self, job_id: str):
 
         db.update_job(job_id, progress=20, log_msg="Starting template mapping (calling Claude API)")
 
+        def _hb_update(pct, msg):
+            db.update_job(job_id, progress=pct, log_msg=msg)
+
         # Pass selected_proposal as dict (NOT json.dumps — mapper handles serialization)
-        result = mapper.map_structure(
-            analysis_json=selected_proposal,
-            catalog_items=catalog_items,
-            feedback="",
-        )
+        with heartbeat(_hb_update, time_constant=60.0, message="Template mapping in progress..."):
+            result = mapper.map_structure(
+                analysis_json=selected_proposal,
+                catalog_items=catalog_items,
+                feedback="",
+            )
 
         # --- Store result ---
         result_dict = result.model_dump()

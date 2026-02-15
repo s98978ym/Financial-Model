@@ -226,9 +226,15 @@ export const api = {
 /**
  * Hook helper: Poll a job until completion.
  * Use with TanStack Query's refetchInterval.
+ *
+ * Adaptive: polls faster (1s) when progress > 50% for quicker completion detection,
+ * and slower (2.5s) at the start when LLM is still generating.
  */
 export function shouldPollJob(data: any): number | false {
   if (!data) return false // No data yet (initial load) — don't poll
-  if (data.status === 'queued' || data.status === 'running') return 2000
+  if (data.status === 'queued' || data.status === 'running') {
+    var progress = data.progress || 0
+    return progress > 50 ? 1000 : 2500
+  }
   return false // Stop polling when completed/failed
 }

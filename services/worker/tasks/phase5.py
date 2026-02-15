@@ -6,6 +6,7 @@ import json
 import logging
 
 from services.worker.celery_app import app
+from services.worker.tasks.heartbeat import heartbeat
 
 logger = logging.getLogger(__name__)
 
@@ -59,8 +60,8 @@ def run_parameter_extraction(self, job_id: str):
             db.update_job(job_id, status="failed", error_msg="Document text not found")
             return {"status": "failed", "job_id": job_id}
 
-        # Truncate for Phase 5 (first N chars)
-        truncated = document_text[:excerpt_chars] if len(document_text) > excerpt_chars else document_text
+        # Truncate for Phase 5 (70% front + 25% back to preserve financial data at end)
+        truncated = DocumentTruncation.for_phase5(document_text, max_chars=excerpt_chars)
         db.update_job(job_id, progress=15, log_msg=f"Document loaded ({len(truncated)} chars)")
 
         # --- Apply user edits ---
@@ -74,12 +75,17 @@ def run_parameter_extraction(self, job_id: str):
         extractor = ParameterExtractorAgent(llm_client=adapter)
 
         db.update_job(job_id, progress=20, log_msg="Starting parameter extraction")
+
+        def _hb_update(pct, msg):
+            db.update_job(job_id, progress=pct, log_msg=msg)
+
         # Pass dict directly (agent handles serialization internally)
-        result = extractor.extract_values(
-            model_design_json=model_design_json,
-            document_text=truncated,
-            feedback="",
-        )
+        with heartbeat(_hb_update, message="Parameter extraction in progress..."):
+            result = extractor.extract_values(
+                model_design_json=model_design_json,
+                document_text=truncated,
+                feedback="",
+            )
 
         # --- Store result ---
         result_dict = result.model_dump()
