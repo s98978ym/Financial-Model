@@ -170,6 +170,7 @@ class ModelDesigner:
         catalog_items: List[Dict[str, Any]],
         feedback: str = "",
         estimation_mode: bool = False,
+        revenue_model_configs: Optional[List[Dict[str, Any]]] = None,
     ) -> ModelDesignResult:
         """Map business concepts to template cells.
 
@@ -185,11 +186,19 @@ class ModelDesigner:
             Optional user feedback.
         estimation_mode : bool
             If True, Phase 3 was empty — use LLM to generate estimated mappings.
+        revenue_model_configs : list[dict], optional
+            User-configured revenue model archetype settings per segment from Phase 3.
         """
+        # Build revenue config section for LLM
+        revenue_section = self._build_revenue_section(revenue_model_configs)
+
         # Estimation mode: Phase 3 succeeded but empty — use LLM for higher accuracy
         if estimation_mode:
             logger.info("ModelDesigner: estimation mode — using LLM to generate concept mappings")
-            return self._generate_llm_estimation(analysis_json, template_structure_json, feedback)
+            return self._generate_llm_estimation(
+                analysis_json, template_structure_json,
+                feedback + ("\n" + revenue_section if revenue_section else ""),
+            )
 
         # Fallback: generate estimated assignments when no input cells found
         if not catalog_items:
@@ -207,6 +216,8 @@ class ModelDesigner:
                 f"{feedback}\n\n"
                 f"上記のフィードバックを考慮して、マッピングを修正してください。\n\n"
             )
+        if revenue_section:
+            feedback_section += revenue_section
 
         messages = [
             {"role": "system", "content": self._system_prompt},
@@ -229,6 +240,43 @@ class ModelDesigner:
             len(result.get("unmapped_cells", [])),
         )
         return self._parse_result(result, catalog_items)
+
+    @staticmethod
+    def _build_revenue_section(
+        revenue_model_configs: Optional[List[Dict[str, Any]]],
+    ) -> str:
+        """Format revenue model configs for LLM prompt injection."""
+        if not revenue_model_configs:
+            return ""
+        # Filter out segments without archetype
+        configured = [c for c in revenue_model_configs if c.get("archetype")]
+        if not configured:
+            return ""
+
+        lines = [
+            "━━━ 収益モデル設定（Phase 3ユーザー設定） ━━━",
+            "ユーザーがセグメントごとに設定した収益ロジックのアーキタイプ:",
+            "",
+        ]
+        for cfg in configured:
+            seg = cfg.get("segment_name", "不明")
+            arch = cfg.get("archetype", "不明")
+            lines.append(f"■ {seg} → {arch}")
+            config = cfg.get("config", {})
+            if config:
+                # Summarize key parameters (avoid dumping entire config)
+                lines.append(f"  設定概要: {json.dumps(config, ensure_ascii=False)[:500]}")
+        lines.append("")
+        lines.append(
+            "上記の収益モデル設定に基づいて、セグメント別のセル割り当て"
+            "（category, assigned_concept, unit等）を最適化してください。"
+        )
+        lines.append(
+            "例: subscriptionモデルのセグメントには MRR/ARR/解約率等の概念を、"
+            "marketplaceモデルには GMV/テイクレート等の概念を割り当ててください。"
+        )
+        lines.append("")
+        return "\n".join(lines)
 
     def _parse_result(
         self,

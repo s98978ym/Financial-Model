@@ -87,11 +87,16 @@ def run_model_design(self, job_id: str):
                     f"セグメント: {', '.join(s.get('name', str(s)) if isinstance(s, dict) else str(s) for s in chosen.get('segments', []))}"
                 )
 
-        # Load Phase 3 proposal decisions (adopted suggestions + instructions)
+        # Load Phase 3 proposal decisions + revenue model configs
         phase3_edits = db.get_edits(run_id, phase=3)
+        revenue_model_configs = None
         if phase3_edits:
             for ed in reversed(phase3_edits):
                 pj = ed.get("patch_json", {})
+                # Extract revenue model configs (latest edit wins)
+                if revenue_model_configs is None and "revenue_model_configs" in pj:
+                    revenue_model_configs = pj["revenue_model_configs"]
+                # Extract adopted proposals
                 adopted = pj.get("adopted", [])
                 if adopted:
                     feedback_parts.append("━━━ ユーザーが採用した提案 ━━━")
@@ -126,6 +131,7 @@ def run_model_design(self, job_id: str):
             catalog_items=catalog_items,
             feedback=feedback,
             estimation_mode=estimation_mode,
+            revenue_model_configs=revenue_model_configs,
         )
 
         # --- Store result ---

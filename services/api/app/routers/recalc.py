@@ -445,7 +445,191 @@ def _compute_sga_breakdown(
 # Segment revenue breakdown
 # ---------------------------------------------------------------------------
 
-def _compute_segments(parameters: Dict[str, Any]) -> List[Dict[str, Any]]:
+def _compute_archetype_revenue(config: Dict[str, Any], archetype: str) -> Optional[List[int]]:
+    """Compute 5-year revenue from archetype-specific config.
+
+    Returns list of 5 annual revenue values, or None if config is insufficient.
+    """
+    try:
+        if archetype == "subscription":
+            plans = config.get("plans", [])
+            if not plans:
+                return None
+            rev = [0] * 5
+            for plan in plans:
+                mp = float(plan.get("monthly_price", 0))
+                subs = plan.get("subscribers", [0] * 5)
+                for y in range(5):
+                    s = float(subs[y]) if y < len(subs) else 0
+                    rev[y] += round(s * mp * 12)
+            return rev
+
+        if archetype == "consulting":
+            skus = config.get("skus", [])
+            if not skus:
+                return None
+            rev = [0] * 5
+            for sku in skus:
+                up = float(sku.get("unit_price", 0))
+                qtys = sku.get("quantities", [0] * 5)
+                for y in range(5):
+                    q = float(qtys[y]) if y < len(qtys) else 0
+                    rev[y] += round(up * q)
+            return rev
+
+        if archetype == "academy":
+            tiers = config.get("tiers", [])
+            if not tiers:
+                return None
+            rev = [0] * 5
+            for tier in tiers:
+                price = float(tier.get("price", 0))
+                students = tier.get("students", [0] * 5)
+                for y in range(5):
+                    s = float(students[y]) if y < len(students) else 0
+                    rev[y] += round(price * s)
+            return rev
+
+        if archetype == "marketplace":
+            demand = config.get("demand", {})
+            users = demand.get("users", [0] * 5)
+            txns = float(demand.get("txns_per_user", 0))
+            avg_val = float(demand.get("avg_txn_value", 0))
+            take_rate = float(config.get("take_rate", 0))
+            rev = []
+            for y in range(5):
+                u = float(users[y]) if y < len(users) else 0
+                rev.append(round(u * txns * avg_val * take_rate * 12))
+            return rev
+
+        if archetype == "usage":
+            tiers = config.get("tiers", [])
+            if not tiers:
+                return None
+            rev = [0] * 5
+            for tier in tiers:
+                up = float(tier.get("unit_price", 0))
+                included = float(tier.get("included_units", 0))
+                avg_usage = float(tier.get("avg_usage_per_user", 0))
+                users = tier.get("users", [0] * 5)
+                billable = max(0, avg_usage - included)
+                for y in range(5):
+                    u = float(users[y]) if y < len(users) else 0
+                    rev[y] += round(u * billable * up * 12)
+            return rev
+
+        if archetype == "advertising":
+            formats = config.get("formats", [])
+            mau = config.get("monthly_active_users", [0] * 5)
+            avg_pv = float(config.get("avg_pageviews_per_user", 0))
+            rev = [0] * 5
+            for fmt in formats:
+                rate = float(fmt.get("rate", 0))
+                fill = float(fmt.get("fill_rate", 0))
+                model = fmt.get("pricing_model", "cpm")
+                for y in range(5):
+                    u = float(mau[y]) if y < len(mau) else 0
+                    imps = u * avg_pv * fill
+                    if model == "cpm":
+                        monthly = imps * rate / 1000
+                    elif model == "cpc":
+                        monthly = imps * 0.02 * rate
+                    elif model == "cpa":
+                        monthly = imps * 0.005 * rate
+                    else:
+                        monthly = 0
+                    rev[y] += round(monthly * 12)
+            return rev
+
+        if archetype == "licensing":
+            products = config.get("products", [])
+            renewal = float(config.get("renewal_rate", 0.85))
+            if not products:
+                return None
+            rev = [0] * 5
+            for prod in products:
+                fee = float(prod.get("license_fee", 0))
+                maint = float(prod.get("maintenance_rate", 0))
+                lics = prod.get("licenses", [0] * 5)
+                for y in range(5):
+                    cum = float(lics[y]) if y < len(lics) else 0
+                    prev = float(lics[y - 1]) if y > 0 and y - 1 < len(lics) else 0
+                    new_lics = max(0, cum - prev)
+                    renewed = prev * renewal
+                    rev[y] += round(new_lics * fee + renewed * fee * maint)
+            return rev
+
+        if archetype == "staffing":
+            cats = config.get("categories", [])
+            util = float(config.get("utilization_rate", 0.85))
+            if not cats:
+                return None
+            rev = [0] * 5
+            for cat in cats:
+                rate = float(cat.get("monthly_rate", 0))
+                hc = cat.get("headcount", [0] * 5)
+                for y in range(5):
+                    h = float(hc[y]) if y < len(hc) else 0
+                    rev[y] += round(h * rate * util * 12)
+            return rev
+
+        if archetype == "rental":
+            assets = config.get("assets", [])
+            util = float(config.get("utilization_rate", 0.8))
+            if not assets:
+                return None
+            rev = [0] * 5
+            for asset in assets:
+                fee = float(asset.get("monthly_fee", 0))
+                units = asset.get("units", [0] * 5)
+                for y in range(5):
+                    u = float(units[y]) if y < len(units) else 0
+                    rev[y] += round(u * fee * util * 12)
+            return rev
+
+        if archetype == "franchise":
+            initial_fee = float(config.get("initial_fee", 0))
+            royalty = float(config.get("royalty_rate", 0))
+            stores = config.get("stores", [0] * 5)
+            avg_rev = float(config.get("avg_store_monthly_revenue", 0))
+            rev = []
+            for y in range(5):
+                cum = float(stores[y]) if y < len(stores) else 0
+                prev = float(stores[y - 1]) if y > 0 and y - 1 < len(stores) else 0
+                new_stores = max(0, cum - prev) if y > 0 else cum
+                initial_rev = new_stores * initial_fee
+                royalty_rev = cum * avg_rev * royalty * 12
+                rev.append(round(initial_rev + royalty_rev))
+            return rev
+
+        if archetype == "unit_economics":
+            skus = config.get("skus", [])
+            if not skus:
+                return None
+            # UE model: per-person annual revenue × assumed customer growth
+            total_rev_per_person = 0
+            for sku in skus:
+                price = float(sku.get("price", 0))
+                items = float(sku.get("items_per_txn", 1))
+                txns = float(sku.get("txns_per_person", 1))
+                annual = float(sku.get("annual_purchases", 12))
+                total_rev_per_person += price * items * txns * annual
+            # No per-FY customer data in UE config; return None to use growth fallback
+            if total_rev_per_person <= 0:
+                return None
+            return None  # Let growth-based calc handle it
+
+    except (TypeError, ValueError, KeyError):
+        logger.debug("Failed to compute archetype revenue for %s", archetype)
+        return None
+
+    return None
+
+
+def _compute_segments(
+    parameters: Dict[str, Any],
+    revenue_model_configs: Optional[List[Dict[str, Any]]] = None,
+) -> List[Dict[str, Any]]:
     """Compute per-segment revenue and gross profit.
 
     Supports up to 10 segments. Each segment can have:
@@ -453,6 +637,9 @@ def _compute_segments(parameters: Dict[str, Any]) -> List[Dict[str, Any]]:
       - seg_{n}_revenue_fy1: initial revenue
       - seg_{n}_growth: growth rate
       - seg_{n}_cogs_rate: variable cost rate
+
+    If revenue_model_configs is provided, uses archetype-specific formulas
+    for segments that have configured archetypes.
 
     If no segments are provided, creates a single "全体" segment from totals.
     """
@@ -491,6 +678,16 @@ def _compute_segments(parameters: Dict[str, Any]) -> List[Dict[str, Any]]:
             "cogs_rate": cogs_rate,
         }]
 
+    # Build lookup for archetype configs by segment name
+    archetype_lookup: Dict[str, Dict[str, Any]] = {}
+    if revenue_model_configs:
+        for rmc in revenue_model_configs:
+            seg_name = rmc.get("segment_name", "")
+            archetype = rmc.get("archetype")
+            config = rmc.get("config")
+            if seg_name and archetype and config:
+                archetype_lookup[seg_name] = {"archetype": archetype, "config": config}
+
     result = []
     for seg in segments_data:
         name = seg.get("name", "セグメント")
@@ -498,16 +695,36 @@ def _compute_segments(parameters: Dict[str, Any]) -> List[Dict[str, Any]]:
         growth = float(seg.get("growth_rate", 0.3))
         cogs_rate = float(seg.get("cogs_rate", 0.3))
 
+        # Try archetype-specific revenue first
+        arch_revenue = None
+        arch_info = archetype_lookup.get(name)
+        if arch_info:
+            arch_revenue = _compute_archetype_revenue(
+                arch_info["config"], arch_info["archetype"],
+            )
+
         revenue = []
         cogs = []
         gross_profit = []
-        for year in range(5):
-            rev = rev_fy1 * ((1 + growth) ** year)
-            cost = rev * cogs_rate
-            gp = rev - cost
-            revenue.append(round(rev))
-            cogs.append(round(cost))
-            gross_profit.append(round(gp))
+
+        if arch_revenue:
+            # Use archetype-computed revenue
+            for year in range(5):
+                rev = arch_revenue[year] if year < len(arch_revenue) else 0
+                cost = round(rev * cogs_rate)
+                gp = rev - cost
+                revenue.append(rev)
+                cogs.append(cost)
+                gross_profit.append(gp)
+        else:
+            # Fallback: simple growth model
+            for year in range(5):
+                rev = rev_fy1 * ((1 + growth) ** year)
+                cost = rev * cogs_rate
+                gp = rev - cost
+                revenue.append(round(rev))
+                cogs.append(round(cost))
+                gross_profit.append(round(gp))
 
         result.append({
             "name": name,
@@ -516,18 +733,23 @@ def _compute_segments(parameters: Dict[str, Any]) -> List[Dict[str, Any]]:
             "gross_profit": gross_profit,
             "cogs_rate": round(cogs_rate, 4),
             "growth_rate": round(growth, 4),
+            "archetype": arch_info["archetype"] if arch_info else None,
         })
 
     return result
 
 
-def _compute_pl(parameters: Dict[str, Any]) -> Dict[str, Any]:
+def _compute_pl(
+    parameters: Dict[str, Any],
+    revenue_model_configs: Optional[List[Dict[str, Any]]] = None,
+) -> Dict[str, Any]:
     """Compute 5-year PL from parameters.
 
     Enhanced with:
       - Per-segment revenue/GP breakdown
       - SGA category detail (payroll, marketing, office, system, other)
       - Depreciation auto-calculation from CAPEX
+      - Archetype-specific revenue computation from Phase 3 configs
     """
     growth_rate = float(parameters.get("growth_rate", 0.3))
     cogs_rate = float(parameters.get("cogs_rate", 0.3))
@@ -535,7 +757,7 @@ def _compute_pl(parameters: Dict[str, Any]) -> Dict[str, Any]:
     opex_growth = float(parameters.get("opex_growth", 0.1))
 
     # --- Segment-level revenue ---
-    segments = _compute_segments(parameters)
+    segments = _compute_segments(parameters, revenue_model_configs)
 
     # Aggregate from segments
     revenue = [0] * 5
@@ -716,6 +938,7 @@ async def recalc(body: dict):
 
     # Load Phase 5 extracted parameters as base if project_id is given
     base_params: Dict[str, Any] = {}
+    revenue_model_configs = None
     if project_id:
         run = db.get_latest_run(project_id)
         if run:
@@ -723,6 +946,19 @@ async def recalc(body: dict):
             if phase5 and phase5.get("raw_json"):
                 base_params = _extract_params_from_phase5(phase5["raw_json"])
                 logger.debug("Loaded %d params from Phase 5", len(base_params))
+
+            # Load Phase 3 revenue model configs for archetype-specific calculations
+            phase3_edits = db.get_edits(run["id"], phase=3)
+            if phase3_edits:
+                for ed in reversed(phase3_edits):
+                    pj = ed.get("patch_json", {})
+                    if "revenue_model_configs" in pj:
+                        revenue_model_configs = pj["revenue_model_configs"]
+                        logger.debug(
+                            "Loaded revenue model configs for %d segments",
+                            len(revenue_model_configs),
+                        )
+                        break
 
     # Layer: Phase 5 base → user-provided params → edited cells
     merged = {**base_params, **parameters, **edited_cells}
@@ -735,7 +971,7 @@ async def recalc(body: dict):
         worst_mult=body.get("worst_multipliers", {"revenue": 0.8, "cost": 1.15}),
     )
 
-    result = _compute_pl(adjusted)
+    result = _compute_pl(adjusted, revenue_model_configs)
     result["scenario"] = scenario
     result["source_params"] = merged  # Return merged params so frontend knows actual values
     return result

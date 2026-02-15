@@ -7,18 +7,34 @@
  * expanded = full configuration panel for the selected archetype.
  */
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import type { ArchetypeId, SegmentRevenueModel, ArchetypeConfig } from './types'
 import { ARCHETYPES, getArchetypeMeta, getDefaultConfig } from './defaults'
+import type { ArchetypeCategory } from './types'
+import { suggestArchetype } from './suggest'
 import { UnitEconomicsPanel } from './UnitEconomicsPanel'
 import { ConsultingPanel } from './ConsultingPanel'
 import { AcademyPanel } from './AcademyPanel'
 import { SubscriptionPanel } from './SubscriptionPanel'
 import { MarketplacePanel } from './MarketplacePanel'
+import { UsagePanel } from './UsagePanel'
+import { AdvertisingPanel } from './AdvertisingPanel'
+import { LicensingPanel } from './LicensingPanel'
+import { StaffingPanel } from './StaffingPanel'
+import { RentalPanel } from './RentalPanel'
+import { FranchisePanel } from './FranchisePanel'
+
+interface SegmentInput {
+  name: string
+  model_type?: string
+  revenue_formula?: string
+  revenue_drivers?: Array<{ name: string; unit?: string; description?: string }>
+  key_assumptions?: string[]
+}
 
 interface Props {
   /** Segments from Phase 2 BM analysis */
-  segments: Array<{ name: string; model_type?: string; revenue_formula?: string }>
+  segments: SegmentInput[]
   /** Current configs (loaded from edits) */
   value: SegmentRevenueModel[]
   onChange: (models: SegmentRevenueModel[]) => void
@@ -26,6 +42,11 @@ interface Props {
 
 export function RevenueModelConfigurator({ segments, value, onChange }: Props) {
   var [expandedIdx, setExpandedIdx] = useState<number | null>(null)
+
+  // Compute suggestions for each segment
+  var suggestions = useMemo(function() {
+    return segments.map(function(seg) { return suggestArchetype(seg) })
+  }, [segments])
 
   // Ensure we have a model entry for each segment
   var models: SegmentRevenueModel[] = segments.map(function(seg, i) {
@@ -76,6 +97,8 @@ export function RevenueModelConfigurator({ segments, value, onChange }: Props) {
         var seg = segments[idx]
         var isExpanded = expandedIdx === idx
         var meta = model.archetype ? getArchetypeMeta(model.archetype) : null
+        var suggestion = suggestions[idx]
+        var suggestedMeta = suggestion ? getArchetypeMeta(suggestion.archetype) : null
 
         return (
           <div key={seg.name} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
@@ -103,7 +126,16 @@ export function RevenueModelConfigurator({ segments, value, onChange }: Props) {
                   {meta.label}
                 </div>
               )}
-              {!meta && (
+              {!meta && suggestedMeta && (
+                <div className="flex items-center gap-1 text-xs text-gray-400">
+                  <span className={'w-3.5 h-3.5 rounded text-[9px] font-bold flex items-center justify-center text-white opacity-60 ' + suggestedMeta.color}>
+                    {suggestedMeta.icon}
+                  </span>
+                  <span className="opacity-60">{suggestedMeta.label}</span>
+                  <span className="text-[9px] text-gray-300">推奨</span>
+                </div>
+              )}
+              {!meta && !suggestedMeta && (
                 <span className="text-xs text-gray-400">モデル未選択</span>
               )}
               <svg
@@ -117,33 +149,42 @@ export function RevenueModelConfigurator({ segments, value, onChange }: Props) {
             {/* --- Expanded content --- */}
             {isExpanded && (
               <div className="border-t border-gray-100">
-                {/* Archetype selector */}
+                {/* Archetype selector — grouped by MECE category */}
                 <div className="px-4 py-3 bg-gray-50 border-b border-gray-100">
                   <div className="text-[10px] font-medium text-gray-500 mb-2">売上モデルを選択</div>
-                  <div className="flex gap-2 flex-wrap">
-                    {ARCHETYPES.map(function(arch) {
-                      var isSelected = model.archetype === arch.id
-                      return (
-                        <button
-                          key={arch.id}
-                          onClick={function(e) { e.stopPropagation(); handleSelectArchetype(idx, arch.id) }}
-                          className={'flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs transition-all '
-                            + (isSelected
-                              ? arch.color + ' text-white border-transparent shadow-sm'
-                              : 'bg-white border-gray-200 text-gray-600 hover:border-gray-400'
-                            )}
-                        >
-                          <span className={'w-4 h-4 rounded text-[10px] font-bold flex items-center justify-center '
-                            + (isSelected ? 'bg-white/30 text-white' : arch.color + ' text-white')}>
-                            {arch.icon}
-                          </span>
-                          {arch.label}
-                        </button>
-                      )
-                    })}
-                  </div>
+                  {(['取引型', '継続型', '仲介型', '権利・教育型'] as ArchetypeCategory[]).map(function(cat) {
+                    var catArchetypes = ARCHETYPES.filter(function(a) { return a.category === cat })
+                    if (catArchetypes.length === 0) return null
+                    return (
+                      <div key={cat} className="mb-2 last:mb-0">
+                        <div className="text-[9px] text-gray-400 font-medium mb-1">{cat}</div>
+                        <div className="flex gap-1.5 flex-wrap">
+                          {catArchetypes.map(function(arch) {
+                            var isSelected = model.archetype === arch.id
+                            return (
+                              <button
+                                key={arch.id}
+                                onClick={function(e) { e.stopPropagation(); handleSelectArchetype(idx, arch.id) }}
+                                className={'flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-[11px] transition-all '
+                                  + (isSelected
+                                    ? arch.color + ' text-white border-transparent shadow-sm'
+                                    : 'bg-white border-gray-200 text-gray-600 hover:border-gray-400'
+                                  )}
+                              >
+                                <span className={'w-4 h-4 rounded text-[10px] font-bold flex items-center justify-center '
+                                  + (isSelected ? 'bg-white/30 text-white' : arch.color + ' text-white')}>
+                                  {arch.icon}
+                                </span>
+                                {arch.label}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )
+                  })}
                   {model.archetype && meta && (
-                    <p className="text-[10px] text-gray-400 mt-1.5">{meta.description}</p>
+                    <p className="text-[10px] text-gray-400 mt-2">{meta.description}</p>
                   )}
                 </div>
 
@@ -180,13 +221,65 @@ export function RevenueModelConfigurator({ segments, value, onChange }: Props) {
                         onChange={function(c) { handleConfigChange(idx, c) }}
                       />
                     )}
+                    {model.archetype === 'usage' && (
+                      <UsagePanel
+                        config={model.config as any}
+                        onChange={function(c) { handleConfigChange(idx, c) }}
+                      />
+                    )}
+                    {model.archetype === 'advertising' && (
+                      <AdvertisingPanel
+                        config={model.config as any}
+                        onChange={function(c) { handleConfigChange(idx, c) }}
+                      />
+                    )}
+                    {model.archetype === 'licensing' && (
+                      <LicensingPanel
+                        config={model.config as any}
+                        onChange={function(c) { handleConfigChange(idx, c) }}
+                      />
+                    )}
+                    {model.archetype === 'staffing' && (
+                      <StaffingPanel
+                        config={model.config as any}
+                        onChange={function(c) { handleConfigChange(idx, c) }}
+                      />
+                    )}
+                    {model.archetype === 'rental' && (
+                      <RentalPanel
+                        config={model.config as any}
+                        onChange={function(c) { handleConfigChange(idx, c) }}
+                      />
+                    )}
+                    {model.archetype === 'franchise' && (
+                      <FranchisePanel
+                        config={model.config as any}
+                        onChange={function(c) { handleConfigChange(idx, c) }}
+                      />
+                    )}
                   </div>
                 )}
 
-                {/* No archetype selected placeholder */}
+                {/* No archetype selected — show suggestion or placeholder */}
                 {!model.archetype && (
-                  <div className="px-4 py-8 text-center">
-                    <p className="text-sm text-gray-400">上のボタンから売上モデルを選択してください</p>
+                  <div className="px-4 py-6 text-center">
+                    {suggestion && suggestedMeta ? (
+                      <div>
+                        <p className="text-xs text-gray-400 mb-2">Phase 2 の分析結果に基づく推奨モデル:</p>
+                        <button
+                          onClick={function() { handleSelectArchetype(idx, suggestion!.archetype) }}
+                          className={'inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white shadow-sm transition-all hover:shadow-md ' + suggestedMeta.color}
+                        >
+                          <span className="w-5 h-5 rounded bg-white/30 text-[11px] font-bold flex items-center justify-center">
+                            {suggestedMeta.icon}
+                          </span>
+                          {suggestedMeta.label}を適用
+                        </button>
+                        <p className="text-[10px] text-gray-400 mt-1.5">{suggestedMeta.description}</p>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-gray-400">上のボタンから売上モデルを選択してください</p>
+                    )}
                   </div>
                 )}
               </div>
