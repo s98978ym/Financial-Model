@@ -26,6 +26,8 @@ var DEFAULT_PARAMS: Record<string, number> = {
   depreciation_mode: 0,  // 0 = manual, 1 = auto
   useful_life: 5,
   existing_depreciation: 0,
+  target_breakeven_fy: 3,       // Default: single-year profit by FY3
+  target_cum_breakeven_fy: 4,   // Default: cumulative profit by FY4
 }
 
 export default function ScenarioPlaygroundPage() {

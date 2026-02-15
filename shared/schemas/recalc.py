@@ -105,6 +105,19 @@ class DepreciationSettings(BaseModel):
     existing_depreciation: float = 0
 
 
+class BreakevenGap(BaseModel):
+    """Gap analysis for a breakeven target."""
+
+    target_fy: int = Field(description="Target FY (1-5)")
+    actual_fy: Optional[int] = Field(default=None, description="Actual breakeven FY, None if not achieved")
+    achieved: bool = False
+    gap_years: int = Field(default=0, description="Years ahead (+) or behind (-) target; 0 if on target")
+    required_opex_change_pct: Optional[float] = Field(
+        default=None,
+        description="% OPEX change needed to hit target (negative = cut needed)",
+    )
+
+
 class KPIs(BaseModel):
     """Key performance indicators."""
 
@@ -113,6 +126,9 @@ class KPIs(BaseModel):
     revenue_cagr: float = 0.0
     fy5_op_margin: float = 0.0
     gp_margin: float = 0.0
+    # Breakeven target gap analysis
+    breakeven_gap: Optional[BreakevenGap] = None
+    cum_breakeven_gap: Optional[BreakevenGap] = None
 
 
 class RecalcResponse(BaseModel):

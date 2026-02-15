@@ -121,6 +121,109 @@ def _apply_scenario_multipliers(
 
 
 # ---------------------------------------------------------------------------
+# Breakeven gap analysis helpers
+# ---------------------------------------------------------------------------
+
+def _compute_breakeven_gap(
+    parameters: Dict[str, Any],
+    target_key: str,
+    actual_fy: Optional[int],
+    gross_profit: List[float],
+    opex: List[float],
+    depreciation: List[float],
+) -> Optional[Dict[str, Any]]:
+    """Compute gap analysis for single-year (operating profit) breakeven target."""
+    target_fy = parameters.get(target_key)
+    if target_fy is None:
+        return None
+    target_fy = int(target_fy)
+    if target_fy < 1 or target_fy > 5:
+        return None
+
+    achieved = actual_fy is not None and actual_fy <= target_fy
+    gap_years = 0
+    if actual_fy is not None:
+        gap_years = target_fy - actual_fy  # positive = ahead of target
+    else:
+        gap_years = -5  # never achieved
+
+    # Compute required OPEX change to hit target at target_fy
+    # At target FY: operating_profit = gross_profit - opex - depreciation > 0
+    # Need: opex_target < gross_profit - depreciation at target FY index
+    idx = target_fy - 1
+    required_opex_change_pct = None
+    if not achieved and idx < len(gross_profit):
+        gp = gross_profit[idx]
+        depr = depreciation[idx] if idx < len(depreciation) else 0
+        max_opex = gp - depr  # OPEX must be below this to break even
+        current_opex = opex[idx] if idx < len(opex) else 0
+        if current_opex > 0:
+            required_opex_change_pct = round((max_opex - current_opex) / current_opex, 4)
+
+    return {
+        "target_fy": target_fy,
+        "actual_fy": actual_fy,
+        "achieved": achieved,
+        "gap_years": gap_years,
+        "required_opex_change_pct": required_opex_change_pct,
+    }
+
+
+def _compute_cum_breakeven_gap(
+    parameters: Dict[str, Any],
+    target_key: str,
+    actual_fy: Optional[int],
+    gross_profit: List[float],
+    opex: List[float],
+    depreciation: List[float],
+    capex: List[float],
+) -> Optional[Dict[str, Any]]:
+    """Compute gap analysis for cumulative FCF breakeven target."""
+    target_fy = parameters.get(target_key)
+    if target_fy is None:
+        return None
+    target_fy = int(target_fy)
+    if target_fy < 1 or target_fy > 5:
+        return None
+
+    achieved = actual_fy is not None and actual_fy <= target_fy
+    gap_years = 0
+    if actual_fy is not None:
+        gap_years = target_fy - actual_fy
+    else:
+        gap_years = -5
+
+    # Compute required OPEX change to make cumulative FCF > 0 by target FY
+    idx = target_fy - 1
+    required_opex_change_pct = None
+    if not achieved:
+        # Current cumulative FCF up to target FY
+        cum_fcf = 0.0
+        total_opex = 0.0
+        for y in range(target_fy):
+            gp = gross_profit[y] if y < len(gross_profit) else 0
+            ox = opex[y] if y < len(opex) else 0
+            dp = depreciation[y] if y < len(depreciation) else 0
+            cx = capex[y] if y < len(capex) else 0
+            op = gp - ox - dp
+            fcf = op + dp - cx
+            cum_fcf += fcf
+            total_opex += ox
+        # Need cum_fcf + delta > 0, where delta = total reduction in OPEX
+        # So need to reduce OPEX by |cum_fcf| total across target_fy years
+        if total_opex > 0 and cum_fcf <= 0:
+            required_opex_change_pct = round(cum_fcf / total_opex, 4)
+
+    return {
+        "target_fy": target_fy,
+        "actual_fy": actual_fy,
+        "achieved": achieved,
+        "gap_years": gap_years,
+        "required_opex_change_pct": required_opex_change_pct,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Depreciation auto-calculation from CAPEX
 # ---------------------------------------------------------------------------
 
@@ -533,6 +636,19 @@ def _compute_pl(parameters: Dict[str, Any]) -> Dict[str, Any]:
     # Gross margin
     gp_margin = gross_profit[-1] / revenue[-1] if revenue[-1] > 0 else 0
 
+    # --- Breakeven gap analysis ---
+    actual_be_fy = int(break_even[2:]) if break_even else None
+    actual_cum_be_fy = int(cum_break_even[2:]) if cum_break_even else None
+
+    breakeven_gap = _compute_breakeven_gap(
+        parameters, "target_breakeven_fy", actual_be_fy,
+        gross_profit, opex, depreciation_list,
+    )
+    cum_breakeven_gap = _compute_cum_breakeven_gap(
+        parameters, "target_cum_breakeven_fy", actual_cum_be_fy,
+        gross_profit, opex, depreciation_list, capex_list,
+    )
+
     return {
         "pl_summary": {
             "revenue": revenue,
@@ -567,6 +683,8 @@ def _compute_pl(parameters: Dict[str, Any]) -> Dict[str, Any]:
             "revenue_cagr": round(rev_cagr, 4),
             "fy5_op_margin": round(fy5_margin, 4),
             "gp_margin": round(gp_margin, 4),
+            "breakeven_gap": breakeven_gap,
+            "cum_breakeven_gap": cum_breakeven_gap,
         },
         "charts_data": {
             "waterfall": [],
