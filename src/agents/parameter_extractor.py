@@ -62,6 +62,17 @@ PE_SYSTEM_PROMPT = """\
 確定済みのモデル設計に基づいて、事業計画書から各セルの具体的な値を抽出します。
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+【最重要: 5年分の値を抽出すること】
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PLモデルは5年間（FY1〜FY5）の計画です。
+各概念（セル）について、**必ず5年分のextractionレコードを生成**してください。
+
+例: 「月間顧客数」のセルがC5にマッピングされている場合：
+  → C5 (FY1), D5 (FY2), E5 (FY3), F5 (FY4), G5 (FY5) の5つのレコードを出力
+
+**列とFYの対応: C列=FY1, D列=FY2, E列=FY3, F列=FY4, G列=FY5**
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 【抽出ルール】
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -69,6 +80,20 @@ PE_SYSTEM_PROMPT = """\
 2. **文脈から推定した値** → confidence 0.5-0.8, source="inferred"
 3. **業界標準からのデフォルト** → confidence 0.3-0.5, source="default"
 4. **抽出不可** → unmapped_cellsに記録
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+【FY2〜FY5の推定方法】
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+文書にFY1の値しかない場合でも、以下の方法でFY2〜FY5を推定してください：
+
+1. **成長率が文書に記載** → その成長率を適用（source="document"）
+2. **売上目標が年度別に記載** → 目標値から逆算（source="document"）
+3. **成長率は不明だがFY1の値がある場合**:
+   - 売上系: 年20-30%成長を仮定（source="inferred"）
+   - コスト系: 売上に連動して成長（source="inferred"）
+   - 人員系: 段階的に増加（source="inferred"）
+   - 固定費系: 年5-10%増を仮定（source="inferred"）
+4. **全く手がかりがない** → 業界標準で仮定（source="default", confidence低）
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 【数値の正規化】
@@ -81,7 +106,7 @@ PE_SYSTEM_PROMPT = """\
 【重要ルール】
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 - **必ずextractionsを返す（最重要ルール）**
-- 全セルについて抽出を試みる
+- **全セルについて5年分(FY1-FY5)の抽出を行う**
 - 推定値でもよいので値を埋める（sourceとconfidenceで区別）
 - ターゲットPL（売上ターゲット・営業利益ターゲット）のセルがある場合は、文書の目標値を優先的に抽出する
 - 有効なJSONのみを返す
@@ -89,6 +114,7 @@ PE_SYSTEM_PROMPT = """\
 
 PE_USER_PROMPT = """\
 以下の確定済み情報をもとに、各セルの値を事業計画書から抽出してください。
+**重要: 各概念について必ずFY1〜FY5の5年分のレコードを生成してください。**
 
 ━━━ ① モデル設計（確定済み: 各セルの概念マッピング） ━━━
 {model_design_json}
@@ -98,20 +124,76 @@ PE_USER_PROMPT = """\
 
 {feedback_section}\
 ━━━ 出力形式（JSON） ━━━
+⚠ 各概念について5年分のextraction（列 C=FY1, D=FY2, E=FY3, F=FY4, G=FY5）を出力してください。
+  モデル設計でセル C5 が「月間顧客数」にマッピングされている場合:
+  → C5(FY1), D5(FY2), E5(FY3), F5(FY4), G5(FY5) の5レコードを出力
+
 {{
   "extractions": [
     {{
-      "sheet": "シート名",
-      "cell": "B5",
-      "label": "セルのラベル",
-      "concept": "モデル設計で決定された概念",
-      "value": 12345,
-      "unit": "円",
-      "source": "document / inferred / default",
+      "sheet": "収益モデル",
+      "cell": "C5",
+      "label": "月間顧客数",
+      "concept": "月間顧客数",
+      "value": 100,
+      "unit": "人",
+      "source": "document",
       "confidence": 0.9,
-      "evidence": "文書からの引用・根拠",
-      "segment": "セグメント名",
+      "evidence": "「初年度100名のユーザー獲得を目指す」",
+      "segment": "SaaS",
       "period": "FY1"
+    }},
+    {{
+      "sheet": "収益モデル",
+      "cell": "D5",
+      "label": "月間顧客数",
+      "concept": "月間顧客数",
+      "value": 250,
+      "unit": "人",
+      "source": "inferred",
+      "confidence": 0.6,
+      "evidence": "年間成長率150%を仮定（SaaS初期段階）",
+      "segment": "SaaS",
+      "period": "FY2"
+    }},
+    {{
+      "sheet": "収益モデル",
+      "cell": "E5",
+      "label": "月間顧客数",
+      "concept": "月間顧客数",
+      "value": 500,
+      "unit": "人",
+      "source": "inferred",
+      "confidence": 0.5,
+      "evidence": "成長率鈍化を想定し年100%成長",
+      "segment": "SaaS",
+      "period": "FY3"
+    }},
+    {{
+      "sheet": "収益モデル",
+      "cell": "F5",
+      "label": "月間顧客数",
+      "concept": "月間顧客数",
+      "value": 850,
+      "unit": "人",
+      "source": "inferred",
+      "confidence": 0.4,
+      "evidence": "成長率70%で推定",
+      "segment": "SaaS",
+      "period": "FY4"
+    }},
+    {{
+      "sheet": "収益モデル",
+      "cell": "G5",
+      "label": "月間顧客数",
+      "concept": "月間顧客数",
+      "value": 1200,
+      "unit": "人",
+      "source": "inferred",
+      "confidence": 0.3,
+      "evidence": "成長率40%で推定（成熟期への移行）",
+      "segment": "SaaS",
+      "period": "FY5"
     }}
   ],
   "unmapped_cells": [
