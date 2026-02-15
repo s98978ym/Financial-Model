@@ -11,6 +11,8 @@ import { ScenarioComparison } from '@/components/scenario/ScenarioComparison'
 import { IndustryBenchmarkCards } from '@/components/scenario/IndustryBenchmarkCards'
 import { ModelOverview } from '@/components/scenario/ModelOverview'
 import { NaturalLanguageInput } from '@/components/scenario/NaturalLanguageInput'
+import { ParameterProposal } from '@/components/scenario/ParameterProposal'
+import type { ParameterProposalData } from '@/components/scenario/ParameterProposal'
 import { PhaseLayout } from '@/components/ui/PhaseLayout'
 import type { IndustryKey } from '@/data/industryBenchmarks'
 import { detectIndustry } from '@/data/industryBenchmarks'
@@ -38,6 +40,7 @@ export default function ScenarioPlaygroundPage() {
   var [plResult, setPLResult] = useState<any>(null)
   var [initialized, setInitialized] = useState(false)
   var [industry, setIndustry] = useState<IndustryKey>('その他')
+  var [pendingProposal, setPendingProposal] = useState<ParameterProposalData | null>(null)
   var saveTimerRef = useRef<any>(null)
   var recalcTimerRef = useRef<any>(null)
   // Keep a ref to latest params so callbacks never use stale state
@@ -125,15 +128,21 @@ export default function ScenarioPlaygroundPage() {
     },
     onSuccess: function(data: any) {
       setPLResult(data)
-      // If source_params came back, use them (includes Phase 5 data)
+      // If source_params came back, show a proposal for user confirmation
       if (!initialized && data.source_params) {
-        var merged = Object.assign({}, DEFAULT_PARAMS)
+        var changes: Record<string, number> = {}
         Object.keys(DEFAULT_PARAMS).forEach(function(key) {
-          if (data.source_params[key] != null) {
-            merged[key as keyof typeof DEFAULT_PARAMS] = data.source_params[key]
+          if (data.source_params[key] != null && data.source_params[key] !== DEFAULT_PARAMS[key]) {
+            changes[key] = data.source_params[key]
           }
         })
-        setParameters(merged)
+        if (Object.keys(changes).length > 0) {
+          setPendingProposal({
+            source: 'Phase 5 パラメーター検出',
+            sourceDetail: 'ビジネスプランから以下のパラメーターを検出しました。確認して適用してください。',
+            changes: changes,
+          })
+        }
         setInitialized(true)
       }
     },
@@ -186,6 +195,37 @@ export default function ScenarioPlaygroundPage() {
     []
   )
 
+  // Proposal flow: NL input or other sources propose changes for user confirmation
+  var handlePropose = useCallback(
+    function(changes: Record<string, number>, sourceDetail: string) {
+      setPendingProposal({
+        source: '自然言語入力',
+        sourceDetail: sourceDetail,
+        changes: changes,
+      })
+    },
+    []
+  )
+
+  var handleProposalAccept = useCallback(
+    function(accepted: Record<string, number>) {
+      var newParams = Object.assign({}, paramsRef.current, accepted)
+      setParameters(newParams)
+      paramsRef.current = newParams
+      debouncedRecalc(newParams)
+      debouncedSave(newParams)
+      setPendingProposal(null)
+    },
+    [] // eslint-disable-line react-hooks/exhaustive-deps
+  )
+
+  var handleProposalReject = useCallback(
+    function() {
+      setPendingProposal(null)
+    },
+    []
+  )
+
   return (
     <PhaseLayout
       phase={6}
@@ -193,6 +233,18 @@ export default function ScenarioPlaygroundPage() {
       subtitle="パラメータを調整してPLの変化を体感"
       projectId={projectId}
     >
+      {/* Parameter Proposal Confirmation */}
+      {pendingProposal && (
+        <div className="mb-6">
+          <ParameterProposal
+            proposal={pendingProposal}
+            currentParams={parameters}
+            onAccept={handleProposalAccept}
+            onReject={handleProposalReject}
+          />
+        </div>
+      )}
+
       {/* Model Overview & Natural Language Input */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
         <ModelOverview
@@ -207,6 +259,7 @@ export default function ScenarioPlaygroundPage() {
             parameters={parameters}
             onParameterChange={handleParameterChange}
             onBatchChange={handleBatchChange}
+            onPropose={handlePropose}
           />
           <IndustryBenchmarkCards
             industry={industry}

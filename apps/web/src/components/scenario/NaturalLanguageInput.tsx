@@ -6,6 +6,7 @@ interface NaturalLanguageInputProps {
   parameters: Record<string, number>
   onParameterChange: (key: string, value: number) => void
   onBatchChange: (changes: Record<string, number>) => void
+  onPropose?: (changes: Record<string, number>, sourceDetail: string) => void
 }
 
 interface ChatMessage {
@@ -172,7 +173,7 @@ var EXAMPLES = [
   '売上を2倍にして',
 ]
 
-export function NaturalLanguageInput({ parameters, onParameterChange, onBatchChange }: NaturalLanguageInputProps) {
+export function NaturalLanguageInput({ parameters, onParameterChange, onBatchChange, onPropose }: NaturalLanguageInputProps) {
   var [input, setInput] = useState('')
   var [messages, setMessages] = useState<ChatMessage[]>([])
   var messagesEndRef = useRef<HTMLDivElement>(null)
@@ -202,16 +203,24 @@ export function NaturalLanguageInput({ parameters, onParameterChange, onBatchCha
         descriptions.push((PARAM_LABELS[key] || key) + ' → ' + formatChangeValue(key, changes[key]))
       }
 
-      newMessages = newMessages.concat([{
-        role: 'system',
-        text: '変更を適用しました:\n' + descriptions.join('\n'),
-      }])
-
-      // Apply changes
-      if (keys.length === 1) {
-        onParameterChange(keys[0], changes[keys[0]])
+      // Route through proposal confirmation when onPropose is available
+      if (onPropose) {
+        onPropose(changes, userMessage)
+        newMessages = newMessages.concat([{
+          role: 'system',
+          text: '変更を提案しました（確認待ち）:\n' + descriptions.join('\n'),
+        }])
       } else {
-        onBatchChange(changes)
+        newMessages = newMessages.concat([{
+          role: 'system',
+          text: '変更を適用しました:\n' + descriptions.join('\n'),
+        }])
+        // Direct apply fallback
+        if (keys.length === 1) {
+          onParameterChange(keys[0], changes[keys[0]])
+        } else {
+          onBatchChange(changes)
+        }
       }
     } else {
       newMessages = newMessages.concat([{
