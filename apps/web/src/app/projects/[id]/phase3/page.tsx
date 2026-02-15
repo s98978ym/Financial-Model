@@ -69,7 +69,7 @@ export default function Phase3Page() {
     return proposals[selectedIdx] || proposals[0] || null
   }, [projectState, phase2Edits.data])
 
-  // Extract segments from the selected Phase 2 proposal
+  // Extract segments from the selected Phase 2 proposal (including drivers for auto-suggestion)
   var segments = useMemo(function() {
     if (!phase2Proposal) return []
     return (phase2Proposal.segments || []).map(function(seg: any) {
@@ -77,6 +77,8 @@ export default function Phase3Page() {
         name: seg.name || '',
         model_type: seg.model_type || '',
         revenue_formula: seg.revenue_formula || '',
+        revenue_drivers: seg.revenue_drivers || [],
+        key_assumptions: seg.key_assumptions || [],
       }
     })
   }, [phase2Proposal])

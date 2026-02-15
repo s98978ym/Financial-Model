@@ -1,2 +1,2 @@
 export { RevenueModelConfigurator } from './RevenueModelConfigurator'
-export type { SegmentRevenueModel, ArchetypeId, ArchetypeConfig } from './types'
+export type { SegmentRevenueModel, ArchetypeId, ArchetypeConfig, ArchetypeCategory } from './types'

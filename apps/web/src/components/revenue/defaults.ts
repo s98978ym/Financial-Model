@@ -10,6 +10,12 @@ import type {
   AcademyConfig,
   SubscriptionConfig,
   MarketplaceConfig,
+  UsageConfig,
+  AdvertisingConfig,
+  LicensingConfig,
+  StaffingConfig,
+  RentalConfig,
+  FranchiseConfig,
   ArchetypeConfig,
 } from './types'
 
@@ -18,6 +24,7 @@ import type {
 // ---------------------------------------------------------------------------
 
 export var ARCHETYPES: ArchetypeMeta[] = [
+  // ═══ 取引型 (Transaction-based) ═══
   {
     id: 'unit_economics',
     label: 'ユニットエコノミクス',
@@ -25,6 +32,7 @@ export var ARCHETYPES: ArchetypeMeta[] = [
     icon: 'U',
     color: 'bg-blue-500',
     textColor: 'text-blue-700',
+    category: '取引型',
   },
   {
     id: 'consulting',
@@ -33,6 +41,82 @@ export var ARCHETYPES: ArchetypeMeta[] = [
     icon: 'C',
     color: 'bg-emerald-500',
     textColor: 'text-emerald-700',
+    category: '取引型',
+  },
+  {
+    id: 'rental',
+    label: 'レンタル/リース',
+    description: '資産貸出型。保有資産の月額料金・台数・稼働率から収益を設計',
+    icon: 'R',
+    color: 'bg-stone-500',
+    textColor: 'text-stone-700',
+    category: '取引型',
+  },
+  // ═══ 継続型 (Recurring) ═══
+  {
+    id: 'subscription',
+    label: 'サブスクリプション',
+    description: '月額課金型。プラン別の月額・契約者数・解約率を設計',
+    icon: 'S',
+    color: 'bg-orange-500',
+    textColor: 'text-orange-700',
+    category: '継続型',
+  },
+  {
+    id: 'usage',
+    label: '従量課金',
+    description: '利用量ベース型。ティア別の単価・無料枠・利用量から収益を設計',
+    icon: '従',
+    color: 'bg-teal-500',
+    textColor: 'text-teal-700',
+    category: '継続型',
+  },
+  {
+    id: 'staffing',
+    label: '人材派遣/SES',
+    description: '人材提供型。職種別の月額単価・原価・稼働人数から収益を設計',
+    icon: '人',
+    color: 'bg-amber-500',
+    textColor: 'text-amber-700',
+    category: '継続型',
+  },
+  // ═══ 仲介型 (Intermediary) ═══
+  {
+    id: 'marketplace',
+    label: 'マーケットプレイス',
+    description: '取引仲介型。供給/需要の双方ユーザー数・取引額・手数料率を設計',
+    icon: 'M',
+    color: 'bg-cyan-500',
+    textColor: 'text-cyan-700',
+    category: '仲介型',
+  },
+  {
+    id: 'advertising',
+    label: '広告モデル',
+    description: '広告収益型。MAU・PV・広告フォーマット別の単価・充填率を設計',
+    icon: '広',
+    color: 'bg-rose-500',
+    textColor: 'text-rose-700',
+    category: '仲介型',
+  },
+  // ═══ 権利・教育型 (Rights & Education) ═══
+  {
+    id: 'licensing',
+    label: 'ライセンス',
+    description: '知的財産型。ライセンス料・保守料率・更新率から収益を設計',
+    icon: 'L',
+    color: 'bg-indigo-500',
+    textColor: 'text-indigo-700',
+    category: '権利・教育型',
+  },
+  {
+    id: 'franchise',
+    label: 'フランチャイズ',
+    description: 'FC展開型。加盟金・ロイヤリティ率・店舗数から収益を設計',
+    icon: 'F',
+    color: 'bg-lime-600',
+    textColor: 'text-lime-700',
+    category: '権利・教育型',
   },
   {
     id: 'academy',
@@ -41,22 +125,7 @@ export var ARCHETYPES: ArchetypeMeta[] = [
     icon: 'A',
     color: 'bg-purple-500',
     textColor: 'text-purple-700',
-  },
-  {
-    id: 'subscription',
-    label: 'サブスクリプション',
-    description: '月額課金型。プラン別の月額・契約者数・解約率を設計',
-    icon: 'S',
-    color: 'bg-orange-500',
-    textColor: 'text-orange-700',
-  },
-  {
-    id: 'marketplace',
-    label: 'マーケットプレイス',
-    description: '取引仲介型。供給/需要の双方ユーザー数・取引額・手数料率を設計',
-    icon: 'M',
-    color: 'bg-cyan-500',
-    textColor: 'text-cyan-700',
+    category: '権利・教育型',
   },
 ]
 
@@ -122,6 +191,69 @@ export function defaultMarketplaceConfig(): MarketplaceConfig {
   }
 }
 
+export function defaultUsageConfig(): UsageConfig {
+  return {
+    tiers: [
+      { id: uid(), name: 'スタンダード', unit_price: 0.5, unit_label: 'APIコール', included_units: 10000, users: [200, 500, 1200, 2500, 5000], avg_usage_per_user: 25000 },
+      { id: uid(), name: 'プレミアム', unit_price: 0.3, unit_label: 'APIコール', included_units: 100000, users: [20, 60, 150, 300, 600], avg_usage_per_user: 200000 },
+    ],
+  }
+}
+
+export function defaultAdvertisingConfig(): AdvertisingConfig {
+  return {
+    formats: [
+      { id: uid(), name: 'ディスプレイ広告', pricing_model: 'cpm', rate: 300, fill_rate: 0.65 },
+      { id: uid(), name: '動画広告', pricing_model: 'cpm', rate: 800, fill_rate: 0.45 },
+      { id: uid(), name: 'ネイティブ広告', pricing_model: 'cpc', rate: 50, fill_rate: 0.55 },
+    ],
+    monthly_active_users: [5000, 15000, 40000, 80000, 150000],
+    avg_pageviews_per_user: 12,
+  }
+}
+
+export function defaultLicensingConfig(): LicensingConfig {
+  return {
+    products: [
+      { id: uid(), name: 'スタンダード版', license_fee: 500000, maintenance_rate: 0.18, licenses: [20, 45, 80, 130, 200] },
+      { id: uid(), name: 'エンタープライズ版', license_fee: 2000000, maintenance_rate: 0.15, licenses: [3, 8, 15, 25, 40] },
+    ],
+    renewal_rate: 0.85,
+  }
+}
+
+export function defaultStaffingConfig(): StaffingConfig {
+  return {
+    categories: [
+      { id: uid(), name: 'シニアエンジニア', monthly_rate: 900000, cost_rate: 650000, headcount: [5, 12, 25, 40, 60] },
+      { id: uid(), name: 'ミドルエンジニア', monthly_rate: 700000, cost_rate: 500000, headcount: [10, 25, 50, 80, 120] },
+      { id: uid(), name: 'ジュニアエンジニア', monthly_rate: 500000, cost_rate: 350000, headcount: [8, 20, 40, 65, 100] },
+    ],
+    utilization_rate: 0.85,
+  }
+}
+
+export function defaultRentalConfig(): RentalConfig {
+  return {
+    assets: [
+      { id: uid(), name: '機器A', monthly_fee: 50000, acquisition_cost: 800000, units: [20, 50, 100, 180, 300] },
+      { id: uid(), name: '機器B', monthly_fee: 30000, acquisition_cost: 400000, units: [30, 80, 160, 280, 450] },
+    ],
+    utilization_rate: 0.80,
+    avg_contract_months: 12,
+  }
+}
+
+export function defaultFranchiseConfig(): FranchiseConfig {
+  return {
+    initial_fee: 5000000,
+    royalty_rate: 0.05,
+    stores: [3, 8, 18, 35, 60],
+    avg_store_monthly_revenue: 8000000,
+    support_cost_per_store: 200000,
+  }
+}
+
 export function getDefaultConfig(archetype: ArchetypeId): ArchetypeConfig {
   switch (archetype) {
     case 'unit_economics': return defaultUnitEconomicsConfig()
@@ -129,5 +261,11 @@ export function getDefaultConfig(archetype: ArchetypeId): ArchetypeConfig {
     case 'academy': return defaultAcademyConfig()
     case 'subscription': return defaultSubscriptionConfig()
     case 'marketplace': return defaultMarketplaceConfig()
+    case 'usage': return defaultUsageConfig()
+    case 'advertising': return defaultAdvertisingConfig()
+    case 'licensing': return defaultLicensingConfig()
+    case 'staffing': return defaultStaffingConfig()
+    case 'rental': return defaultRentalConfig()
+    case 'franchise': return defaultFranchiseConfig()
   }
 }

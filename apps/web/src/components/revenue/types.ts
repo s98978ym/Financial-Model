@@ -15,6 +15,14 @@ export type ArchetypeId =
   | 'academy'
   | 'subscription'
   | 'marketplace'
+  | 'usage'
+  | 'advertising'
+  | 'licensing'
+  | 'staffing'
+  | 'rental'
+  | 'franchise'
+
+export type ArchetypeCategory = '取引型' | '継続型' | '仲介型' | '権利・教育型'
 
 export interface ArchetypeMeta {
   id: ArchetypeId
@@ -23,6 +31,7 @@ export interface ArchetypeMeta {
   icon: string
   color: string       // Tailwind bg class
   textColor: string   // Tailwind text class
+  category: ArchetypeCategory
 }
 
 // ---------------------------------------------------------------------------
@@ -119,6 +128,106 @@ export interface MarketplaceConfig {
 }
 
 // ---------------------------------------------------------------------------
+// Usage (従量課金) model
+// ---------------------------------------------------------------------------
+
+export interface UsageTier {
+  id: string
+  name: string
+  unit_price: number        // 単価/利用単位
+  unit_label: string        // 利用単位名 (APIコール, GB, 時間, etc.)
+  included_units: number    // 無料枠
+  users: number[]           // FY1-FY5 ユーザー数
+  avg_usage_per_user: number // 平均利用量/ユーザー/月
+}
+
+export interface UsageConfig {
+  tiers: UsageTier[]
+}
+
+// ---------------------------------------------------------------------------
+// Advertising (広告) model
+// ---------------------------------------------------------------------------
+
+export interface AdFormat {
+  id: string
+  name: string
+  pricing_model: 'cpm' | 'cpc' | 'cpa'
+  rate: number              // CPM/CPC/CPA 単価
+  fill_rate: number         // 広告充填率 (0-1)
+}
+
+export interface AdvertisingConfig {
+  formats: AdFormat[]
+  monthly_active_users: number[] // FY1-FY5 MAU
+  avg_pageviews_per_user: number
+}
+
+// ---------------------------------------------------------------------------
+// Licensing (ライセンス) model
+// ---------------------------------------------------------------------------
+
+export interface LicenseProduct {
+  id: string
+  name: string
+  license_fee: number       // ライセンス料
+  maintenance_rate: number  // 年間保守料率 (0-1)
+  licenses: number[]        // FY1-FY5 累計ライセンス数
+}
+
+export interface LicensingConfig {
+  products: LicenseProduct[]
+  renewal_rate: number      // 更新率 (0-1)
+}
+
+// ---------------------------------------------------------------------------
+// Staffing (人材派遣/SES) model
+// ---------------------------------------------------------------------------
+
+export interface StaffCategory {
+  id: string
+  name: string
+  monthly_rate: number      // 月額単価(請求)
+  cost_rate: number         // 月額原価
+  headcount: number[]       // FY1-FY5 稼働人数
+}
+
+export interface StaffingConfig {
+  categories: StaffCategory[]
+  utilization_rate: number  // 稼働率 (0-1)
+}
+
+// ---------------------------------------------------------------------------
+// Rental (レンタル/リース) model
+// ---------------------------------------------------------------------------
+
+export interface RentalAsset {
+  id: string
+  name: string
+  monthly_fee: number       // 月額レンタル料
+  acquisition_cost: number  // 取得原価
+  units: number[]           // FY1-FY5 保有台数
+}
+
+export interface RentalConfig {
+  assets: RentalAsset[]
+  utilization_rate: number  // 稼働率 (0-1)
+  avg_contract_months: number
+}
+
+// ---------------------------------------------------------------------------
+// Franchise (フランチャイズ) model
+// ---------------------------------------------------------------------------
+
+export interface FranchiseConfig {
+  initial_fee: number               // 加盟金
+  royalty_rate: number              // ロイヤリティ率 (0-1)
+  stores: number[]                  // FY1-FY5 累計店舗数
+  avg_store_monthly_revenue: number // 平均店舗月商
+  support_cost_per_store: number    // 店舗あたりサポートコスト/月
+}
+
+// ---------------------------------------------------------------------------
 // Union type
 // ---------------------------------------------------------------------------
 
@@ -128,6 +237,12 @@ export type ArchetypeConfig =
   | AcademyConfig
   | SubscriptionConfig
   | MarketplaceConfig
+  | UsageConfig
+  | AdvertisingConfig
+  | LicensingConfig
+  | StaffingConfig
+  | RentalConfig
+  | FranchiseConfig
 
 export interface SegmentRevenueModel {
   segment_name: string
