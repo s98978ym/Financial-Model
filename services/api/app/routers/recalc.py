@@ -277,6 +277,18 @@ def _compute_sga_breakdown(
         parameters.get(f"mk_{sub}") is not None for sub in _DEFAULT_MKTG_SUBCATS
     )
 
+    # Default allocation ratios for marketing subcategories
+    _MKTG_DEFAULT_RATIOS = {
+        "digital_ad": 0.30,
+        "offline_ad": 0.10,
+        "pr":         0.10,
+        "events":     0.10,
+        "branding":   0.10,
+        "crm":        0.10,
+        "content":    0.10,
+        "other_mktg": 0.10,
+    }
+
     if has_mktg_detail:
         for sub in _DEFAULT_MKTG_SUBCATS:
             val = float(parameters.get(f"mk_{sub}", 0))
@@ -286,11 +298,15 @@ def _compute_sga_breakdown(
             for y in range(5):
                 mktg_total[y] += yearly[y]
     else:
-        # Derive from total marketing budget
+        # Derive subcategories from total marketing budget using default ratios
         mktg_fy1 = float(parameters.get("sga_marketing", opex_total_per_year[0] * 0.20))
         mktg_growth = float(parameters.get("marketing_growth", opex_growth))
         for y in range(5):
             mktg_total[y] = round(mktg_fy1 * ((1 + mktg_growth) ** y))
+        # Always populate subcategory breakdown
+        for sub in _DEFAULT_MKTG_SUBCATS:
+            ratio = _MKTG_DEFAULT_RATIOS.get(sub, 0.10)
+            mktg_categories[sub] = [round(mktg_total[y] * ratio) for y in range(5)]
 
     # ─── Office costs ───
     office_fy1 = float(parameters.get("sga_office", opex_total_per_year[0] * 0.10))

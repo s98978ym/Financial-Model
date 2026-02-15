@@ -117,7 +117,7 @@ var SGA_CATEGORIES = [
 ]
 
 var MKTG_LABELS: Record<string, string> = {
-  digital_ad: 'デジタル広告（獲得）',
+  digital_ad: 'デジタル広告',
   offline_ad: 'オフライン広告',
   pr: 'PR・広報',
   events: 'イベント・展示会',
@@ -137,6 +137,42 @@ var MKTG_COLORS: Record<string, string> = {
   content: 'bg-purple-300',
   other_mktg: 'bg-gray-300',
 }
+
+/** Multi-angle marketing categorization tags */
+var MKTG_ANGLES: {
+  key: string
+  label: string
+  groups: { label: string; keys: string[]; color: string }[]
+}[] = [
+  {
+    key: 'directness',
+    label: '直接 / 間接',
+    groups: [
+      { label: '直接（獲得）', keys: ['digital_ad', 'offline_ad', 'events', 'crm'], color: 'bg-rose-500' },
+      { label: '間接（認知）', keys: ['pr', 'branding', 'content', 'other_mktg'], color: 'bg-sky-400' },
+    ],
+  },
+  {
+    key: 'purpose',
+    label: '目的別',
+    groups: [
+      { label: '獲得', keys: ['digital_ad', 'offline_ad', 'events'], color: 'bg-red-500' },
+      { label: 'ブランディング', keys: ['branding', 'pr', 'content'], color: 'bg-blue-500' },
+      { label: 'CRM・リテンション', keys: ['crm', 'other_mktg'], color: 'bg-green-500' },
+    ],
+  },
+  {
+    key: 'medium',
+    label: '手段別',
+    groups: [
+      { label: '広告', keys: ['digital_ad', 'offline_ad'], color: 'bg-purple-600' },
+      { label: 'PR・広報', keys: ['pr'], color: 'bg-fuchsia-500' },
+      { label: 'イベント', keys: ['events'], color: 'bg-pink-400' },
+      { label: 'コンテンツ', keys: ['content', 'branding'], color: 'bg-violet-400' },
+      { label: 'CRM・その他', keys: ['crm', 'other_mktg'], color: 'bg-indigo-400' },
+    ],
+  },
+]
 
 var CAPEX_DRIVERS = [
   {
@@ -228,9 +264,11 @@ function BenchmarkBar({ benchmark, driver, value }: { benchmark: DriverBenchmark
 /** Role-based payroll detail panel */
 function PayrollDetailPanel({
   roles,
+  parameters,
   onChange,
 }: {
   roles: Record<string, PayrollRoleDetail>
+  parameters: Record<string, number>
   onChange: (key: string, value: number) => void
 }) {
   var roleEntries = Object.entries(roles)
@@ -241,7 +279,13 @@ function PayrollDetailPanel({
       <div className="text-[11px] text-orange-700 font-medium mb-2">人件費内訳（平均年収 x 人数 = コスト）</div>
       <div className="space-y-2.5">
         {roleEntries.map(function([roleKey, role]) {
-          var fy1Cost = role.cost[0] || 0
+          // Use LOCAL parameter values as source of truth for sliders
+          var salaryKey = 'pr_' + roleKey + '_salary'
+          var hcKey = 'pr_' + roleKey + '_hc'
+          var localSalary = parameters[salaryKey] != null ? parameters[salaryKey] : role.salary
+          var localHc = parameters[hcKey] != null ? parameters[hcKey] : (role.headcount[0] || 0)
+          var fy1Cost = localSalary * localHc
+
           return (
             <div key={roleKey} className="bg-white rounded p-2 border border-orange-100">
               <div className="flex items-center justify-between mb-1.5">
@@ -256,12 +300,12 @@ function PayrollDetailPanel({
                     min={3_000_000}
                     max={15_000_000}
                     step={500_000}
-                    value={role.salary}
-                    onChange={function(e) { onChange('pr_' + roleKey + '_salary', parseFloat(e.target.value)) }}
+                    value={localSalary}
+                    onChange={function(e) { onChange(salaryKey, parseFloat(e.target.value)) }}
                     className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-orange-500"
                   />
                   <div className="text-[10px] font-mono text-gray-600 text-center mt-0.5">
-                    {(role.salary / 10_000).toFixed(0)}万円
+                    {(localSalary / 10_000).toFixed(0)}万円
                   </div>
                 </div>
                 <div>
@@ -271,12 +315,12 @@ function PayrollDetailPanel({
                     min={0}
                     max={50}
                     step={1}
-                    value={role.headcount[0] || 0}
-                    onChange={function(e) { onChange('pr_' + roleKey + '_hc', parseFloat(e.target.value)) }}
+                    value={localHc}
+                    onChange={function(e) { onChange(hcKey, parseFloat(e.target.value)) }}
                     className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-orange-500"
                   />
                   <div className="text-[10px] font-mono text-gray-600 text-center mt-0.5">
-                    {role.headcount[0] || 0}人 → {role.headcount[4] || 0}人(FY5)
+                    {localHc}人 → {role.headcount[4] || Math.round(localHc * 1.2 ** 4)}人(FY5)
                   </div>
                 </div>
               </div>
@@ -288,45 +332,120 @@ function PayrollDetailPanel({
   )
 }
 
-/** Marketing subcategory detail panel */
+/** Marketing subcategory detail panel with multi-angle categorization */
 function MarketingDetailPanel({
   categories,
   total,
+  parameters,
   onChange,
 }: {
   categories: Record<string, number[]>
   total: number[]
+  parameters: Record<string, number>
   onChange: (key: string, value: number) => void
 }) {
+  var [activeAngle, setActiveAngle] = useState(0)
   var catEntries = Object.entries(categories)
-  var hasCats = catEntries.length > 0
+  var mktgTotal = total[0] || 0
+
+  // Compute angle-based grouping
+  function getAngleData(angleIdx: number) {
+    var angle = MKTG_ANGLES[angleIdx]
+    if (!angle) return []
+    return angle.groups.map(function(group) {
+      var sum = 0
+      group.keys.forEach(function(k) {
+        var catVals = categories[k]
+        if (catVals) {
+          // Use local parameter if set, otherwise API value
+          var localVal = parameters['mk_' + k]
+          sum += (localVal != null ? localVal : (catVals[0] || 0))
+        }
+      })
+      return { label: group.label, value: sum, color: group.color, keys: group.keys }
+    })
+  }
 
   return (
     <div className="mt-2 bg-purple-50 rounded-lg p-3 border border-purple-100">
-      <div className="text-[11px] text-purple-700 font-medium mb-2">
-        マーケティング費内訳（FY1）
-        <span className="text-[10px] text-purple-500 ml-1">合計: {formatYen(total[0] || 0)}</span>
+      <div className="flex items-center justify-between mb-2">
+        <div className="text-[11px] text-purple-700 font-medium">
+          マーケティング費内訳（FY1）
+          <span className="text-[10px] text-purple-500 ml-1">合計: {formatYen(mktgTotal)}</span>
+        </div>
       </div>
-      {hasCats ? (
-        <div className="space-y-1.5">
-          {/* Composition bar */}
-          <div className="h-3 rounded-full overflow-hidden flex mb-2">
-            {catEntries.map(function([catKey, values]) {
-              var val = values[0] || 0
-              var catTotal = total[0] || 1
-              var pct = (val / catTotal) * 100
-              return (
-                <div
-                  key={catKey}
-                  className={(MKTG_COLORS[catKey] || 'bg-gray-300') + ' transition-all'}
-                  style={{ width: Math.max(pct, 1) + '%' }}
-                  title={(MKTG_LABELS[catKey] || catKey) + ': ' + formatYen(val)}
-                />
-              )
-            })}
-          </div>
+
+      {/* Multi-angle composition bars */}
+      <div className="space-y-2 mb-3">
+        {MKTG_ANGLES.map(function(angle, ai) {
+          var data = getAngleData(ai)
+          var angleTotal = data.reduce(function(s, d) { return s + d.value }, 0) || 1
+          return (
+            <div key={angle.key}>
+              <div className="text-[10px] text-gray-500 mb-0.5">{angle.label}</div>
+              <div className="h-5 rounded-full overflow-hidden flex bg-gray-200">
+                {data.map(function(d, di) {
+                  var pct = (d.value / angleTotal) * 100
+                  return (
+                    <div
+                      key={di}
+                      className={d.color + ' transition-all relative group flex items-center justify-center'}
+                      style={{ width: Math.max(pct, 2) + '%' }}
+                    >
+                      {pct > 15 && (
+                        <span className="text-[9px] text-white font-medium truncate px-1">
+                          {d.label}
+                        </span>
+                      )}
+                      <div className="absolute z-10 bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:block">
+                        <div className="bg-gray-900 text-white text-[10px] px-2 py-1 rounded whitespace-nowrap shadow-lg">
+                          {d.label}: {formatYen(d.value)} ({pct.toFixed(0)}%)
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+              <div className="flex flex-wrap gap-x-2 mt-0.5">
+                {data.map(function(d, di) {
+                  var pct = (d.value / angleTotal) * 100
+                  return (
+                    <div key={di} className="flex items-center gap-0.5">
+                      <div className={'w-1.5 h-1.5 rounded-full ' + d.color} />
+                      <span className="text-[9px] text-gray-500">{d.label} {pct.toFixed(0)}%</span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Per-category sliders (手段別の詳細) */}
+      <div className="border-t border-purple-200 pt-2">
+        <div className="text-[10px] text-purple-600 font-medium mb-1.5">カテゴリ別予算配分</div>
+        {/* Composition bar by category */}
+        <div className="h-3 rounded-full overflow-hidden flex mb-2">
           {catEntries.map(function([catKey, values]) {
-            var val = values[0] || 0
+            var localVal = parameters['mk_' + catKey]
+            var val = localVal != null ? localVal : (values[0] || 0)
+            var pct = mktgTotal > 0 ? (val / mktgTotal) * 100 : 12.5
+            return (
+              <div
+                key={catKey}
+                className={(MKTG_COLORS[catKey] || 'bg-gray-300') + ' transition-all'}
+                style={{ width: Math.max(pct, 1) + '%' }}
+                title={(MKTG_LABELS[catKey] || catKey) + ': ' + formatYen(val)}
+              />
+            )
+          })}
+        </div>
+        <div className="space-y-1.5">
+          {catEntries.map(function([catKey, values]) {
+            // Use local parameter value as source of truth
+            var localVal = parameters['mk_' + catKey]
+            var val = localVal != null ? localVal : (values[0] || 0)
             return (
               <div key={catKey}>
                 <div className="flex items-center justify-between mb-0.5">
@@ -349,9 +468,7 @@ function MarketingDetailPanel({
             )
           })}
         </div>
-      ) : (
-        <p className="text-[10px] text-gray-400">マーケティング費の詳細はカテゴリ単位でスライダーを設定すると表示されます</p>
-      )}
+      </div>
     </div>
   )
 }
@@ -556,6 +673,7 @@ export function DriverSliders({ parameters, onChange, onBatchChange, industry, s
                   {isPayroll && payrollExpanded && sgaDetail && (
                     <PayrollDetailPanel
                       roles={sgaDetail.payroll.roles}
+                      parameters={parameters}
                       onChange={onChange}
                     />
                   )}
@@ -565,6 +683,7 @@ export function DriverSliders({ parameters, onChange, onBatchChange, industry, s
                     <MarketingDetailPanel
                       categories={sgaDetail.marketing.categories}
                       total={sgaDetail.marketing.total}
+                      parameters={parameters}
                       onChange={onChange}
                     />
                   )}
