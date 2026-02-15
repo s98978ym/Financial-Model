@@ -337,7 +337,12 @@ async def phase3_map(body: dict):
 
 @router.post("/phase4/design", status_code=202)
 async def phase4_design(body: dict):
-    """Phase 4: Model Design — cell assignments (async job)."""
+    """Phase 4: Model Design — cell assignments (async job).
+
+    Validates Phase 3 prerequisite:
+    - If Phase 3 result does not exist → 409 error (must complete Phase 3 first)
+    - If Phase 3 result exists but sheet_mappings is empty → proceed in estimation mode
+    """
     project_id = body.get("project_id")
 
     if not project_id:
@@ -350,12 +355,42 @@ async def phase4_design(body: dict):
     if not run:
         run = db.create_run(project_id)
 
+    # --- Phase 3 prerequisite check ---
+    phase3_result = db.get_phase_result(run["id"], phase=3)
+    estimation_mode = False
+
+    if not phase3_result:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "PHASE3_NOT_COMPLETED",
+                "message": "Phase 3（テンプレートマッピング）が完了していません。先にPhase 3を実行してください。",
+            },
+        )
+
+    # Phase 3 exists — check if results are substantively empty
+    raw = phase3_result.get("raw_json", {})
+    mappings = raw.get("sheet_mappings", [])
+    if not mappings:
+        # If user explicitly requested estimation mode, proceed
+        if not body.get("allow_estimation"):
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "PHASE3_EMPTY_RESULT",
+                    "message": "Phase 3は完了しましたが、シートマッピングが空です。推定モードで続行しますか？",
+                    "allow_estimation": True,
+                },
+            )
+        estimation_mode = True
+
     job = create_job(phase=4, run_id=run["id"], payload={
         "project_id": project_id,
         "bm_result_ref": body.get("bm_result_ref", ""),
         "ts_result_ref": body.get("ts_result_ref", ""),
         "catalog_ref": body.get("catalog_ref", ""),
         "edits": body.get("edits", []),
+        "estimation_mode": estimation_mode,
     })
 
     _dispatch_celery("tasks.phase4.run_model_design", job["id"])
@@ -364,6 +399,7 @@ async def phase4_design(body: dict):
         "job_id": job["id"],
         "status": "queued",
         "phase": 4,
+        "estimation_mode": estimation_mode,
         "poll_url": f"/v1/jobs/{job['id']}",
     }
 

@@ -169,6 +169,7 @@ class ModelDesigner:
         template_structure_json: Dict[str, Any],
         catalog_items: List[Dict[str, Any]],
         feedback: str = "",
+        estimation_mode: bool = False,
     ) -> ModelDesignResult:
         """Map business concepts to template cells.
 
@@ -182,7 +183,14 @@ class ModelDesigner:
             Writable template cells.
         feedback : str
             Optional user feedback.
+        estimation_mode : bool
+            If True, Phase 3 was empty — use LLM to generate estimated mappings.
         """
+        # Estimation mode: Phase 3 succeeded but empty — use LLM for higher accuracy
+        if estimation_mode:
+            logger.info("ModelDesigner: estimation mode — using LLM to generate concept mappings")
+            return self._generate_llm_estimation(analysis_json, template_structure_json, feedback)
+
         # Fallback: generate estimated assignments when no input cells found
         if not catalog_items:
             logger.info("ModelDesigner: catalog_items is empty, generating estimated assignments")
@@ -286,6 +294,130 @@ class ModelDesigner:
             warnings=raw.get("warnings", []),
             raw_json=raw,
         )
+
+    # ------------------------------------------------------------------
+    # LLM-based estimation (when Phase 3 succeeded but was empty)
+    # ------------------------------------------------------------------
+
+    _ESTIMATION_SYSTEM_PROMPT = """\
+あなたは投資銀行のシニアFMスペシャリストです。
+テンプレート構造が取得できなかった場合でも、事業分析結果から
+PL（損益計算書）の概念マッピングを推定します。
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+【推定モードの原則】
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+テンプレートのセル情報がないため、標準的なPL構造を仮定して
+ビジネス概念を配置します。
+
+1. **シート構造の推定**
+   - セグメント毎に「収益モデル」シートを想定
+   - 共通の「費用リスト」「前提条件」シートを想定
+
+2. **セル位置の推定**
+   - C列を入力列、B列をラベル列と仮定
+   - 行番号は3から連番
+
+3. **PLカテゴリは必ず設定**
+   - 売上、変動費、固定費、人件費、販管費、前提条件 等
+
+4. **derivation は全て "estimated" に設定**
+
+5. **confidence は内容の確からしさに応じて 0.2〜0.6 の範囲で設定**
+   - 文書に明示的記載あり → 0.5-0.6
+   - 文書から推測 → 0.3-0.4
+   - 一般的なビジネスモデルから想定 → 0.2-0.3
+"""
+
+    _ESTIMATION_USER_PROMPT = """\
+テンプレート構造が取得できませんでした（Phase 3の結果が空）。
+以下の事業分析結果から、PLモデルの概念マッピングを推定してください。
+
+━━━ 事業分析結果 ━━━
+{business_analysis_json}
+
+━━━ テンプレート構造（参考、空の可能性あり） ━━━
+{template_structure_json}
+
+{feedback_section}\
+━━━ 出力形式（JSON） ━━━
+推定モードのため、全てのassignmentの derivation を "estimated" にしてください。
+
+{{
+  "cell_assignments": [
+    {{
+      "sheet": "推定シート名",
+      "cell": "C3",
+      "category": "PLの大分類",
+      "label": "項目名",
+      "assigned_concept": "概念名【推定】",
+      "segment": "セグメント名",
+      "period": "FY1-FY5",
+      "unit": "単位",
+      "derivation": "estimated",
+      "confidence": 0.4,
+      "reasoning": "推定理由"
+    }}
+  ],
+  "unmapped_cells": [],
+  "warnings": ["推定モードに関する注意事項"]
+}}
+"""
+
+    def _generate_llm_estimation(
+        self,
+        analysis_json: Dict[str, Any],
+        template_structure_json: Dict[str, Any],
+        feedback: str = "",
+    ) -> ModelDesignResult:
+        """Use LLM to generate estimated concept mappings when Phase 3 is empty.
+
+        This produces higher-quality estimates than the static fallback by
+        leveraging the LLM's understanding of the business model.
+        """
+        analysis_str = json.dumps(analysis_json, ensure_ascii=False, indent=2)
+        structure_str = json.dumps(template_structure_json, ensure_ascii=False, indent=2)
+
+        feedback_section = ""
+        if feedback:
+            feedback_section = (
+                f"━━━ ユーザーフィードバック ━━━\n"
+                f"{feedback}\n\n"
+            )
+
+        messages = [
+            {"role": "system", "content": self._ESTIMATION_SYSTEM_PROMPT},
+            {"role": "user", "content": self._ESTIMATION_USER_PROMPT.format(
+                business_analysis_json=analysis_str,
+                template_structure_json=structure_str,
+                feedback_section=feedback_section,
+            )},
+        ]
+
+        logger.info("ModelDesigner: sending estimation request to LLM")
+        try:
+            raw = self.llm.extract(messages)
+        except Exception:
+            logger.exception("ModelDesigner: LLM estimation failed, falling back to static")
+            return self._generate_fallback_assignments(analysis_json, template_structure_json)
+
+        # Ensure all assignments have derivation="estimated"
+        for ca in raw.get("cell_assignments", []):
+            ca["derivation"] = "estimated"
+
+        # Add standard estimation warnings
+        warnings = raw.get("warnings", [])
+        warnings.insert(0, "【推定モード】Phase 3のテンプレート構造が空のため、LLMによる推定マッピングを生成しました。")
+        warnings.insert(1, "セル位置は仮配置です。テンプレートExcelの実際のセル位置を確認してください。")
+        raw["warnings"] = warnings
+
+        logger.info(
+            "ModelDesigner: LLM estimation generated %d assignments",
+            len(raw.get("cell_assignments", [])),
+        )
+
+        return self._parse_result(raw)
 
     def _generate_fallback_assignments(
         self,

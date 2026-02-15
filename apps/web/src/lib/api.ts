@@ -77,7 +77,12 @@ async function fetchAPI(path: string, options: RequestInit = {}): Promise<any> {
 
   if (!res.ok) {
     const error = await res.json().catch(() => ({ error: { message: res.statusText } }))
-    throw new Error(error.error?.message || error.detail?.message || `API Error: ${res.status}`)
+    var msg = error.error?.message || error.detail?.message || `API Error: ${res.status}`
+    var apiError = new Error(msg) as any
+    apiError.code = error.detail?.code || error.error?.code || null
+    apiError.detail = error.detail || null
+    apiError.status = res.status
+    throw apiError
   }
 
   return res.json()
