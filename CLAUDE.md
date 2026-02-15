@@ -107,3 +107,15 @@ make ci                      # Full CI: lint + test + build-check
 | Frontend | `apps/web/` | `shared/schemas/`, `services/api/app/routers/` |
 | Infra | `infra/`, `Dockerfile*`, `render.yaml`, `*.json` (root) | All source code |
 | Test | `tests/`, `services/api/tests/` | All source code |
+
+## 基本方針
+
+- 必ず日本語で応対してください
+- 調査やデバッグにはサブエージェントを活用してコンテキストを節約してください
+- 重要な決定事項は定期的にマークダウンファイルに記録してください
+
+## コード規約
+
+- TypeScriptを使用
+- テストはVitestで書く
+- コミットメッセージは日本語で簡潔に
