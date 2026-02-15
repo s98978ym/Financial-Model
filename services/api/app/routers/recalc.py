@@ -182,68 +182,144 @@ def _compute_depreciation_from_capex(
 # SGA category breakdown
 # ---------------------------------------------------------------------------
 
+def _compute_headcount_cost(
+    avg_salary: float,
+    headcount_per_year: List[float],
+) -> List[int]:
+    """Compute annual cost for a role: avg_salary × headcount."""
+    return [round(avg_salary * hc) for hc in headcount_per_year]
+
+
+# Default personnel roles with (avg_salary, default_headcount_fy1-5)
+_DEFAULT_ROLES = {
+    "planning":  {"label": "事業企画",         "salary": 7_000_000, "hc": [1, 1, 2, 2, 3]},
+    "sales":     {"label": "営業",             "salary": 6_000_000, "hc": [1, 2, 3, 5, 7]},
+    "marketing": {"label": "マーケティング",   "salary": 6_500_000, "hc": [1, 1, 2, 2, 3]},
+    "support":   {"label": "カスタマーサポート", "salary": 4_500_000, "hc": [0, 1, 2, 3, 4]},
+    "corporate": {"label": "コーポレート",     "salary": 7_500_000, "hc": [1, 1, 2, 2, 3]},
+    "other_hr":  {"label": "その他",           "salary": 5_500_000, "hc": [0, 0, 1, 1, 2]},
+}
+
+# Default marketing subcategories
+_DEFAULT_MKTG_SUBCATS = [
+    "digital_ad", "offline_ad", "pr", "events", "branding", "crm", "content", "other_mktg",
+]
+
+_MKTG_LABELS = {
+    "digital_ad": "デジタル広告（獲得）",
+    "offline_ad": "オフライン広告",
+    "pr": "PR・広報",
+    "events": "イベント・展示会",
+    "branding": "ブランディング",
+    "crm": "CRM・リテンション",
+    "content": "コンテンツ制作",
+    "other_mktg": "その他マーケ費",
+}
+
+
 def _compute_sga_breakdown(
     parameters: Dict[str, Any],
     opex_total_per_year: List[float],
-) -> Dict[str, List[int]]:
-    """Break down OPEX into SGA categories.
+) -> Dict[str, Any]:
+    """Compute detailed SGA breakdown.
 
-    If individual categories (payroll, marketing, etc.) are provided,
-    use them directly. Otherwise, derive from opex_total using default ratios.
+    Returns a nested structure:
+    {
+      "payroll": {
+        "roles": { "planning": { "salary": N, "headcount": [...], "cost": [...] }, ... },
+        "total": [...]
+      },
+      "marketing": {
+        "categories": { "digital_ad": [...], "pr": [...], ... },
+        "total": [...]
+      },
+      "office": [...],
+      "rd": [...],
+      "other": [...],
+    }
     """
     opex_growth = float(parameters.get("opex_growth", 0.1))
 
-    # Check if individual SGA categories are provided
-    payroll_fy1 = parameters.get("payroll")
-    marketing_fy1 = parameters.get("sga_marketing")
-    office_fy1 = parameters.get("sga_office")
-    system_fy1 = parameters.get("sga_system")
-    other_fy1 = parameters.get("sga_other")
+    # ─── Payroll: role × (salary × headcount) ───
+    payroll_roles: Dict[str, Any] = {}
+    payroll_total = [0] * 5
 
-    has_categories = any(v is not None for v in [payroll_fy1, marketing_fy1, office_fy1, system_fy1, other_fy1])
+    for role_key, defaults in _DEFAULT_ROLES.items():
+        salary = float(parameters.get(f"pr_{role_key}_salary", defaults["salary"]))
+        hc_key = f"pr_{role_key}_hc"
+        # headcount can be provided as a list [fy1..fy5] or scalar
+        hc_raw = parameters.get(hc_key, defaults["hc"])
+        if isinstance(hc_raw, list):
+            hc = [float(h) for h in hc_raw[:5]]
+            while len(hc) < 5:
+                hc.append(hc[-1] if hc else 0)
+        else:
+            hc_fy1 = float(hc_raw)
+            hc_growth = float(parameters.get(f"pr_{role_key}_hc_growth", 0.2))
+            hc = [round(hc_fy1 * ((1 + hc_growth) ** y)) for y in range(5)]
 
-    if has_categories:
-        # Use provided values with growth rate
-        base_total = opex_total_per_year[0]
-
-        # Default ratios for missing categories
-        ratios = {"payroll": 0.45, "sga_marketing": 0.20, "sga_office": 0.15, "sga_system": 0.10, "sga_other": 0.10}
-        cat_values = {
-            "payroll": float(payroll_fy1) if payroll_fy1 is not None else base_total * ratios["payroll"],
-            "marketing": float(marketing_fy1) if marketing_fy1 is not None else base_total * ratios["sga_marketing"],
-            "office": float(office_fy1) if office_fy1 is not None else base_total * ratios["sga_office"],
-            "system": float(system_fy1) if system_fy1 is not None else base_total * ratios["sga_system"],
-            "other": float(other_fy1) if other_fy1 is not None else base_total * ratios["sga_other"],
+        cost = _compute_headcount_cost(salary, hc)
+        payroll_roles[role_key] = {
+            "label": defaults["label"],
+            "salary": round(salary),
+            "headcount": [round(h) for h in hc],
+            "cost": cost,
         }
+        for y in range(5):
+            payroll_total[y] += cost[y]
 
-        # Apply per-category growth rates (use category-specific or general opex_growth)
-        payroll_growth = float(parameters.get("payroll_growth", opex_growth))
-        marketing_growth = float(parameters.get("marketing_growth", opex_growth))
-        office_growth = float(parameters.get("office_growth", opex_growth * 0.5))  # office grows slower
-        system_growth = float(parameters.get("system_growth", opex_growth))
-        other_growth = float(parameters.get("other_growth", opex_growth * 0.5))
+    # ─── Marketing: category breakdown ───
+    mktg_categories: Dict[str, List[int]] = {}
+    mktg_total = [0] * 5
 
-        result: Dict[str, List[int]] = {
-            "payroll": [], "marketing": [], "office": [], "system": [], "other": [],
-        }
-        for year in range(5):
-            result["payroll"].append(round(cat_values["payroll"] * ((1 + payroll_growth) ** year)))
-            result["marketing"].append(round(cat_values["marketing"] * ((1 + marketing_growth) ** year)))
-            result["office"].append(round(cat_values["office"] * ((1 + office_growth) ** year)))
-            result["system"].append(round(cat_values["system"] * ((1 + system_growth) ** year)))
-            result["other"].append(round(cat_values["other"] * ((1 + other_growth) ** year)))
+    # Check for detailed marketing subcategory inputs
+    has_mktg_detail = any(
+        parameters.get(f"mk_{sub}") is not None for sub in _DEFAULT_MKTG_SUBCATS
+    )
 
-        return result
+    if has_mktg_detail:
+        for sub in _DEFAULT_MKTG_SUBCATS:
+            val = float(parameters.get(f"mk_{sub}", 0))
+            growth = float(parameters.get(f"mk_{sub}_growth", opex_growth))
+            yearly = [round(val * ((1 + growth) ** y)) for y in range(5)]
+            mktg_categories[sub] = yearly
+            for y in range(5):
+                mktg_total[y] += yearly[y]
     else:
-        # Derive from total OPEX using standard ratios
-        result = {"payroll": [], "marketing": [], "office": [], "system": [], "other": []}
-        for year_total in opex_total_per_year:
-            result["payroll"].append(round(year_total * 0.45))
-            result["marketing"].append(round(year_total * 0.20))
-            result["office"].append(round(year_total * 0.15))
-            result["system"].append(round(year_total * 0.10))
-            result["other"].append(round(year_total * 0.10))
-        return result
+        # Derive from total marketing budget
+        mktg_fy1 = float(parameters.get("sga_marketing", opex_total_per_year[0] * 0.20))
+        mktg_growth = float(parameters.get("marketing_growth", opex_growth))
+        for y in range(5):
+            mktg_total[y] = round(mktg_fy1 * ((1 + mktg_growth) ** y))
+
+    # ─── Office costs ───
+    office_fy1 = float(parameters.get("sga_office", opex_total_per_year[0] * 0.10))
+    office_growth = float(parameters.get("office_growth", opex_growth * 0.5))
+    office_total = [round(office_fy1 * ((1 + office_growth) ** y)) for y in range(5)]
+
+    # ─── R&D / System costs ───
+    system_fy1 = float(parameters.get("sga_system", opex_total_per_year[0] * 0.15))
+    system_growth = float(parameters.get("system_growth", opex_growth))
+    system_total = [round(system_fy1 * ((1 + system_growth) ** y)) for y in range(5)]
+
+    # ─── Other ───
+    other_fy1 = float(parameters.get("sga_other", opex_total_per_year[0] * 0.05))
+    other_growth = float(parameters.get("other_growth", opex_growth * 0.5))
+    other_total = [round(other_fy1 * ((1 + other_growth) ** y)) for y in range(5)]
+
+    return {
+        "payroll": {
+            "roles": payroll_roles,
+            "total": payroll_total,
+        },
+        "marketing": {
+            "categories": mktg_categories,
+            "total": mktg_total,
+        },
+        "office": office_total,
+        "system": system_total,
+        "other": other_total,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -363,7 +439,16 @@ def _compute_pl(parameters: Dict[str, Any]) -> Dict[str, Any]:
         ox = opex_base * ((1 + opex_growth) ** year)
         opex.append(round(ox))
 
-    sga_breakdown = _compute_sga_breakdown(parameters, opex)
+    sga_detail = _compute_sga_breakdown(parameters, opex)
+
+    # Extract flat totals per category for charts / backward compat
+    sga_breakdown = {
+        "payroll": sga_detail["payroll"]["total"],
+        "marketing": sga_detail["marketing"]["total"],
+        "office": sga_detail["office"],
+        "system": sga_detail["system"],
+        "other": sga_detail["other"],
+    }
 
     # If categories were provided, recompute opex from category sum
     has_categories = any(
@@ -455,8 +540,10 @@ def _compute_pl(parameters: Dict[str, Any]) -> Dict[str, Any]:
                 }
                 for seg in segments
             ],
-            # New: SGA category breakdown
+            # SGA category totals (flat, for charts)
             "sga_breakdown": sga_breakdown,
+            # SGA detail with role-level payroll & marketing subcategories
+            "sga_detail": sga_detail,
         },
         "kpis": {
             "break_even_year": break_even,

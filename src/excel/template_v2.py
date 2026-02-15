@@ -127,24 +127,71 @@ PL_ROWS = {
     "funding_need": 34,
 }
 
-# SGA detail sheet row positions
+# SGA detail sheet row positions (expanded with parameter-driven logic)
 SGA_ROWS = {
     "header_fy": 3,
-    "payroll":   4,
-    "marketing": 5,
-    "office":    6,
-    "other":     7,
-    "total":     8,
+    # --- 人件費セクション (Payroll by role: avg_salary × headcount) ---
+    "payroll_header":  5,
+    "pr_planning":     6,   # 事業企画
+    "pr_sales":        7,   # 営業
+    "pr_marketing":    8,   # マーケティング
+    "pr_support":      9,   # カスタマーサポート
+    "pr_corporate":   10,   # コーポレート（管理部門）
+    "pr_other":       11,   # その他
+    "payroll_total":  12,
+    # --- マーケティング費セクション (Marketing by category) ---
+    "mktg_header":    14,
+    "mk_digital_ad":  15,   # デジタル広告（獲得）
+    "mk_offline_ad":  16,   # オフライン広告
+    "mk_pr":          17,   # PR・広報
+    "mk_events":      18,   # イベント・展示会
+    "mk_branding":    19,   # ブランディング
+    "mk_crm":         20,   # CRM・リテンション
+    "mk_content":     21,   # コンテンツ制作
+    "mk_other":       22,   # その他マーケ費
+    "mktg_total":     23,
+    # --- オフィス・管理費セクション ---
+    "office_header":  25,
+    "of_rent":        26,   # オフィス賃料
+    "of_utilities":   27,   # 光熱費・通信費
+    "of_insurance":   28,   # 保険・福利厚生
+    "of_professional":29,   # 士業・専門家費用
+    "of_other":       30,   # その他管理費
+    "office_total":   31,
+    # --- その他販管費 ---
+    "other_header":   33,
+    "ot_travel":      34,   # 旅費交通費
+    "ot_supplies":    35,   # 消耗品・備品
+    "ot_misc":        36,   # 雑費
+    "other_total":    37,
+    # --- 販管費合計 ---
+    "total":          39,
 }
 
-# R&D detail sheet row positions
+# R&D detail sheet row positions (expanded with parameter-driven logic)
 RD_ROWS = {
     "header_fy":   3,
-    "internal":    4,
-    "outsource":   5,
-    "cloud_infra": 6,
-    "other":       7,
-    "total":       8,
+    # --- 社内開発セクション ---
+    "int_header":     5,
+    "int_engineers":  6,    # エンジニア人件費 (avg_salary × headcount)
+    "int_designers":  7,    # デザイナー人件費
+    "int_pm":         8,    # PM・ディレクター人件費
+    "int_total":      9,
+    # --- 外注開発セクション ---
+    "ext_header":    11,
+    "ext_dev":       12,    # 開発外注費
+    "ext_design":    13,    # デザイン外注費
+    "ext_other":     14,    # その他外注
+    "ext_total":     15,
+    # --- インフラ・ツールセクション ---
+    "infra_header":  17,
+    "inf_cloud":     18,    # クラウドインフラ（AWS/GCP等）
+    "inf_saas":      19,    # SaaSツール利用料
+    "inf_license":   20,    # ライセンス費用
+    "inf_other":     21,    # その他インフラ
+    "infra_total":   22,
+    # --- 開発費合計 ---
+    "total":         24,
 }
 
 # Simulation sheet row positions
@@ -977,14 +1024,14 @@ def _sr_opex_row(ws, row: int, label: str, R: dict, sga_rd_mode: str = "inline")
             )
 
         if sga_rd_mode == "separate":
-            # Reference detail sheets
+            # Reference detail sheet section totals
             sga_sheet = "販管費明細"
             rd_sheet = "開発費明細"
-            payroll = f"'{sga_sheet}'!{cl}{SGA_ROWS['payroll']}*{_mult(4)}"
-            marketing = f"'{sga_sheet}'!{cl}{SGA_ROWS['marketing']}*{_mult(5)}"
+            payroll = f"'{sga_sheet}'!{cl}{SGA_ROWS['payroll_total']}*{_mult(4)}"
+            marketing = f"'{sga_sheet}'!{cl}{SGA_ROWS['mktg_total']}*{_mult(5)}"
             rest_sga = (
-                f"('{sga_sheet}'!{cl}{SGA_ROWS['office']}"
-                f"+'{sga_sheet}'!{cl}{SGA_ROWS['other']})*{_mult(6)}"
+                f"('{sga_sheet}'!{cl}{SGA_ROWS['office_total']}"
+                f"+'{sga_sheet}'!{cl}{SGA_ROWS['other_total']})*{_mult(6)}"
             )
             rd = f"'{rd_sheet}'!{cl}{RD_ROWS['total']}*{_mult(6)}"
             formulas.append(f"={payroll}+{marketing}+{rest_sga}+{rd}")
@@ -1179,38 +1226,196 @@ def build_sensitivity_sheet(
         ws.cell(row=row, column=6, value=mitigation).font = LABEL_FONT
 
 
+def _write_param_role_row(
+    ws, row: int, label: str, fy_labels: List[str],
+    default_salary: int = 6_000_000, default_hc: List[int] = None,
+) -> None:
+    """Write a personnel role row: avg_salary (col H) × headcount (B-F) = cost (B-F).
+
+    Layout per role:
+      A: label, B-F: =H{row} * I{row+offset} formula (cost per FY),
+      H: avg annual salary (INPUT), I-M: headcount per FY (INPUT)
+    The B-F columns are formulas: =salary * headcount
+    """
+    hc = default_hc or [1, 1, 2, 2, 3]
+    _write_label(ws, row, label, indent=1)
+
+    # H = average salary (INPUT)
+    cell_sal = ws.cell(row=row, column=8, value=default_salary)
+    cell_sal.fill = YELLOW_FILL
+    cell_sal.font = NUMBER_FONT
+    cell_sal.number_format = NUMBER_FMT
+
+    for i in range(5):
+        fy_col = FY_COLS[i]       # B-F (cost output)
+        hc_col = 9 + i            # I-M (headcount input)
+
+        # Headcount input
+        cell_hc = ws.cell(row=row, column=hc_col, value=hc[i])
+        cell_hc.fill = YELLOW_FILL
+        cell_hc.font = NUMBER_FONT
+        cell_hc.number_format = '#,##0'
+
+        # Cost formula: salary × headcount
+        sal_ref = f"$H${row}"
+        hc_ref = f"{_col(hc_col)}{row}"
+        c = ws.cell(row=row, column=fy_col, value=f"={sal_ref}*{hc_ref}")
+        c.font = FORMULA_FONT
+        c.number_format = NUMBER_FMT
+        c.alignment = Alignment(horizontal="right")
+
+
+def _write_param_rate_row(
+    ws, row: int, label: str,
+    base_ref: str, default_rate: float = 0.0,
+) -> None:
+    """Write a cost row driven by a rate: base_value × rate.
+
+    H: rate (INPUT, %), B-F: =base_ref * H{row}
+    """
+    _write_label(ws, row, label, indent=1)
+
+    # H = rate (INPUT)
+    cell_rate = ws.cell(row=row, column=8, value=default_rate)
+    cell_rate.fill = YELLOW_FILL
+    cell_rate.font = NUMBER_FONT
+    cell_rate.number_format = PERCENT_FMT
+
+    for i in range(5):
+        fy_col = FY_COLS[i]
+        rate_ref = f"$H${row}"
+        c = ws.cell(row=row, column=fy_col, value=f"={base_ref.format(col=_col(fy_col))}*{rate_ref}")
+        c.font = FORMULA_FONT
+        c.number_format = NUMBER_FMT
+        c.alignment = Alignment(horizontal="right")
+
+
 def build_sga_detail_sheet(
     wb: Workbook,
     fy_labels: Optional[List[str]] = None,
 ) -> None:
-    """Build 販管費明細 (SGA detail) sheet.
+    """Build 販管費明細 (SGA detail) sheet — parameter-driven.
 
-    Breaks down SGA into: 人件費, マーケティング費, オフィス・一般管理費, その他.
-    Total row is referenced by PL設計 sheet.
+    Structure:
+      人件費: 6 roles × (平均年収 × 人数) per FY
+      マーケ費: 8 categories × direct input per FY (with budget allocation note)
+      オフィス管理費: 5 categories × direct input
+      その他: 3 categories
+      販管費合計: sum of all section totals
     """
     fy = fy_labels or DEFAULT_FY_LABELS
     ws = wb.create_sheet("販管費明細")
-    _set_col_widths(ws, {1: 26, 2: 16, 3: 16, 4: 16, 5: 16, 6: 16})
+    _set_col_widths(ws, {
+        1: 28, 2: 16, 3: 16, 4: 16, 5: 16, 6: 16,
+        7: 2,   # spacer
+        8: 16,  # param: salary / rate
+        9: 10, 10: 10, 11: 10, 12: 10, 13: 10,  # headcount FY1-5
+    })
 
     # Title
-    _write_title(ws, 1, "販管費明細（SGA）")
+    _write_title(ws, 1, "販管費明細（SGA）", merge_end_col=13)
     _separator_row(ws, 2)
 
     # FY headers
     _write_fy_headers(ws, SGA_ROWS["header_fy"], fy, label="費目")
+    # Parameter headers (H=パラメータ, I-M=FY headcount)
+    ws.cell(row=SGA_ROWS["header_fy"], column=8, value="パラメータ").font = SUBHEADER_FONT
+    for i, f in enumerate(fy):
+        c = ws.cell(row=SGA_ROWS["header_fy"], column=9 + i, value=f"人数{f}")
+        c.font = Font(name="Meiryo", size=9, bold=True, color="FF4472C4")
+        c.alignment = Alignment(horizontal="center")
 
-    # Input rows
-    _write_input_row(ws, SGA_ROWS["payroll"], "人件費", [0] * 5, indent=1)
-    _write_input_row(ws, SGA_ROWS["marketing"], "マーケティング費", [0] * 5, indent=1)
-    _write_input_row(ws, SGA_ROWS["office"], "オフィス・一般管理費", [0] * 5, indent=1)
-    _write_input_row(ws, SGA_ROWS["other"], "その他販管費", [0] * 5, indent=1)
+    # ═══════ 人件費セクション ═══════
+    _write_section_header(ws, SGA_ROWS["payroll_header"], "【人件費】平均年収 × 人数")
+    ws.cell(row=SGA_ROWS["payroll_header"], column=8, value="平均年収").font = Font(name="Meiryo", size=9, color="FF4472C4")
 
-    # Total
-    total_f = [
-        f"=SUM({_col(c)}{SGA_ROWS['payroll']}:{_col(c)}{SGA_ROWS['other']})"
+    roles = [
+        ("pr_planning",  "事業企画",     7_000_000, [1, 1, 2, 2, 3]),
+        ("pr_sales",     "営業",         6_000_000, [1, 2, 3, 5, 7]),
+        ("pr_marketing", "マーケティング", 6_500_000, [1, 1, 2, 2, 3]),
+        ("pr_support",   "カスタマーサポート", 4_500_000, [0, 1, 2, 3, 4]),
+        ("pr_corporate", "コーポレート（管理）", 7_500_000, [1, 1, 2, 2, 3]),
+        ("pr_other",     "その他",       5_500_000, [0, 0, 1, 1, 2]),
+    ]
+    for key, lbl, sal, hc in roles:
+        _write_param_role_row(ws, SGA_ROWS[key], lbl, fy, default_salary=sal, default_hc=hc)
+
+    # Payroll total
+    first_r = SGA_ROWS["pr_planning"]
+    last_r = SGA_ROWS["pr_other"]
+    total_f = [f"=SUM({_col(c)}{first_r}:{_col(c)}{last_r})" for c in FY_COLS]
+    _write_formula_row(ws, SGA_ROWS["payroll_total"], "人件費 小計", total_f, bold=True)
+    _apply_border_row(ws, SGA_ROWS["payroll_total"], THIN_BORDER)
+
+    # ═══════ マーケティング費セクション ═══════
+    _write_section_header(ws, SGA_ROWS["mktg_header"], "【マーケティング費】カテゴリ別予算")
+    ws.cell(row=SGA_ROWS["mktg_header"], column=8, value="備考").font = Font(name="Meiryo", size=9, color="FF4472C4")
+
+    mktg_items = [
+        ("mk_digital_ad", "デジタル広告（獲得）"),
+        ("mk_offline_ad", "オフライン広告"),
+        ("mk_pr",         "PR・広報"),
+        ("mk_events",     "イベント・展示会"),
+        ("mk_branding",   "ブランディング"),
+        ("mk_crm",        "CRM・リテンション"),
+        ("mk_content",    "コンテンツ制作"),
+        ("mk_other",      "その他マーケ費"),
+    ]
+    for key, lbl in mktg_items:
+        _write_input_row(ws, SGA_ROWS[key], lbl, [0] * 5, indent=1)
+
+    first_m = SGA_ROWS["mk_digital_ad"]
+    last_m = SGA_ROWS["mk_other"]
+    mktg_f = [f"=SUM({_col(c)}{first_m}:{_col(c)}{last_m})" for c in FY_COLS]
+    _write_formula_row(ws, SGA_ROWS["mktg_total"], "マーケティング費 小計", mktg_f, bold=True)
+    _apply_border_row(ws, SGA_ROWS["mktg_total"], THIN_BORDER)
+
+    # ═══════ オフィス・管理費セクション ═══════
+    _write_section_header(ws, SGA_ROWS["office_header"], "【オフィス・一般管理費】")
+
+    office_items = [
+        ("of_rent",        "オフィス賃料"),
+        ("of_utilities",   "光熱費・通信費"),
+        ("of_insurance",   "保険・福利厚生"),
+        ("of_professional","士業・専門家費用"),
+        ("of_other",       "その他管理費"),
+    ]
+    for key, lbl in office_items:
+        _write_input_row(ws, SGA_ROWS[key], lbl, [0] * 5, indent=1)
+
+    first_o = SGA_ROWS["of_rent"]
+    last_o = SGA_ROWS["of_other"]
+    office_f = [f"=SUM({_col(c)}{first_o}:{_col(c)}{last_o})" for c in FY_COLS]
+    _write_formula_row(ws, SGA_ROWS["office_total"], "オフィス管理費 小計", office_f, bold=True)
+    _apply_border_row(ws, SGA_ROWS["office_total"], THIN_BORDER)
+
+    # ═══════ その他販管費セクション ═══════
+    _write_section_header(ws, SGA_ROWS["other_header"], "【その他販管費】")
+
+    other_items = [
+        ("ot_travel",   "旅費交通費"),
+        ("ot_supplies", "消耗品・備品"),
+        ("ot_misc",     "雑費"),
+    ]
+    for key, lbl in other_items:
+        _write_input_row(ws, SGA_ROWS[key], lbl, [0] * 5, indent=1)
+
+    first_ot = SGA_ROWS["ot_travel"]
+    last_ot = SGA_ROWS["ot_misc"]
+    other_f = [f"=SUM({_col(c)}{first_ot}:{_col(c)}{last_ot})" for c in FY_COLS]
+    _write_formula_row(ws, SGA_ROWS["other_total"], "その他販管費 小計", other_f, bold=True)
+    _apply_border_row(ws, SGA_ROWS["other_total"], THIN_BORDER)
+
+    # ═══════ 販管費合計 ═══════
+    _separator_row(ws, SGA_ROWS["total"] - 1)
+    grand_total_f = [
+        f"={_col(c)}{SGA_ROWS['payroll_total']}"
+        f"+{_col(c)}{SGA_ROWS['mktg_total']}"
+        f"+{_col(c)}{SGA_ROWS['office_total']}"
+        f"+{_col(c)}{SGA_ROWS['other_total']}"
         for c in FY_COLS
     ]
-    _write_formula_row(ws, SGA_ROWS["total"], "販管費合計", total_f, bold=True)
+    _write_formula_row(ws, SGA_ROWS["total"], "販管費合計", grand_total_f, bold=True)
     _apply_border_row(ws, SGA_ROWS["total"], BOTTOM_DOUBLE)
 
 
@@ -1218,34 +1423,97 @@ def build_rd_detail_sheet(
     wb: Workbook,
     fy_labels: Optional[List[str]] = None,
 ) -> None:
-    """Build 開発費明細 (R&D detail) sheet.
+    """Build 開発費明細 (R&D detail) sheet — parameter-driven.
 
-    Breaks down R&D into: 社内開発, 外注開発, クラウド/インフラ, その他.
-    Total row is referenced by PL設計 sheet.
+    Structure:
+      社内開発: 3 roles × (平均年収 × 人数)
+      外注開発: 3 categories × direct input
+      インフラ・ツール: 4 categories × direct input
+      開発費合計: sum of all sections
     """
     fy = fy_labels or DEFAULT_FY_LABELS
     ws = wb.create_sheet("開発費明細")
-    _set_col_widths(ws, {1: 26, 2: 16, 3: 16, 4: 16, 5: 16, 6: 16})
+    _set_col_widths(ws, {
+        1: 28, 2: 16, 3: 16, 4: 16, 5: 16, 6: 16,
+        7: 2,   # spacer
+        8: 16,  # param: salary
+        9: 10, 10: 10, 11: 10, 12: 10, 13: 10,  # headcount FY1-5
+    })
 
     # Title
-    _write_title(ws, 1, "開発費明細（R&D）")
+    _write_title(ws, 1, "開発費明細（R&D）", merge_end_col=13)
     _separator_row(ws, 2)
 
     # FY headers
     _write_fy_headers(ws, RD_ROWS["header_fy"], fy, label="費目")
+    ws.cell(row=RD_ROWS["header_fy"], column=8, value="パラメータ").font = SUBHEADER_FONT
+    for i, f in enumerate(fy):
+        c = ws.cell(row=RD_ROWS["header_fy"], column=9 + i, value=f"人数{f}")
+        c.font = Font(name="Meiryo", size=9, bold=True, color="FF4472C4")
+        c.alignment = Alignment(horizontal="center")
 
-    # Input rows
-    _write_input_row(ws, RD_ROWS["internal"], "社内開発人件費", [0] * 5, indent=1)
-    _write_input_row(ws, RD_ROWS["outsource"], "外注開発費", [0] * 5, indent=1)
-    _write_input_row(ws, RD_ROWS["cloud_infra"], "クラウド・インフラ費", [0] * 5, indent=1)
-    _write_input_row(ws, RD_ROWS["other"], "その他開発費", [0] * 5, indent=1)
+    # ═══════ 社内開発セクション ═══════
+    _write_section_header(ws, RD_ROWS["int_header"], "【社内開発人件費】平均年収 × 人数")
+    ws.cell(row=RD_ROWS["int_header"], column=8, value="平均年収").font = Font(name="Meiryo", size=9, color="FF4472C4")
 
-    # Total
-    total_f = [
-        f"=SUM({_col(c)}{RD_ROWS['internal']}:{_col(c)}{RD_ROWS['other']})"
+    int_roles = [
+        ("int_engineers", "エンジニア",       8_000_000, [2, 3, 5, 7, 10]),
+        ("int_designers", "デザイナー",       6_500_000, [0, 1, 1, 2, 2]),
+        ("int_pm",        "PM・ディレクター", 9_000_000, [1, 1, 1, 2, 2]),
+    ]
+    for key, lbl, sal, hc in int_roles:
+        _write_param_role_row(ws, RD_ROWS[key], lbl, fy, default_salary=sal, default_hc=hc)
+
+    first_int = RD_ROWS["int_engineers"]
+    last_int = RD_ROWS["int_pm"]
+    int_f = [f"=SUM({_col(c)}{first_int}:{_col(c)}{last_int})" for c in FY_COLS]
+    _write_formula_row(ws, RD_ROWS["int_total"], "社内開発 小計", int_f, bold=True)
+    _apply_border_row(ws, RD_ROWS["int_total"], THIN_BORDER)
+
+    # ═══════ 外注開発セクション ═══════
+    _write_section_header(ws, RD_ROWS["ext_header"], "【外注開発費】")
+
+    ext_items = [
+        ("ext_dev",    "開発外注費"),
+        ("ext_design", "デザイン外注費"),
+        ("ext_other",  "その他外注"),
+    ]
+    for key, lbl in ext_items:
+        _write_input_row(ws, RD_ROWS[key], lbl, [0] * 5, indent=1)
+
+    first_ext = RD_ROWS["ext_dev"]
+    last_ext = RD_ROWS["ext_other"]
+    ext_f = [f"=SUM({_col(c)}{first_ext}:{_col(c)}{last_ext})" for c in FY_COLS]
+    _write_formula_row(ws, RD_ROWS["ext_total"], "外注開発 小計", ext_f, bold=True)
+    _apply_border_row(ws, RD_ROWS["ext_total"], THIN_BORDER)
+
+    # ═══════ インフラ・ツールセクション ═══════
+    _write_section_header(ws, RD_ROWS["infra_header"], "【インフラ・ツール費】")
+
+    infra_items = [
+        ("inf_cloud",   "クラウドインフラ（AWS/GCP等）"),
+        ("inf_saas",    "SaaSツール利用料"),
+        ("inf_license", "ライセンス費用"),
+        ("inf_other",   "その他インフラ"),
+    ]
+    for key, lbl in infra_items:
+        _write_input_row(ws, RD_ROWS[key], lbl, [0] * 5, indent=1)
+
+    first_inf = RD_ROWS["inf_cloud"]
+    last_inf = RD_ROWS["inf_other"]
+    inf_f = [f"=SUM({_col(c)}{first_inf}:{_col(c)}{last_inf})" for c in FY_COLS]
+    _write_formula_row(ws, RD_ROWS["infra_total"], "インフラ 小計", inf_f, bold=True)
+    _apply_border_row(ws, RD_ROWS["infra_total"], THIN_BORDER)
+
+    # ═══════ 開発費合計 ═══════
+    _separator_row(ws, RD_ROWS["total"] - 1)
+    grand_f = [
+        f"={_col(c)}{RD_ROWS['int_total']}"
+        f"+{_col(c)}{RD_ROWS['ext_total']}"
+        f"+{_col(c)}{RD_ROWS['infra_total']}"
         for c in FY_COLS
     ]
-    _write_formula_row(ws, RD_ROWS["total"], "開発費合計", total_f, bold=True)
+    _write_formula_row(ws, RD_ROWS["total"], "開発費合計", grand_f, bold=True)
     _apply_border_row(ws, RD_ROWS["total"], BOTTOM_DOUBLE)
 
 

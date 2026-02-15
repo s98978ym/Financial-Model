@@ -4,11 +4,33 @@ import { useState } from 'react'
 import type { IndustryKey, DriverBenchmark } from '@/data/industryBenchmarks'
 import { INDUSTRY_BENCHMARKS } from '@/data/industryBenchmarks'
 
+interface PayrollRoleDetail {
+  label: string
+  salary: number
+  headcount: number[]
+  cost: number[]
+}
+
+interface SGADetail {
+  payroll: {
+    roles: Record<string, PayrollRoleDetail>
+    total: number[]
+  }
+  marketing: {
+    categories: Record<string, number[]>
+    total: number[]
+  }
+  office: number[]
+  system: number[]
+  other: number[]
+}
+
 interface DriverSlidersProps {
   parameters: Record<string, number>
   onChange: (key: string, value: number) => void
   onBatchChange?: (changes: Record<string, number>) => void
   industry?: IndustryKey
+  sgaDetail?: SGADetail
 }
 
 var REVENUE_DRIVERS = [
@@ -94,6 +116,28 @@ var SGA_CATEGORIES = [
   },
 ]
 
+var MKTG_LABELS: Record<string, string> = {
+  digital_ad: 'デジタル広告（獲得）',
+  offline_ad: 'オフライン広告',
+  pr: 'PR・広報',
+  events: 'イベント・展示会',
+  branding: 'ブランディング',
+  crm: 'CRM・リテンション',
+  content: 'コンテンツ制作',
+  other_mktg: 'その他マーケ費',
+}
+
+var MKTG_COLORS: Record<string, string> = {
+  digital_ad: 'bg-purple-600',
+  offline_ad: 'bg-purple-400',
+  pr: 'bg-fuchsia-500',
+  events: 'bg-pink-400',
+  branding: 'bg-violet-400',
+  crm: 'bg-indigo-400',
+  content: 'bg-purple-300',
+  other_mktg: 'bg-gray-300',
+}
+
 var CAPEX_DRIVERS = [
   {
     key: 'capex',
@@ -112,6 +156,12 @@ var USEFUL_LIFE_OPTIONS = [
   { value: 7, label: '7年（設備）' },
   { value: 10, label: '10年（建物附属）' },
 ]
+
+function formatYen(v: number): string {
+  if (Math.abs(v) >= 100_000_000) return (v / 100_000_000).toFixed(1) + '億円'
+  if (Math.abs(v) >= 10_000) return (v / 10_000).toFixed(0) + '万円'
+  return v.toLocaleString() + '円'
+}
 
 function BenchmarkTooltip({ benchmark, driverKey }: { benchmark: DriverBenchmark; driverKey: string }) {
   var isRate = driverKey.includes('rate') || driverKey.includes('growth')
@@ -175,9 +225,142 @@ function BenchmarkBar({ benchmark, driver, value }: { benchmark: DriverBenchmark
   )
 }
 
-export function DriverSliders({ parameters, onChange, onBatchChange, industry }: DriverSlidersProps) {
+/** Role-based payroll detail panel */
+function PayrollDetailPanel({
+  roles,
+  onChange,
+}: {
+  roles: Record<string, PayrollRoleDetail>
+  onChange: (key: string, value: number) => void
+}) {
+  var roleEntries = Object.entries(roles)
+  if (roleEntries.length === 0) return null
+
+  return (
+    <div className="mt-2 bg-orange-50 rounded-lg p-3 border border-orange-100">
+      <div className="text-[11px] text-orange-700 font-medium mb-2">人件費内訳（平均年収 x 人数 = コスト）</div>
+      <div className="space-y-2.5">
+        {roleEntries.map(function([roleKey, role]) {
+          var fy1Cost = role.cost[0] || 0
+          return (
+            <div key={roleKey} className="bg-white rounded p-2 border border-orange-100">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-xs font-medium text-gray-700">{role.label}</span>
+                <span className="text-xs font-mono text-orange-700">{formatYen(fy1Cost)}/年</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[10px] text-gray-500 block mb-0.5">平均年収</label>
+                  <input
+                    type="range"
+                    min={3_000_000}
+                    max={15_000_000}
+                    step={500_000}
+                    value={role.salary}
+                    onChange={function(e) { onChange('pr_' + roleKey + '_salary', parseFloat(e.target.value)) }}
+                    className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-orange-500"
+                  />
+                  <div className="text-[10px] font-mono text-gray-600 text-center mt-0.5">
+                    {(role.salary / 10_000).toFixed(0)}万円
+                  </div>
+                </div>
+                <div>
+                  <label className="text-[10px] text-gray-500 block mb-0.5">FY1 人数</label>
+                  <input
+                    type="range"
+                    min={0}
+                    max={50}
+                    step={1}
+                    value={role.headcount[0] || 0}
+                    onChange={function(e) { onChange('pr_' + roleKey + '_hc', parseFloat(e.target.value)) }}
+                    className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-orange-500"
+                  />
+                  <div className="text-[10px] font-mono text-gray-600 text-center mt-0.5">
+                    {role.headcount[0] || 0}人 → {role.headcount[4] || 0}人(FY5)
+                  </div>
+                </div>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+/** Marketing subcategory detail panel */
+function MarketingDetailPanel({
+  categories,
+  total,
+  onChange,
+}: {
+  categories: Record<string, number[]>
+  total: number[]
+  onChange: (key: string, value: number) => void
+}) {
+  var catEntries = Object.entries(categories)
+  var hasCats = catEntries.length > 0
+
+  return (
+    <div className="mt-2 bg-purple-50 rounded-lg p-3 border border-purple-100">
+      <div className="text-[11px] text-purple-700 font-medium mb-2">
+        マーケティング費内訳（FY1）
+        <span className="text-[10px] text-purple-500 ml-1">合計: {formatYen(total[0] || 0)}</span>
+      </div>
+      {hasCats ? (
+        <div className="space-y-1.5">
+          {/* Composition bar */}
+          <div className="h-3 rounded-full overflow-hidden flex mb-2">
+            {catEntries.map(function([catKey, values]) {
+              var val = values[0] || 0
+              var catTotal = total[0] || 1
+              var pct = (val / catTotal) * 100
+              return (
+                <div
+                  key={catKey}
+                  className={(MKTG_COLORS[catKey] || 'bg-gray-300') + ' transition-all'}
+                  style={{ width: Math.max(pct, 1) + '%' }}
+                  title={(MKTG_LABELS[catKey] || catKey) + ': ' + formatYen(val)}
+                />
+              )
+            })}
+          </div>
+          {catEntries.map(function([catKey, values]) {
+            var val = values[0] || 0
+            return (
+              <div key={catKey}>
+                <div className="flex items-center justify-between mb-0.5">
+                  <div className="flex items-center gap-1">
+                    <div className={'w-1.5 h-1.5 rounded-full ' + (MKTG_COLORS[catKey] || 'bg-gray-300')} />
+                    <label className="text-[11px] text-gray-700">{MKTG_LABELS[catKey] || catKey}</label>
+                  </div>
+                  <span className="text-[11px] font-mono text-gray-600">{formatYen(val)}</span>
+                </div>
+                <input
+                  type="range"
+                  min={0}
+                  max={50_000_000}
+                  step={500_000}
+                  value={val}
+                  onChange={function(e) { onChange('mk_' + catKey, parseFloat(e.target.value)) }}
+                  className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                />
+              </div>
+            )
+          })}
+        </div>
+      ) : (
+        <p className="text-[10px] text-gray-400">マーケティング費の詳細はカテゴリ単位でスライダーを設定すると表示されます</p>
+      )}
+    </div>
+  )
+}
+
+export function DriverSliders({ parameters, onChange, onBatchChange, industry, sgaDetail }: DriverSlidersProps) {
   var [hoveredDriver, setHoveredDriver] = useState<string | null>(null)
   var [sgaExpanded, setSgaExpanded] = useState(false)
+  var [payrollExpanded, setPayrollExpanded] = useState(false)
+  var [mktgExpanded, setMktgExpanded] = useState(false)
   var [deprMode, setDeprMode] = useState<'manual' | 'auto'>(
     (parameters.depreciation_mode as any) === 'auto' ? 'auto' : 'manual'
   )
@@ -328,12 +511,32 @@ export function DriverSliders({ parameters, onChange, onBatchChange, industry }:
             {/* Category sliders */}
             {SGA_CATEGORIES.map(function(cat) {
               var value = parameters[cat.key] != null ? parameters[cat.key] : opexBase * cat.ratio
+              var isPayroll = cat.key === 'payroll'
+              var isMktg = cat.key === 'sga_marketing'
+
               return (
                 <div key={cat.key}>
                   <div className="flex items-center justify-between mb-1">
                     <div className="flex items-center gap-1.5">
                       <div className={'w-2 h-2 rounded-full ' + cat.color} />
                       <label className="text-sm text-gray-700">{cat.label}</label>
+                      {/* Expand toggle for payroll / marketing */}
+                      {isPayroll && sgaDetail && (
+                        <button
+                          onClick={function() { setPayrollExpanded(!payrollExpanded) }}
+                          className="text-[10px] text-orange-500 hover:text-orange-700 ml-1"
+                        >
+                          {payrollExpanded ? '▲閉じる' : '▼詳細'}
+                        </button>
+                      )}
+                      {isMktg && sgaDetail && (
+                        <button
+                          onClick={function() { setMktgExpanded(!mktgExpanded) }}
+                          className="text-[10px] text-purple-500 hover:text-purple-700 ml-1"
+                        >
+                          {mktgExpanded ? '▲閉じる' : '▼詳細'}
+                        </button>
+                      )}
                     </div>
                     <span className="text-sm font-mono font-medium text-gray-900">
                       {cat.format(value)}
@@ -348,6 +551,23 @@ export function DriverSliders({ parameters, onChange, onBatchChange, industry }:
                     onChange={function(e) { onChange(cat.key, parseFloat(e.target.value)) }}
                     className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-orange-500"
                   />
+
+                  {/* Payroll role-level detail */}
+                  {isPayroll && payrollExpanded && sgaDetail && (
+                    <PayrollDetailPanel
+                      roles={sgaDetail.payroll.roles}
+                      onChange={onChange}
+                    />
+                  )}
+
+                  {/* Marketing subcategory detail */}
+                  {isMktg && mktgExpanded && sgaDetail && (
+                    <MarketingDetailPanel
+                      categories={sgaDetail.marketing.categories}
+                      total={sgaDetail.marketing.total}
+                      onChange={onChange}
+                    />
+                  )}
                 </div>
               )
             })}
