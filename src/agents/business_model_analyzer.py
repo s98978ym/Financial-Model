@@ -249,99 +249,57 @@ BM_ANALYZER_SYSTEM_PROMPT = """\
 """
 
 BM_ANALYZER_USER_PROMPT = """\
-以下の事業計画書の文書テキストを読み、ビジネスモデルを分析してください。
+以下の事業計画書を読み、ビジネスモデルを分析してください。
 
-【絶対ルール】
-- 以下の文書テキストに書かれている内容だけを根拠として使うこと
-- 文書にない情報を勝手に補完しないこと
-- すべてのevidenceフィールドに文書からの原文引用を入れること
-
-■ 事業計画書の文書テキスト:
+■ 事業計画書:
 ---
 {document_text}
 ---
 
-■ 出力形式（JSON）:
+■ 出力JSON形式:
 {{
-  "company_name": "文書に明記されている会社名（なければ「記載なし」）",
-  "document_narrative": "文書から読み取れた事実だけに基づくビジネスの概要。文書に書いてあることだけを述べ、推測で補完しない。各主張の根拠を文書から示せること。",
-  "key_facts": [
-    "「〜〜」（原文引用）に基づく事実",
-    "文書に明記された数値や情報のみ記載",
-    "推定した場合は【推定】と明記し、推定根拠を付記"
-  ],
+  "company_name": "会社名（文書に明記なければ「記載なし」）",
+  "document_narrative": "文書の事実のみに基づくビジネス概要",
+  "key_facts": ["「原文引用」に基づく事実（推定は【推定】と明記）"],
   "proposals": [
     {{
-      "label": "パターンA: [簡潔なモデル名]",
-      "industry": "業種（文書から読み取れるもの）",
-      "business_model_type": "B2B / B2C / B2B2C / marketplace / etc.",
-      "executive_summary": "文書の事実に基づくこの解釈の要約（1-3文）",
-      "diagram": "テキストベースのビジネスモデル図解。\\n[顧客] --課金方法--> [サービス] --収益--> [売上]\\n矢印(-->)、ボックス([])、パイプ(|)を使ってフローを表現する。",
+      "label": "パターンA: [モデル名]",
+      "industry": "業種",
+      "business_model_type": "B2B/B2C/B2B2C/marketplace等",
+      "executive_summary": "この解釈の要約（1-3文）",
+      "diagram": "[顧客]--課金-->[サービス]--収益-->[売上]",
       "segments": [
         {{
-          "name": "セグメント名（文書に基づく）",
-          "model_type": "subscription / transaction / project / marketplace / license / advertising / freemium / etc.",
-          "revenue_formula": "売上 = ドライバー1 × ドライバー2 × ...",
+          "name": "セグメント名",
+          "model_type": "subscription/transaction/project/marketplace/license/advertising/freemium等",
+          "revenue_formula": "売上 = ドライバー1 × ドライバー2",
           "revenue_drivers": [
-            {{
-              "name": "ドライバー名",
-              "description": "説明",
-              "unit": "単位",
-              "estimated_value": "文書に記載の値（なければnull）",
-              "evidence": "「文書からの原文引用」（なければ「文書に記載なし」）",
-              "is_from_document": true
-            }}
+            {{"name": "名前", "description": "説明", "unit": "単位", "estimated_value": "文書記載値またはnull", "evidence": "「原文引用」または「文書に記載なし」", "is_from_document": true}}
           ],
-          "key_assumptions": ["文書に基づく前提"]
+          "key_assumptions": ["前提"]
         }}
       ],
       "shared_costs": [
-        {{
-          "name": "コスト名",
-          "category": "fixed / variable",
-          "description": "説明",
-          "estimated_value": "文書に記載の値（なければnull）",
-          "evidence": "「文書からの原文引用」（なければ「文書に記載なし」）",
-          "is_from_document": true
-        }}
+        {{"name": "コスト名", "category": "fixed/variable", "description": "説明", "estimated_value": "文書記載値またはnull", "evidence": "「原文引用」または「文書に記載なし」", "is_from_document": true}}
       ],
-      "growth_trajectory": "文書に記載の成長計画・見通し（なければ「文書に記載なし」）",
-      "risk_factors": ["文書に記載のリスク要因"],
-      "time_horizon": "文書に記載の計画期間（なければ「文書に記載なし」）",
+      "growth_trajectory": "成長計画（なければ「文書に記載なし」）",
+      "risk_factors": ["リスク要因"],
+      "time_horizon": "計画期間（なければ「文書に記載なし」）",
       "confidence": 0.8,
-      "reasoning": "文書のどの記述からこの解釈が導かれるかの説明"
-    }},
-    {{
-      "label": "パターンB: [別の解釈]",
-      "...": "（同じ構造で別の解釈を提案）"
-    }},
-    {{
-      "label": "パターンC: [さらに別の解釈]",
-      "...": "（同じ構造で別の解釈を提案）"
+      "reasoning": "この解釈の根拠"
     }}
   ],
   "financial_targets": {{
     "horizon_years": 5,
-    "revenue_targets": [
-      {{"year": "FY1", "value": 10000000, "evidence": "「文書からの原文引用」", "source": "document"}},
-      {{"year": "FY2", "value": null, "evidence": "文書に記載なし", "source": "default"}}
-    ],
-    "op_targets": [
-      {{"year": "FY1", "value": -5000000, "evidence": "「文書からの原文引用」", "source": "document"}}
-    ],
+    "revenue_targets": [{{"year": "FY1", "value": 10000000, "evidence": "「原文引用」", "source": "document"}}],
+    "op_targets": [{{"year": "FY1", "value": -5000000, "evidence": "「原文引用」", "source": "document"}}],
     "single_year_breakeven": {{"year": "FY3", "evidence": "「3年目に単月黒字化」", "source": "document"}},
     "cumulative_breakeven": {{"year": "FY5", "evidence": "「5年目に累積黒字」", "source": "document"}}
   }},
   "currency": "JPY"
 }}
 
-【注意】
-- proposalsは必ず3〜5件。少なすぎても多すぎてもいけない。
-- 各proposalは完全に独立した1つの解釈（セグメント構成が異なりうる）。
-- confidenceの高い順に並べる。
-- document_narrativeは文書の事実に基づく。文書にない情報を補完してはいけない。
-- evidenceフィールドには必ず文書からの「原文引用」を入れること。推測の場合は「文書に記載なし・【推定】〜」と記載。
-- financial_targets: 文書に売上目標・利益目標・黒字化時期の記載があれば抽出する。なければ空配列/nullを返す。数値は円単位に正規化（億→×1億、万→×1万）。
+proposalsは3〜5件。各proposalは独立した解釈（セグメント構成が異なりうる）。confidenceの高い順に並べる。financial_targetsは文書に記載があれば抽出、なければ空配列/null。数値は円単位に正規化（億→×1億、万→×1万）。
 """
 
 

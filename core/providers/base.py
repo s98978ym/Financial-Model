@@ -19,7 +19,7 @@ class LLMConfig:
 
     model: str = "claude-sonnet-4-5-20250929"
     temperature: float = 0.1
-    max_tokens: int = 32768
+    max_tokens: int = 12288
     timeout_seconds: int = 300
     retry_attempts: int = 2
     retry_base_delay: float = 2.0
