@@ -546,12 +546,70 @@ export function DriverSliders({ parameters, onChange, onBatchChange, industry, s
   var [sgaExpanded, setSgaExpanded] = useState(false)
   var [payrollExpanded, setPayrollExpanded] = useState(false)
   var [mktgExpanded, setMktgExpanded] = useState(false)
+  var [sgaMaterialized, setSgaMaterialized] = useState(false)
   var [deprMode, setDeprMode] = useState<'manual' | 'auto'>(
     (parameters.depreciation_mode as any) === 'auto' ? 'auto' : 'manual'
   )
   var benchmarks = industry ? INDUSTRY_BENCHMARKS[industry]?.drivers : null
 
   var opexBase = parameters.opex_base || 80_000_000
+
+  // Materialize SGA categories into explicit params on first expand
+  // This breaks the circular dependency: opexBase*ratio ↔ sum of categories
+  function materializeSgaCategories() {
+    if (sgaMaterialized) return
+    var needsBatch = false
+    var batch: Record<string, number> = {}
+    SGA_CATEGORIES.forEach(function(cat) {
+      if (parameters[cat.key] == null) {
+        batch[cat.key] = Math.round(opexBase * cat.ratio)
+        needsBatch = true
+      }
+    })
+    if (needsBatch && onBatchChange) {
+      onBatchChange(batch)
+    }
+    setSgaMaterialized(true)
+  }
+
+  // Materialize payroll role params so sliders don't bounce on sgaDetail changes
+  function materializePayrollRoles() {
+    if (!sgaDetail) return
+    var batch: Record<string, number> = {}
+    var needsBatch = false
+    Object.entries(sgaDetail.payroll.roles).forEach(function([roleKey, role]) {
+      var salaryKey = 'pr_' + roleKey + '_salary'
+      var hcKey = 'pr_' + roleKey + '_hc'
+      if (parameters[salaryKey] == null) {
+        batch[salaryKey] = role.salary
+        needsBatch = true
+      }
+      if (parameters[hcKey] == null) {
+        batch[hcKey] = role.headcount[0] || 0
+        needsBatch = true
+      }
+    })
+    if (needsBatch && onBatchChange) {
+      onBatchChange(batch)
+    }
+  }
+
+  // Materialize marketing subcategory params
+  function materializeMktgCategories() {
+    if (!sgaDetail) return
+    var batch: Record<string, number> = {}
+    var needsBatch = false
+    Object.entries(sgaDetail.marketing.categories).forEach(function([catKey, values]) {
+      var paramKey = 'mk_' + catKey
+      if (parameters[paramKey] == null) {
+        batch[paramKey] = values[0] || 0
+        needsBatch = true
+      }
+    })
+    if (needsBatch && onBatchChange) {
+      onBatchChange(batch)
+    }
+  }
 
   // --- Batch helper: update multiple params + trigger recalc ---
   function batchUpdate(changes: Record<string, number>) {
@@ -714,7 +772,10 @@ export function DriverSliders({ parameters, onChange, onBatchChange, industry, s
       {/* SGA Section */}
       <div className="py-3 border-b border-gray-100">
         <button
-          onClick={function() { setSgaExpanded(!sgaExpanded) }}
+          onClick={function() {
+            if (!sgaExpanded) materializeSgaCategories()
+            setSgaExpanded(!sgaExpanded)
+          }}
           className="w-full flex items-center justify-between mb-2"
         >
           <div className="flex items-center gap-1.5">
@@ -823,7 +884,10 @@ export function DriverSliders({ parameters, onChange, onBatchChange, industry, s
                       <span className="text-[10px] text-gray-400">{pct}%</span>
                       {isPayroll && sgaDetail && (
                         <button
-                          onClick={function() { setPayrollExpanded(!payrollExpanded) }}
+                          onClick={function() {
+                            if (!payrollExpanded) materializePayrollRoles()
+                            setPayrollExpanded(!payrollExpanded)
+                          }}
                           className="text-[10px] text-orange-500 hover:text-orange-700 ml-1"
                         >
                           {payrollExpanded ? '▲閉じる' : '▼詳細'}
@@ -831,7 +895,10 @@ export function DriverSliders({ parameters, onChange, onBatchChange, industry, s
                       )}
                       {isMktg && sgaDetail && (
                         <button
-                          onClick={function() { setMktgExpanded(!mktgExpanded) }}
+                          onClick={function() {
+                            if (!mktgExpanded) materializeMktgCategories()
+                            setMktgExpanded(!mktgExpanded)
+                          }}
                           className="text-[10px] text-purple-500 hover:text-purple-700 ml-1"
                         >
                           {mktgExpanded ? '▲閉じる' : '▼詳細'}

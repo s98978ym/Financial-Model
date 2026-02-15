@@ -39,6 +39,12 @@ export default function ScenarioPlaygroundPage() {
   var [initialized, setInitialized] = useState(false)
   var [industry, setIndustry] = useState<IndustryKey>('その他')
   var saveTimerRef = useRef<any>(null)
+  var recalcTimerRef = useRef<any>(null)
+  // Keep a ref to latest params so callbacks never use stale state
+  var paramsRef = useRef(parameters)
+  paramsRef.current = parameters
+  var scenarioRef = useRef(scenario)
+  scenarioRef.current = scenario
 
   // Load project state to get Phase 5 parameters
   var projectState = useQuery({
@@ -47,10 +53,11 @@ export default function ScenarioPlaygroundPage() {
     enabled: !!projectId,
   })
 
-  // Clean up debounce timer on unmount to prevent state updates after unmount
+  // Clean up debounce timers on unmount to prevent state updates after unmount
   useEffect(function() {
     return function() {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+      if (recalcTimerRef.current) clearTimeout(recalcTimerRef.current)
     }
   }, [])
 
@@ -84,6 +91,14 @@ export default function ScenarioPlaygroundPage() {
     saveTimerRef.current = setTimeout(function() {
       saveParams.mutate(newParams)
     }, 2000) // Save 2s after last change
+  }
+
+  // Debounced recalc: coalesce rapid slider changes into a single API call
+  function debouncedRecalc(newParams: Record<string, number>) {
+    if (recalcTimerRef.current) clearTimeout(recalcTimerRef.current)
+    recalcTimerRef.current = setTimeout(function() {
+      recalc.mutate({ parameters: newParams, scenario: scenarioRef.current })
+    }, 80) // 80ms debounce — feels instant but prevents flood
   }
 
   function prepareParams(p: Record<string, number>) {
@@ -133,30 +148,35 @@ export default function ScenarioPlaygroundPage() {
 
   var handleParameterChange = useCallback(
     function(key: string, value: number) {
-      var newParams = Object.assign({}, parameters, { [key]: value })
+      // Use ref to avoid stale closure — always reads latest params
+      var newParams = Object.assign({}, paramsRef.current, { [key]: value })
       setParameters(newParams)
-      recalc.mutate({ parameters: newParams, scenario: scenario })
+      paramsRef.current = newParams
+      debouncedRecalc(newParams)
       debouncedSave(newParams)
     },
-    [parameters, scenario, recalc]
+    [] // eslint-disable-line react-hooks/exhaustive-deps
   )
 
   var handleBatchChange = useCallback(
     function(changes: Record<string, number>) {
-      var newParams = Object.assign({}, parameters, changes)
+      // Use ref to avoid stale closure — always reads latest params
+      var newParams = Object.assign({}, paramsRef.current, changes)
       setParameters(newParams)
-      recalc.mutate({ parameters: newParams, scenario: scenario })
+      paramsRef.current = newParams
+      debouncedRecalc(newParams)
       debouncedSave(newParams)
     },
-    [parameters, scenario, recalc]
+    [] // eslint-disable-line react-hooks/exhaustive-deps
   )
 
   var handleScenarioChange = useCallback(
     function(newScenario: 'base' | 'best' | 'worst') {
       setScenario(newScenario)
-      recalc.mutate({ parameters: parameters, scenario: newScenario })
+      scenarioRef.current = newScenario
+      recalc.mutate({ parameters: paramsRef.current, scenario: newScenario })
     },
-    [parameters, recalc]
+    [] // eslint-disable-line react-hooks/exhaustive-deps
   )
 
   var handleIndustryChange = useCallback(
