@@ -38,13 +38,15 @@ def run_model_design(self, job_id: str):
         phase2_result = db.get_phase_result(run_id, phase=2)
         phase3_result = db.get_phase_result(run_id, phase=3)
 
-        if not phase2_result or not phase3_result:
-            missing = []
-            if not phase2_result:
-                missing.append("Phase 2")
-            if not phase3_result:
-                missing.append("Phase 3")
-            db.update_job(job_id, status="failed", error_msg=f"Missing results: {', '.join(missing)}")
+        if not phase2_result:
+            db.update_job(job_id, status="failed", error_msg="Missing results: Phase 2")
+            return {"status": "failed", "job_id": job_id}
+
+        if not phase3_result:
+            db.update_job(
+                job_id, status="failed",
+                error_msg="Phase 3（テンプレートマッピング）が完了していません。先にPhase 3を実行してください。",
+            )
             return {"status": "failed", "job_id": job_id}
 
         analysis_json = phase2_result.get("raw_json", {})
@@ -53,7 +55,17 @@ def run_model_design(self, job_id: str):
         if isinstance(catalog_items, str):
             catalog_items = []
 
-        db.update_job(job_id, progress=15, log_msg="Phase 2 & 3 data loaded")
+        # Detect estimation mode: Phase 3 exists but sheet_mappings is empty
+        estimation_mode = payload.get("estimation_mode", False)
+        sheet_mappings = ts_json.get("sheet_mappings", [])
+        if not sheet_mappings and not estimation_mode:
+            # Even if not flagged by API, detect and enable estimation mode
+            estimation_mode = True
+
+        if estimation_mode:
+            db.update_job(job_id, progress=15, log_msg="Phase 3 data empty — estimation mode enabled")
+        else:
+            db.update_job(job_id, progress=15, log_msg="Phase 2 & 3 data loaded")
 
         # --- Build feedback from Phase 2 selection + Phase 3 proposal decisions ---
         feedback_parts = []
@@ -103,12 +115,17 @@ def run_model_design(self, job_id: str):
         adapter = ProviderAdapter(provider)
         designer = ModelDesigner(llm_client=adapter)
 
-        db.update_job(job_id, progress=20, log_msg="Starting model design")
+        if estimation_mode:
+            db.update_job(job_id, progress=20, log_msg="Starting LLM-based estimation design")
+        else:
+            db.update_job(job_id, progress=20, log_msg="Starting model design")
+
         result = designer.design(
             analysis_json=analysis_json,
             template_structure_json=ts_json,
             catalog_items=catalog_items,
             feedback=feedback,
+            estimation_mode=estimation_mode,
         )
 
         # --- Store result ---

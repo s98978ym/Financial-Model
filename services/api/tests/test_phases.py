@@ -101,8 +101,28 @@ def test_phase3_missing_project_id(client):
 
 # ── Phase 4 (async) ────────────────────────────────────────
 
-def test_phase4_creates_job(client, sample_document):
+def test_phase4_requires_phase3(client, sample_document):
+    """Phase 4 should return 409 when Phase 3 has not been completed."""
     project_id, _ = sample_document
+    resp = client.post(
+        "/v1/phase4/design",
+        json={"project_id": project_id},
+    )
+    assert resp.status_code == 409
+    assert resp.json()["detail"]["code"] == "PHASE3_NOT_COMPLETED"
+
+
+def test_phase4_creates_job(client, sample_document):
+    """Phase 4 succeeds when Phase 3 result exists with mappings."""
+    from services.api.app import db
+    project_id, _ = sample_document
+    run = db.get_latest_run(project_id)
+    if not run:
+        run = db.create_run(project_id)
+    db.save_phase_result(
+        run_id=run["id"], phase=3,
+        raw_json={"sheet_mappings": [{"sheet_name": "PL", "sheet_purpose": "revenue_model"}]},
+    )
     with patch("services.api.app.routers.phases._dispatch_celery"):
         resp = client.post(
             "/v1/phase4/design",
@@ -111,6 +131,28 @@ def test_phase4_creates_job(client, sample_document):
     assert resp.status_code == 202
     data = resp.json()
     assert data["phase"] == 4
+
+
+def test_phase4_estimation_mode(client, sample_document):
+    """Phase 4 enters estimation mode when Phase 3 result is empty."""
+    from services.api.app import db
+    project_id, _ = sample_document
+    run = db.get_latest_run(project_id)
+    if not run:
+        run = db.create_run(project_id)
+    db.save_phase_result(run_id=run["id"], phase=3, raw_json={"sheet_mappings": []})
+    # Without allow_estimation → 409
+    resp = client.post("/v1/phase4/design", json={"project_id": project_id})
+    assert resp.status_code == 409
+    assert resp.json()["detail"]["code"] == "PHASE3_EMPTY_RESULT"
+    # With allow_estimation → 202
+    with patch("services.api.app.routers.phases._dispatch_celery"):
+        resp2 = client.post("/v1/phase4/design", json={
+            "project_id": project_id,
+            "allow_estimation": True,
+        })
+    assert resp2.status_code == 202
+    assert resp2.json()["estimation_mode"] is True
 
 
 def test_phase4_missing_project_id(client):
@@ -166,6 +208,8 @@ def test_job_not_found(client):
 
 def test_full_pipeline_job_creation(client, sample_document):
     """Verify all phases can create jobs sequentially for the same project."""
+    from services.api.app import db
+
     project_id, doc_id = sample_document
 
     with patch("services.api.app.routers.phases._dispatch_celery"):
@@ -183,7 +227,14 @@ def test_full_pipeline_job_creation(client, sample_document):
         )
         assert r3.status_code == 202
 
-        # Phase 4
+        # Simulate Phase 3 completing (since Celery is mocked, we inject the result)
+        run = db.get_latest_run(project_id)
+        db.save_phase_result(
+            run_id=run["id"], phase=3,
+            raw_json={"sheet_mappings": [{"sheet_name": "PL", "sheet_purpose": "revenue_model"}]},
+        )
+
+        # Phase 4 (requires Phase 3 result)
         r4 = client.post(
             "/v1/phase4/design",
             json={"project_id": project_id},

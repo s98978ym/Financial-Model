@@ -226,12 +226,51 @@ class TestPhase2to5JobCreation:
         assert data["phase"] == 3
         assert data["job_id"]
 
-    def test_phase4_creates_job(self, client):
+    def test_phase4_requires_phase3(self, client):
+        """Phase 4 should return 409 when Phase 3 result is missing."""
+        res = client.post("/v1/phase4/design", json={
+            "project_id": self.project_id,
+        })
+        assert res.status_code == 409
+        assert res.json()["detail"]["code"] == "PHASE3_NOT_COMPLETED"
+
+    def test_phase4_creates_job_with_phase3(self, client):
+        """Phase 4 succeeds when Phase 3 result exists."""
+        from services.api.app import db
+        run = db.get_latest_run(self.project_id)
+        if not run:
+            run = db.create_run(self.project_id)
+        db.save_phase_result(
+            run_id=run["id"], phase=3,
+            raw_json={"sheet_mappings": [{"sheet_name": "PL", "sheet_purpose": "revenue_model"}]},
+        )
         res = client.post("/v1/phase4/design", json={
             "project_id": self.project_id,
         })
         assert res.status_code == 202
         assert res.json()["phase"] == 4
+
+    def test_phase4_estimation_mode_with_empty_phase3(self, client):
+        """Phase 4 returns 409 with allow_estimation hint when Phase 3 is empty."""
+        from services.api.app import db
+        run = db.get_latest_run(self.project_id)
+        if not run:
+            run = db.create_run(self.project_id)
+        db.save_phase_result(run_id=run["id"], phase=3, raw_json={"sheet_mappings": []})
+        res = client.post("/v1/phase4/design", json={
+            "project_id": self.project_id,
+        })
+        assert res.status_code == 409
+        assert res.json()["detail"]["code"] == "PHASE3_EMPTY_RESULT"
+        assert res.json()["detail"]["allow_estimation"] is True
+
+        # Now try with allow_estimation=True
+        res2 = client.post("/v1/phase4/design", json={
+            "project_id": self.project_id,
+            "allow_estimation": True,
+        })
+        assert res2.status_code == 202
+        assert res2.json()["estimation_mode"] is True
 
     def test_phase5_creates_job(self, client):
         res = client.post("/v1/phase5/extract", json={

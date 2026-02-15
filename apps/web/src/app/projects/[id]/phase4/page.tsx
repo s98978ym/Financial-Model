@@ -12,6 +12,7 @@ export default function Phase4Page() {
   const router = useRouter()
   const projectId = params.id as string
   const [selectedCell, setSelectedCell] = useState<any>(null)
+  const [showEstimationConfirm, setShowEstimationConfirm] = useState(false)
 
   const { result, isProcessing, isComplete, isFailed, trigger, progress, error, projectState } =
     usePhaseJob({ projectId, phase: 4 })
@@ -21,11 +22,31 @@ export default function Phase4Page() {
   const warnings = result?.warnings || []
   const hasEstimated = assignments.some((a: any) => a.derivation === 'estimated')
 
+  // Phase 3 prerequisite status
+  const phase3Result = projectState?.phase_results?.[3]
+  const phase3Exists = !!phase3Result
+  const phase3Empty = phase3Exists && !(phase3Result.raw_json?.sheet_mappings?.length)
+
   // Load Phase 3 sheet mappings for enrichment
   const sheetMappings = useMemo(() => {
-    const phase3Result = projectState?.phase_results?.[3]?.raw_json
-    return phase3Result?.sheet_mappings || []
+    const phase3Raw = projectState?.phase_results?.[3]?.raw_json
+    return phase3Raw?.sheet_mappings || []
   }, [projectState])
+
+  // Handle trigger with Phase 3 prerequisite check
+  const handleTrigger = () => {
+    if (!phase3Exists) return // Should not happen since button is hidden
+    if (phase3Empty) {
+      setShowEstimationConfirm(true)
+      return
+    }
+    trigger()
+  }
+
+  const handleEstimationConfirm = () => {
+    setShowEstimationConfirm(false)
+    trigger({ allow_estimation: true })
+  }
 
   const stats = useMemo(() => {
     const total = assignments.length + unmapped.length
@@ -43,8 +64,65 @@ export default function Phase4Page() {
       subtitle="テンプレートの各セルにビジネスコンセプトを割り当て、PLの骨格を構築します"
       projectId={projectId}
     >
-      {/* Trigger */}
-      {!isProcessing && !isComplete && !isFailed && (
+      {/* Phase 3 not completed — block trigger */}
+      {!isProcessing && !isComplete && !isFailed && !phase3Exists && projectState && (
+        <div className="text-center py-16 bg-gradient-to-b from-red-50 to-white rounded-2xl border border-red-200">
+          <div className="text-4xl mb-4">⛔</div>
+          <h3 className="text-lg font-semibold text-red-800 mb-2">
+            Phase 3を先に完了してください
+          </h3>
+          <p className="text-red-600 text-sm mb-6 max-w-md mx-auto">
+            モデル設計にはPhase 3（テンプレートマッピング）の結果が必要です。
+            Phase 3が完了していないため、設計を開始できません。
+          </p>
+          <button
+            onClick={() => router.push(`/projects/${projectId}/phase3`)}
+            className="bg-red-600 text-white px-8 py-3 rounded-xl hover:bg-red-700 font-medium shadow-lg shadow-red-200 transition-all"
+          >
+            Phase 3へ移動する
+          </button>
+        </div>
+      )}
+
+      {/* Estimation confirmation dialog */}
+      {showEstimationConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-md mx-4">
+            <div className="text-center mb-4">
+              <div className="text-3xl mb-2">⚠️</div>
+              <h3 className="text-lg font-semibold text-amber-800">推定モードで続行しますか？</h3>
+            </div>
+            <p className="text-sm text-gray-600 mb-4">
+              Phase 3は完了しましたが、テンプレートのシートマッピングが空です。
+              推定モードではLLMを使って事業分析結果からPL概念マッピングを自動生成します。
+            </p>
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-5">
+              <ul className="text-xs text-amber-700 space-y-1">
+                <li>・セル位置は仮配置になります</li>
+                <li>・テンプレートの実際の構造と異なる場合があります</li>
+                <li>・生成後に手動で調整が必要な場合があります</li>
+              </ul>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowEstimationConfirm(false)}
+                className="flex-1 px-4 py-2.5 rounded-xl border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm font-medium"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={handleEstimationConfirm}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-amber-500 text-white hover:bg-amber-600 text-sm font-medium shadow-lg shadow-amber-200"
+              >
+                推定モードで続行
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Trigger — Phase 3 exists */}
+      {!isProcessing && !isComplete && !isFailed && phase3Exists && (
         <div className="text-center py-16 bg-gradient-to-b from-indigo-50 to-white rounded-2xl border border-indigo-100">
           <div className="text-4xl mb-4">🏗️</div>
           <h3 className="text-lg font-semibold text-gray-800 mb-2">
@@ -54,8 +132,15 @@ export default function Phase4Page() {
             テンプレートの各入力セルが「何を表すか」を自動判定します。
             売上・コスト・前提条件の概念マッピングを構築します。
           </p>
+          {phase3Empty && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4 max-w-md mx-auto">
+              <p className="text-xs text-amber-700">
+                Phase 3のシートマッピングが空です。推定モードで実行されます。
+              </p>
+            </div>
+          )}
           <button
-            onClick={() => trigger()}
+            onClick={handleTrigger}
             className="bg-blue-600 text-white px-8 py-3 rounded-xl hover:bg-blue-700 font-medium shadow-lg shadow-blue-200 transition-all hover:shadow-xl hover:shadow-blue-300"
           >
             設計を開始する
@@ -86,12 +171,23 @@ export default function Phase4Page() {
             <div>
               <p className="text-sm font-medium text-red-800">設計に失敗しました</p>
               <p className="text-sm text-red-600 mt-1">{error}</p>
-              <button
-                onClick={() => trigger()}
-                className="mt-3 text-sm bg-red-100 text-red-700 px-4 py-1.5 rounded-lg hover:bg-red-200 transition-colors"
-              >
-                再試行
-              </button>
+              <div className="flex gap-2 mt-3">
+                {error && error.indexOf('Phase 3') >= 0 ? (
+                  <button
+                    onClick={() => router.push(`/projects/${projectId}/phase3`)}
+                    className="text-sm bg-red-100 text-red-700 px-4 py-1.5 rounded-lg hover:bg-red-200 transition-colors"
+                  >
+                    Phase 3へ移動する
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => trigger()}
+                    className="text-sm bg-red-100 text-red-700 px-4 py-1.5 rounded-lg hover:bg-red-200 transition-colors"
+                  >
+                    再試行
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>
