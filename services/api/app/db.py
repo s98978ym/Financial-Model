@@ -20,7 +20,8 @@ from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
-DATABASE_URL = os.environ.get("DATABASE_URL", "")
+# Accept SUPABASE_URL as fallback when DATABASE_URL is not set
+DATABASE_URL = os.environ.get("DATABASE_URL") or os.environ.get("SUPABASE_URL", "")
 
 # ---------------------------------------------------------------------------
 # Connection pool (lazy init)

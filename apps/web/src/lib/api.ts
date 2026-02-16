@@ -77,11 +77,17 @@ async function fetchAPI(path: string, options: RequestInit = {}): Promise<any> {
 
   if (!res.ok) {
     const error = await res.json().catch(() => ({ error: { message: res.statusText } }))
-    var msg = error.error?.message || error.detail?.message || `API Error: ${res.status}`
+    // FastAPI returns { detail: "message" } (string) or { detail: { message, code } }
+    var detailStr = typeof error.detail === 'string' ? error.detail : null
+    var msg = error.error?.message || error.detail?.message || detailStr || `API Error: ${res.status}`
     var apiError = new Error(msg) as any
     apiError.code = error.detail?.code || error.error?.code || null
     apiError.detail = error.detail || null
     apiError.status = res.status
+    // Auto-clear admin token on 401 for admin paths so UI shows login form
+    if (res.status === 401 && path.indexOf('/admin/') === 0) {
+      _adminToken = null
+    }
     throw apiError
   }
 
