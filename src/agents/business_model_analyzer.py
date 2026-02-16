@@ -394,7 +394,7 @@ class BusinessModelAnalyzer:
                      len(truncated), len(document_text))
         from core.providers.base import LLMConfig
         extract_kwargs: dict = {
-            "config": LLMConfig(max_tokens=8192),
+            "config": LLMConfig(max_tokens=12288),
         }
         if progress_callback is not None:
             extract_kwargs["progress_callback"] = progress_callback
@@ -415,6 +415,15 @@ class BusinessModelAnalyzer:
         if result and result.get("segments") and not result.get("proposals"):
             logger.info("BusinessModelAnalyzer: old format detected, wrapping as single proposal")
             result = self._wrap_legacy_format(result)
+
+        # Fallback: if LLM returned data but no proposals, create one from available fields
+        if result and not result.get("proposals"):
+            logger.warning(
+                "BusinessModelAnalyzer: LLM returned no proposals (keys=%s). "
+                "Creating fallback proposal from available data.",
+                list(result.keys()),
+            )
+            result = self._create_fallback_proposal(result)
 
         # Validate proposals exist
         proposals_raw = result.get("proposals") if result else None
@@ -485,6 +494,45 @@ class BusinessModelAnalyzer:
             "key_facts": [],
             "proposals": [proposal],
             "currency": raw.get("currency", "JPY"),
+        }
+
+    @staticmethod
+    def _create_fallback_proposal(raw: Dict[str, Any]) -> Dict[str, Any]:
+        """Create a single fallback proposal when LLM omits proposals entirely.
+
+        This handles the case where the LLM returns company_name, document_narrative,
+        key_facts etc. but fails to include the proposals array.
+        """
+        # Try to extract any useful structural info from the response
+        industry = raw.get("industry", "")
+        bm_type = raw.get("business_model_type", "")
+        narrative = raw.get("document_narrative", "") or raw.get("executive_summary", "")
+        company = raw.get("company_name", "")
+
+        label_suffix = industry or bm_type or company or "自動生成"
+
+        proposal = {
+            "label": f"パターンA: {label_suffix}",
+            "industry": industry,
+            "business_model_type": bm_type,
+            "executive_summary": narrative[:300] if narrative else "文書から構造を自動推定",
+            "segments": raw.get("segments", []) or [{
+                "name": "メインセグメント",
+                "model_type": "unknown",
+                "revenue_formula": "要確認",
+                "revenue_drivers": [],
+                "key_assumptions": [],
+            }],
+            "shared_costs": raw.get("shared_costs", []),
+            "growth_trajectory": raw.get("growth_trajectory", ""),
+            "risk_factors": raw.get("risk_factors", []),
+            "time_horizon": raw.get("time_horizon", ""),
+            "confidence": 0.4,
+            "reasoning": "LLMがproposals形式で返さなかったため、利用可能なデータからフォールバック生成",
+        }
+        return {
+            **raw,
+            "proposals": [proposal],
         }
 
     def _parse_result(self, raw: Dict[str, Any]) -> BusinessModelAnalysis:
