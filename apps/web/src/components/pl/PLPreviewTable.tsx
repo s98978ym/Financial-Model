@@ -402,8 +402,7 @@ function MobileYearCard({
   var confBg = pct >= 80 ? 'bg-green-100' : pct >= 50 ? 'bg-yellow-100' : 'bg-red-100'
 
   // Find first non-null year value for quick display
-  var firstVal: EnrichedItem | null = null
-  row.yearValues.forEach(function(yv) { if (!firstVal && yv) firstVal = yv })
+  var firstVal = row.yearValues.find(function(yv): yv is EnrichedItem { return yv !== null })
 
   return (
     <div
