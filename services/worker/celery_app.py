@@ -69,7 +69,7 @@ if _use_tls:
     # Parse ssl_cert_reqs from REDIS_URL query string (e.g. ?ssl_cert_reqs=CERT_NONE)
     _parsed = urlparse(REDIS_URL)
     _qs = parse_qs(_parsed.query)
-    _cert_reqs_str = (_qs.get("ssl_cert_reqs", ["CERT_REQUIRED"])[0]).upper()
+    _cert_reqs_str = (_qs.get("ssl_cert_reqs", ["CERT_NONE"])[0]).upper()
 
     if _cert_reqs_str == "CERT_NONE":
         _ssl_cert_reqs = ssl.CERT_NONE
@@ -78,16 +78,31 @@ if _use_tls:
     else:
         _ssl_cert_reqs = ssl.CERT_REQUIRED
 
+    # Resolve CA certificates: use certifi if available, else system bundle
+    _ssl_ca_certs = None
+    if _ssl_cert_reqs != ssl.CERT_NONE:
+        try:
+            import certifi
+            _ssl_ca_certs = certifi.where()
+        except ImportError:
+            pass  # Fall back to system CA bundle (ssl_ca_certs=None)
+
     broker_opts = {
         "broker_use_ssl": {
             "ssl_cert_reqs": _ssl_cert_reqs,
-            "ssl_ca_certs": None,  # Use system CA bundle
+            "ssl_ca_certs": _ssl_ca_certs,
         },
         "redis_backend_use_ssl": {
             "ssl_cert_reqs": _ssl_cert_reqs,
-            "ssl_ca_certs": None,
+            "ssl_ca_certs": _ssl_ca_certs,
         },
     }
+
+    if _is_celery_worker:
+        logger.info(
+            "TLS config: cert_reqs=%s, ca_certs=%s",
+            _cert_reqs_str, _ssl_ca_certs or "(system)",
+        )
 
 app = Celery(
     "plgen_worker",
@@ -116,7 +131,7 @@ app.conf.update(
     task_acks_late=True,
     task_reject_on_worker_lost=True,
     broker_connection_retry_on_startup=True,
-    broker_connection_max_retries=5,
+    broker_connection_max_retries=10,
     **broker_opts,
 )
 

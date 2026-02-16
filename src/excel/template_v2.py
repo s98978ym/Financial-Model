@@ -168,31 +168,51 @@ SGA_ROWS = {
     "total":          39,
 }
 
-# R&D detail sheet row positions (expanded with parameter-driven logic)
-RD_ROWS = {
-    "header_fy":   3,
-    # --- 社内開発セクション ---
-    "int_header":     5,
-    "int_engineers":  6,    # エンジニア人件費 (avg_salary × headcount)
-    "int_designers":  7,    # デザイナー人件費
-    "int_pm":         8,    # PM・ディレクター人件費
-    "int_total":      9,
-    # --- 外注開発セクション ---
-    "ext_header":    11,
-    "ext_dev":       12,    # 開発外注費
-    "ext_design":    13,    # デザイン外注費
-    "ext_other":     14,    # その他外注
-    "ext_total":     15,
-    # --- インフラ・ツールセクション ---
-    "infra_header":  17,
-    "inf_cloud":     18,    # クラウドインフラ（AWS/GCP等）
-    "inf_saas":      19,    # SaaSツール利用料
-    "inf_license":   20,    # ライセンス費用
-    "inf_other":     21,    # その他インフラ
-    "infra_total":   22,
-    # --- 開発費合計 ---
-    "total":         24,
-}
+# ---------------------------------------------------------------------------
+# R&D detail sheet — 動的テーマ構造
+# ---------------------------------------------------------------------------
+# 大カテゴリ (事業ライン等) と小カテゴリ (個別開発テーマ) をパラメータで指定可能。
+# テーマ構造から行位置を自動計算する。
+
+DEFAULT_RD_THEMES: List[Dict] = [
+    {"name": "コアプロダクト開発", "items": ["バックエンド開発", "フロントエンド開発", "UI/UXデザイン", "QA・テスト"]},
+    {"name": "新規事業・機能開発", "items": ["新機能企画・開発", "PoC・プロトタイプ", "外注開発費"]},
+    {"name": "インフラ・技術基盤", "items": ["クラウドインフラ（AWS/GCP等）", "DevOps・CI/CD", "セキュリティ対応"]},
+    {"name": "保守・運用", "items": ["バグ修正・障害対応", "モニタリング・監視", "その他保守"]},
+]
+
+
+def compute_rd_rows(themes: Optional[List[Dict]] = None) -> Dict:
+    """テーマ構造から R&D 明細シートの行位置を動的に計算する。
+
+    Returns a dict with keys:
+      header_fy, cat{N}_header, cat{N}_sub{M}, cat{N}_total,
+      cat{N}_count, total, _num_cats
+    """
+    themes = themes or DEFAULT_RD_THEMES
+    rows: Dict = {"header_fy": 3}
+    current_row = 5
+
+    for i, theme in enumerate(themes):
+        cat = f"cat{i + 1}"
+        rows[f"{cat}_header"] = current_row
+        current_row += 1
+
+        for j in range(len(theme["items"])):
+            rows[f"{cat}_sub{j + 1}"] = current_row
+            current_row += 1
+
+        rows[f"{cat}_total"] = current_row
+        rows[f"{cat}_count"] = len(theme["items"])
+        current_row += 2  # total row + blank separator
+
+    rows["total"] = current_row
+    rows["_num_cats"] = len(themes)
+    return rows
+
+
+# Module-level default (backward compatibility with export.py imports)
+RD_ROWS: Dict = compute_rd_rows()
 
 # Simulation sheet row positions
 SIM_ROWS = {
@@ -1422,99 +1442,64 @@ def build_sga_detail_sheet(
 def build_rd_detail_sheet(
     wb: Workbook,
     fy_labels: Optional[List[str]] = None,
+    rd_themes: Optional[List[Dict]] = None,
 ) -> None:
-    """Build 開発費明細 (R&D detail) sheet — parameter-driven.
+    """Build 開発費明細 (R&D detail) sheet — 動的テーマ構造.
 
-    Structure:
-      社内開発: 3 roles × (平均年収 × 人数)
-      外注開発: 3 categories × direct input
-      インフラ・ツール: 4 categories × direct input
-      開発費合計: sum of all sections
+    大カテゴリ (事業ライン等) と小カテゴリ (個別開発テーマ) を
+    rd_themes パラメータで自由に指定可能。
+
+    Example rd_themes:
+      [
+        {"name": "アカデミーサービス", "items": ["栄養士DX化", "コンテンツ高度化"]},
+        {"name": "ミールサービス", "items": ["ロジスティクス効率化"]},
+        {"name": "共通", "items": ["CSシステム構築"]},
+      ]
     """
+    themes = rd_themes or DEFAULT_RD_THEMES
+    rd_rows = RD_ROWS  # Module-level dict (updated by create_v2_workbook)
+
     fy = fy_labels or DEFAULT_FY_LABELS
     ws = wb.create_sheet("開発費明細")
-    _set_col_widths(ws, {
-        1: 28, 2: 16, 3: 16, 4: 16, 5: 16, 6: 16,
-        7: 2,   # spacer
-        8: 16,  # param: salary
-        9: 10, 10: 10, 11: 10, 12: 10, 13: 10,  # headcount FY1-5
-    })
+    _set_col_widths(ws, {1: 28, 2: 16, 3: 16, 4: 16, 5: 16, 6: 16})
 
     # Title
-    _write_title(ws, 1, "開発費明細（R&D）", merge_end_col=13)
+    _write_title(ws, 1, "開発費明細（R&D）", merge_end_col=6)
     _separator_row(ws, 2)
 
     # FY headers
-    _write_fy_headers(ws, RD_ROWS["header_fy"], fy, label="費目")
-    ws.cell(row=RD_ROWS["header_fy"], column=8, value="パラメータ").font = SUBHEADER_FONT
-    for i, f in enumerate(fy):
-        c = ws.cell(row=RD_ROWS["header_fy"], column=9 + i, value=f"人数{f}")
-        c.font = Font(name="Meiryo", size=9, bold=True, color="FF4472C4")
-        c.alignment = Alignment(horizontal="center")
+    _write_fy_headers(ws, rd_rows["header_fy"], fy, label="開発テーマ")
 
-    # ═══════ 社内開発セクション ═══════
-    _write_section_header(ws, RD_ROWS["int_header"], "【社内開発人件費】平均年収 × 人数")
-    ws.cell(row=RD_ROWS["int_header"], column=8, value="平均年収").font = Font(name="Meiryo", size=9, color="FF4472C4")
+    # ═══════ 各大カテゴリを動的に生成 ═══════
+    cat_total_rows: List[int] = []
 
-    int_roles = [
-        ("int_engineers", "エンジニア",       8_000_000, [2, 3, 5, 7, 10]),
-        ("int_designers", "デザイナー",       6_500_000, [0, 1, 1, 2, 2]),
-        ("int_pm",        "PM・ディレクター", 9_000_000, [1, 1, 1, 2, 2]),
-    ]
-    for key, lbl, sal, hc in int_roles:
-        _write_param_role_row(ws, RD_ROWS[key], lbl, fy, default_salary=sal, default_hc=hc)
+    for i, theme in enumerate(themes):
+        cat = f"cat{i + 1}"
 
-    first_int = RD_ROWS["int_engineers"]
-    last_int = RD_ROWS["int_pm"]
-    int_f = [f"=SUM({_col(c)}{first_int}:{_col(c)}{last_int})" for c in FY_COLS]
-    _write_formula_row(ws, RD_ROWS["int_total"], "社内開発 小計", int_f, bold=True)
-    _apply_border_row(ws, RD_ROWS["int_total"], THIN_BORDER)
+        # Section header: 【大カテゴリ名】
+        _write_section_header(ws, rd_rows[f"{cat}_header"], f"【{theme['name']}】")
 
-    # ═══════ 外注開発セクション ═══════
-    _write_section_header(ws, RD_ROWS["ext_header"], "【外注開発費】")
+        # Sub-items (小カテゴリ)
+        for j, item_label in enumerate(theme["items"]):
+            _write_input_row(ws, rd_rows[f"{cat}_sub{j + 1}"], item_label, [0] * 5, indent=1)
 
-    ext_items = [
-        ("ext_dev",    "開発外注費"),
-        ("ext_design", "デザイン外注費"),
-        ("ext_other",  "その他外注"),
-    ]
-    for key, lbl in ext_items:
-        _write_input_row(ws, RD_ROWS[key], lbl, [0] * 5, indent=1)
+        # Subtotal: 大カテゴリ名 小計
+        first_sub = rd_rows[f"{cat}_sub1"]
+        last_sub = rd_rows[f"{cat}_sub{len(theme['items'])}"]
+        sub_f = [f"=SUM({_col(c)}{first_sub}:{_col(c)}{last_sub})" for c in FY_COLS]
+        _write_formula_row(ws, rd_rows[f"{cat}_total"], f"{theme['name']} 小計", sub_f, bold=True)
+        _apply_border_row(ws, rd_rows[f"{cat}_total"], THIN_BORDER)
 
-    first_ext = RD_ROWS["ext_dev"]
-    last_ext = RD_ROWS["ext_other"]
-    ext_f = [f"=SUM({_col(c)}{first_ext}:{_col(c)}{last_ext})" for c in FY_COLS]
-    _write_formula_row(ws, RD_ROWS["ext_total"], "外注開発 小計", ext_f, bold=True)
-    _apply_border_row(ws, RD_ROWS["ext_total"], THIN_BORDER)
-
-    # ═══════ インフラ・ツールセクション ═══════
-    _write_section_header(ws, RD_ROWS["infra_header"], "【インフラ・ツール費】")
-
-    infra_items = [
-        ("inf_cloud",   "クラウドインフラ（AWS/GCP等）"),
-        ("inf_saas",    "SaaSツール利用料"),
-        ("inf_license", "ライセンス費用"),
-        ("inf_other",   "その他インフラ"),
-    ]
-    for key, lbl in infra_items:
-        _write_input_row(ws, RD_ROWS[key], lbl, [0] * 5, indent=1)
-
-    first_inf = RD_ROWS["inf_cloud"]
-    last_inf = RD_ROWS["inf_other"]
-    inf_f = [f"=SUM({_col(c)}{first_inf}:{_col(c)}{last_inf})" for c in FY_COLS]
-    _write_formula_row(ws, RD_ROWS["infra_total"], "インフラ 小計", inf_f, bold=True)
-    _apply_border_row(ws, RD_ROWS["infra_total"], THIN_BORDER)
+        cat_total_rows.append(rd_rows[f"{cat}_total"])
 
     # ═══════ 開発費合計 ═══════
-    _separator_row(ws, RD_ROWS["total"] - 1)
+    _separator_row(ws, rd_rows["total"] - 1)
     grand_f = [
-        f"={_col(c)}{RD_ROWS['int_total']}"
-        f"+{_col(c)}{RD_ROWS['ext_total']}"
-        f"+{_col(c)}{RD_ROWS['infra_total']}"
+        "=" + "+".join(f"{_col(c)}{tr}" for tr in cat_total_rows)
         for c in FY_COLS
     ]
-    _write_formula_row(ws, RD_ROWS["total"], "開発費合計", grand_f, bold=True)
-    _apply_border_row(ws, RD_ROWS["total"], BOTTOM_DOUBLE)
+    _write_formula_row(ws, rd_rows["total"], "開発費合計", grand_f, bold=True)
+    _apply_border_row(ws, rd_rows["total"], BOTTOM_DOUBLE)
 
 
 def create_v2_workbook(
@@ -1523,6 +1508,7 @@ def create_v2_workbook(
     segment_model_types: Optional[List[str]] = None,
     extra_sheets: Optional[List[str]] = None,
     sga_rd_mode: str = "inline",
+    rd_themes: Optional[List[Dict]] = None,
 ) -> Workbook:
     """Create a complete v2 workbook with 3-layer structure.
 
@@ -1540,6 +1526,15 @@ def create_v2_workbook(
     sga_rd_mode : str
         "inline" = OPEX items directly in PL sheet (default)
         "separate" = SGA/R&D totals reference detail sheets
+    rd_themes : list[dict] | None
+        R&D 開発テーマ構造。大カテゴリ/小カテゴリを自由に定義。
+        Example::
+
+            [
+                {"name": "アカデミーサービス", "items": ["栄養士DX化", "コンテンツ高度化"]},
+                {"name": "ミールサービス", "items": ["ロジスティクス効率化"]},
+                {"name": "共通", "items": ["CSシステム構築"]},
+            ]
 
     Returns
     -------
@@ -1548,6 +1543,13 @@ def create_v2_workbook(
     """
     fy = fy_labels or DEFAULT_FY_LABELS
     model_types = segment_model_types or ["subscription"] * num_segments
+
+    # Update module-level RD_ROWS before building any sheets
+    # (PL sheet and simulation sheet reference RD_ROWS['total'])
+    if rd_themes is not None or sga_rd_mode == "separate":
+        rd_rows = compute_rd_rows(rd_themes)
+        RD_ROWS.clear()
+        RD_ROWS.update(rd_rows)
 
     wb = Workbook()
 
@@ -1562,7 +1564,7 @@ def create_v2_workbook(
     # SGA/R&D detail sheets (when separate mode)
     if sga_rd_mode == "separate":
         build_sga_detail_sheet(wb, fy_labels=fy)
-        build_rd_detail_sheet(wb, fy_labels=fy)
+        build_rd_detail_sheet(wb, fy_labels=fy, rd_themes=rd_themes)
 
     # Layer A: Simulation (moved to first position)
     build_simulation_sheet(wb, fy_labels=fy, sga_rd_mode=sga_rd_mode)
