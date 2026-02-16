@@ -397,13 +397,26 @@ def _generate_local_excel(job_id: str, run_id: str, body: dict):
                 )
                 ws_sga.cell(row=SGA_ROWS["total"], column=col).value = sga_grand
 
-                # --- R&D / System ---
+                # --- R&D / System (開発テーマベース4大カテゴリ) ---
                 system_list = sga_detail.get("system", [])
                 rd_total = system_list[i] if system_list and i < len(system_list) else round(opex_list[i] * 0.12)
-                ws_rd.cell(row=RD_ROWS["int_engineers"], column=col).value = round(rd_total * 0.50)
-                ws_rd.cell(row=RD_ROWS["ext_dev"], column=col).value = round(rd_total * 0.25)
-                ws_rd.cell(row=RD_ROWS["inf_cloud"], column=col).value = round(rd_total * 0.20)
-                ws_rd.cell(row=RD_ROWS["inf_other"], column=col).value = round(rd_total * 0.05)
+                # 大カテゴリ1: コアプロダクト開発 (40%)
+                ws_rd.cell(row=RD_ROWS["cat1_sub1"], column=col).value = round(rd_total * 0.20)  # バックエンド
+                ws_rd.cell(row=RD_ROWS["cat1_sub2"], column=col).value = round(rd_total * 0.10)  # フロントエンド
+                ws_rd.cell(row=RD_ROWS["cat1_sub3"], column=col).value = round(rd_total * 0.05)  # UI/UX
+                ws_rd.cell(row=RD_ROWS["cat1_sub4"], column=col).value = round(rd_total * 0.05)  # QA
+                # 大カテゴリ2: 新規事業・機能開発 (25%)
+                ws_rd.cell(row=RD_ROWS["cat2_sub1"], column=col).value = round(rd_total * 0.15)  # 新機能
+                ws_rd.cell(row=RD_ROWS["cat2_sub2"], column=col).value = round(rd_total * 0.05)  # PoC
+                ws_rd.cell(row=RD_ROWS["cat2_sub3"], column=col).value = round(rd_total * 0.05)  # 外注
+                # 大カテゴリ3: インフラ・技術基盤 (20%)
+                ws_rd.cell(row=RD_ROWS["cat3_sub1"], column=col).value = round(rd_total * 0.12)  # クラウド
+                ws_rd.cell(row=RD_ROWS["cat3_sub2"], column=col).value = round(rd_total * 0.05)  # DevOps
+                ws_rd.cell(row=RD_ROWS["cat3_sub3"], column=col).value = round(rd_total * 0.03)  # セキュリティ
+                # 大カテゴリ4: 保守・運用 (15%)
+                ws_rd.cell(row=RD_ROWS["cat4_sub1"], column=col).value = round(rd_total * 0.08)  # バグ修正
+                ws_rd.cell(row=RD_ROWS["cat4_sub2"], column=col).value = round(rd_total * 0.04)  # 監視
+                ws_rd.cell(row=RD_ROWS["cat4_sub3"], column=col).value = round(rd_total * 0.03)  # その他
             # PL rows 12-13 are formulas referencing detail sheets (already set by template)
         else:
             # Inline mode: write OPEX directly to PL sheet using computed breakdown

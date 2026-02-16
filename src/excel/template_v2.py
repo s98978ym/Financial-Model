@@ -168,30 +168,36 @@ SGA_ROWS = {
     "total":          39,
 }
 
-# R&D detail sheet row positions (expanded with parameter-driven logic)
+# R&D detail sheet row positions — 開発テーマベース (大カテゴリ → 小カテゴリ)
 RD_ROWS = {
     "header_fy":   3,
-    # --- 社内開発セクション ---
-    "int_header":     5,
-    "int_engineers":  6,    # エンジニア人件費 (avg_salary × headcount)
-    "int_designers":  7,    # デザイナー人件費
-    "int_pm":         8,    # PM・ディレクター人件費
-    "int_total":      9,
-    # --- 外注開発セクション ---
-    "ext_header":    11,
-    "ext_dev":       12,    # 開発外注費
-    "ext_design":    13,    # デザイン外注費
-    "ext_other":     14,    # その他外注
-    "ext_total":     15,
-    # --- インフラ・ツールセクション ---
-    "infra_header":  17,
-    "inf_cloud":     18,    # クラウドインフラ（AWS/GCP等）
-    "inf_saas":      19,    # SaaSツール利用料
-    "inf_license":   20,    # ライセンス費用
-    "inf_other":     21,    # その他インフラ
-    "infra_total":   22,
+    # --- 大カテゴリ1: コアプロダクト開発 ---
+    "cat1_header":    5,
+    "cat1_sub1":      6,    # バックエンド開発
+    "cat1_sub2":      7,    # フロントエンド開発
+    "cat1_sub3":      8,    # UI/UXデザイン
+    "cat1_sub4":      9,    # QA・テスト
+    "cat1_total":    10,
+    # --- 大カテゴリ2: 新規事業・機能開発 ---
+    "cat2_header":   12,
+    "cat2_sub1":     13,    # 新機能企画・開発
+    "cat2_sub2":     14,    # PoC・プロトタイプ
+    "cat2_sub3":     15,    # 外注開発費
+    "cat2_total":    16,
+    # --- 大カテゴリ3: インフラ・技術基盤 ---
+    "cat3_header":   18,
+    "cat3_sub1":     19,    # クラウドインフラ（AWS/GCP等）
+    "cat3_sub2":     20,    # DevOps・CI/CD
+    "cat3_sub3":     21,    # セキュリティ対応
+    "cat3_total":    22,
+    # --- 大カテゴリ4: 保守・運用 ---
+    "cat4_header":   24,
+    "cat4_sub1":     25,    # バグ修正・障害対応
+    "cat4_sub2":     26,    # モニタリング・監視
+    "cat4_sub3":     27,    # その他保守
+    "cat4_total":    28,
     # --- 開発費合計 ---
-    "total":         24,
+    "total":         30,
 }
 
 # Simulation sheet row positions
@@ -1423,94 +1429,94 @@ def build_rd_detail_sheet(
     wb: Workbook,
     fy_labels: Optional[List[str]] = None,
 ) -> None:
-    """Build 開発費明細 (R&D detail) sheet — parameter-driven.
+    """Build 開発費明細 (R&D detail) sheet — 開発テーマベース.
 
     Structure:
-      社内開発: 3 roles × (平均年収 × 人数)
-      外注開発: 3 categories × direct input
-      インフラ・ツール: 4 categories × direct input
-      開発費合計: sum of all sections
+      大カテゴリ1: コアプロダクト開発 (4 sub-items)
+      大カテゴリ2: 新規事業・機能開発 (3 sub-items)
+      大カテゴリ3: インフラ・技術基盤 (3 sub-items)
+      大カテゴリ4: 保守・運用         (3 sub-items)
+      開発費合計: sum of all category subtotals
     """
     fy = fy_labels or DEFAULT_FY_LABELS
     ws = wb.create_sheet("開発費明細")
-    _set_col_widths(ws, {
-        1: 28, 2: 16, 3: 16, 4: 16, 5: 16, 6: 16,
-        7: 2,   # spacer
-        8: 16,  # param: salary
-        9: 10, 10: 10, 11: 10, 12: 10, 13: 10,  # headcount FY1-5
-    })
+    _set_col_widths(ws, {1: 28, 2: 16, 3: 16, 4: 16, 5: 16, 6: 16})
 
     # Title
-    _write_title(ws, 1, "開発費明細（R&D）", merge_end_col=13)
+    _write_title(ws, 1, "開発費明細（R&D）", merge_end_col=6)
     _separator_row(ws, 2)
 
     # FY headers
-    _write_fy_headers(ws, RD_ROWS["header_fy"], fy, label="費目")
-    ws.cell(row=RD_ROWS["header_fy"], column=8, value="パラメータ").font = SUBHEADER_FONT
-    for i, f in enumerate(fy):
-        c = ws.cell(row=RD_ROWS["header_fy"], column=9 + i, value=f"人数{f}")
-        c.font = Font(name="Meiryo", size=9, bold=True, color="FF4472C4")
-        c.alignment = Alignment(horizontal="center")
+    _write_fy_headers(ws, RD_ROWS["header_fy"], fy, label="開発テーマ")
 
-    # ═══════ 社内開発セクション ═══════
-    _write_section_header(ws, RD_ROWS["int_header"], "【社内開発人件費】平均年収 × 人数")
-    ws.cell(row=RD_ROWS["int_header"], column=8, value="平均年収").font = Font(name="Meiryo", size=9, color="FF4472C4")
-
-    int_roles = [
-        ("int_engineers", "エンジニア",       8_000_000, [2, 3, 5, 7, 10]),
-        ("int_designers", "デザイナー",       6_500_000, [0, 1, 1, 2, 2]),
-        ("int_pm",        "PM・ディレクター", 9_000_000, [1, 1, 1, 2, 2]),
+    # ═══════ 大カテゴリ1: コアプロダクト開発 ═══════
+    _write_section_header(ws, RD_ROWS["cat1_header"], "【コアプロダクト開発】")
+    cat1_items = [
+        ("cat1_sub1", "バックエンド開発"),
+        ("cat1_sub2", "フロントエンド開発"),
+        ("cat1_sub3", "UI/UXデザイン"),
+        ("cat1_sub4", "QA・テスト"),
     ]
-    for key, lbl, sal, hc in int_roles:
-        _write_param_role_row(ws, RD_ROWS[key], lbl, fy, default_salary=sal, default_hc=hc)
-
-    first_int = RD_ROWS["int_engineers"]
-    last_int = RD_ROWS["int_pm"]
-    int_f = [f"=SUM({_col(c)}{first_int}:{_col(c)}{last_int})" for c in FY_COLS]
-    _write_formula_row(ws, RD_ROWS["int_total"], "社内開発 小計", int_f, bold=True)
-    _apply_border_row(ws, RD_ROWS["int_total"], THIN_BORDER)
-
-    # ═══════ 外注開発セクション ═══════
-    _write_section_header(ws, RD_ROWS["ext_header"], "【外注開発費】")
-
-    ext_items = [
-        ("ext_dev",    "開発外注費"),
-        ("ext_design", "デザイン外注費"),
-        ("ext_other",  "その他外注"),
-    ]
-    for key, lbl in ext_items:
+    for key, lbl in cat1_items:
         _write_input_row(ws, RD_ROWS[key], lbl, [0] * 5, indent=1)
+    first_c1 = RD_ROWS["cat1_sub1"]
+    last_c1 = RD_ROWS["cat1_sub4"]
+    c1_f = [f"=SUM({_col(c)}{first_c1}:{_col(c)}{last_c1})" for c in FY_COLS]
+    _write_formula_row(ws, RD_ROWS["cat1_total"], "コアプロダクト開発 小計", c1_f, bold=True)
+    _apply_border_row(ws, RD_ROWS["cat1_total"], THIN_BORDER)
 
-    first_ext = RD_ROWS["ext_dev"]
-    last_ext = RD_ROWS["ext_other"]
-    ext_f = [f"=SUM({_col(c)}{first_ext}:{_col(c)}{last_ext})" for c in FY_COLS]
-    _write_formula_row(ws, RD_ROWS["ext_total"], "外注開発 小計", ext_f, bold=True)
-    _apply_border_row(ws, RD_ROWS["ext_total"], THIN_BORDER)
-
-    # ═══════ インフラ・ツールセクション ═══════
-    _write_section_header(ws, RD_ROWS["infra_header"], "【インフラ・ツール費】")
-
-    infra_items = [
-        ("inf_cloud",   "クラウドインフラ（AWS/GCP等）"),
-        ("inf_saas",    "SaaSツール利用料"),
-        ("inf_license", "ライセンス費用"),
-        ("inf_other",   "その他インフラ"),
+    # ═══════ 大カテゴリ2: 新規事業・機能開発 ═══════
+    _write_section_header(ws, RD_ROWS["cat2_header"], "【新規事業・機能開発】")
+    cat2_items = [
+        ("cat2_sub1", "新機能企画・開発"),
+        ("cat2_sub2", "PoC・プロトタイプ"),
+        ("cat2_sub3", "外注開発費"),
     ]
-    for key, lbl in infra_items:
+    for key, lbl in cat2_items:
         _write_input_row(ws, RD_ROWS[key], lbl, [0] * 5, indent=1)
+    first_c2 = RD_ROWS["cat2_sub1"]
+    last_c2 = RD_ROWS["cat2_sub3"]
+    c2_f = [f"=SUM({_col(c)}{first_c2}:{_col(c)}{last_c2})" for c in FY_COLS]
+    _write_formula_row(ws, RD_ROWS["cat2_total"], "新規事業・機能開発 小計", c2_f, bold=True)
+    _apply_border_row(ws, RD_ROWS["cat2_total"], THIN_BORDER)
 
-    first_inf = RD_ROWS["inf_cloud"]
-    last_inf = RD_ROWS["inf_other"]
-    inf_f = [f"=SUM({_col(c)}{first_inf}:{_col(c)}{last_inf})" for c in FY_COLS]
-    _write_formula_row(ws, RD_ROWS["infra_total"], "インフラ 小計", inf_f, bold=True)
-    _apply_border_row(ws, RD_ROWS["infra_total"], THIN_BORDER)
+    # ═══════ 大カテゴリ3: インフラ・技術基盤 ═══════
+    _write_section_header(ws, RD_ROWS["cat3_header"], "【インフラ・技術基盤】")
+    cat3_items = [
+        ("cat3_sub1", "クラウドインフラ（AWS/GCP等）"),
+        ("cat3_sub2", "DevOps・CI/CD"),
+        ("cat3_sub3", "セキュリティ対応"),
+    ]
+    for key, lbl in cat3_items:
+        _write_input_row(ws, RD_ROWS[key], lbl, [0] * 5, indent=1)
+    first_c3 = RD_ROWS["cat3_sub1"]
+    last_c3 = RD_ROWS["cat3_sub3"]
+    c3_f = [f"=SUM({_col(c)}{first_c3}:{_col(c)}{last_c3})" for c in FY_COLS]
+    _write_formula_row(ws, RD_ROWS["cat3_total"], "インフラ・技術基盤 小計", c3_f, bold=True)
+    _apply_border_row(ws, RD_ROWS["cat3_total"], THIN_BORDER)
+
+    # ═══════ 大カテゴリ4: 保守・運用 ═══════
+    _write_section_header(ws, RD_ROWS["cat4_header"], "【保守・運用】")
+    cat4_items = [
+        ("cat4_sub1", "バグ修正・障害対応"),
+        ("cat4_sub2", "モニタリング・監視"),
+        ("cat4_sub3", "その他保守"),
+    ]
+    for key, lbl in cat4_items:
+        _write_input_row(ws, RD_ROWS[key], lbl, [0] * 5, indent=1)
+    first_c4 = RD_ROWS["cat4_sub1"]
+    last_c4 = RD_ROWS["cat4_sub3"]
+    c4_f = [f"=SUM({_col(c)}{first_c4}:{_col(c)}{last_c4})" for c in FY_COLS]
+    _write_formula_row(ws, RD_ROWS["cat4_total"], "保守・運用 小計", c4_f, bold=True)
+    _apply_border_row(ws, RD_ROWS["cat4_total"], THIN_BORDER)
 
     # ═══════ 開発費合計 ═══════
     _separator_row(ws, RD_ROWS["total"] - 1)
     grand_f = [
-        f"={_col(c)}{RD_ROWS['int_total']}"
-        f"+{_col(c)}{RD_ROWS['ext_total']}"
-        f"+{_col(c)}{RD_ROWS['infra_total']}"
+        f"={_col(c)}{RD_ROWS['cat1_total']}"
+        f"+{_col(c)}{RD_ROWS['cat2_total']}"
+        f"+{_col(c)}{RD_ROWS['cat3_total']}"
+        f"+{_col(c)}{RD_ROWS['cat4_total']}"
         for c in FY_COLS
     ]
     _write_formula_row(ws, RD_ROWS["total"], "開発費合計", grand_f, bold=True)
