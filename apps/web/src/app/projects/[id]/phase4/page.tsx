@@ -4,6 +4,7 @@ import { useState, useMemo } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { PLPreviewTable } from '@/components/pl/PLPreviewTable'
 import { EvidencePanel } from '@/components/grid/EvidencePanel'
+import { MobileEvidenceSheet } from '@/components/grid/MobileEvidenceSheet'
 import { PhaseLayout } from '@/components/ui/PhaseLayout'
 import { usePhaseJob } from '@/lib/usePhaseJob'
 
@@ -257,13 +258,19 @@ export default function Phase4Page() {
               />
             </div>
 
-            {/* Evidence Panel */}
+            {/* Evidence Panel - Desktop */}
             <div className="w-80 flex-shrink-0 hidden lg:block">
               <div className="sticky top-4">
                 <EvidencePanel cell={selectedCell} />
               </div>
             </div>
           </div>
+
+          {/* Evidence Panel - Mobile Bottom Sheet */}
+          <MobileEvidenceSheet
+            cell={selectedCell}
+            onClose={() => setSelectedCell(null)}
+          />
 
           {/* Unmapped Items */}
           {unmapped.length > 0 && (

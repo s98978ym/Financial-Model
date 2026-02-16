@@ -37,7 +37,44 @@ export function PhaseLayout({ phase, title, subtitle, projectId, children }: Pha
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
           </svg>
         </Link>
-        <div className="flex items-center gap-0 overflow-x-auto pb-2">
+
+        {/* Mobile: Dot stepper with current phase label */}
+        <div className="sm:hidden">
+          <div className="flex items-center justify-center gap-1.5 mb-2">
+            {PHASES.map(function(p) {
+              var isActive = p.num === phase
+              var isComplete = p.num < phase
+              var href = p.num === 1
+                ? '/projects/new'
+                : '/projects/' + projectId + '/' + p.path
+              return (
+                <Link
+                  key={p.num}
+                  href={href}
+                  className={
+                    'w-3 h-3 rounded-full transition-all flex-shrink-0 ' +
+                    (isActive
+                      ? 'bg-blue-600 ring-2 ring-blue-200 scale-125'
+                      : isComplete
+                        ? 'bg-green-500'
+                        : 'bg-gray-300')
+                  }
+                  title={p.label + ': ' + p.desc}
+                />
+              )
+            })}
+          </div>
+          <div className="text-center">
+            <span className="text-xs text-gray-400">Phase {phase}/{PHASES.length}</span>
+            <span className="mx-2 text-gray-300">|</span>
+            <span className="text-xs font-semibold text-blue-600">
+              {PHASES[phase - 1] ? PHASES[phase - 1].icon + ' ' + PHASES[phase - 1].label : ''}
+            </span>
+          </div>
+        </div>
+
+        {/* Desktop: Full horizontal stepper */}
+        <div className="hidden sm:flex items-center gap-0 overflow-x-auto pb-2">
           {PHASES.map(function(p, i) {
             var isActive = p.num === phase
             var isComplete = p.num < phase
@@ -71,7 +108,7 @@ export function PhaseLayout({ phase, title, subtitle, projectId, children }: Pha
                       <span className="text-xs">{p.icon}</span>
                     )}
                   </span>
-                  <div className="hidden sm:block">
+                  <div>
                     <div className={'text-xs font-semibold ' + (isActive ? 'text-white' : '')}>
                       {p.label}
                     </div>
@@ -123,7 +160,7 @@ export function PhaseLayout({ phase, title, subtitle, projectId, children }: Pha
         {phase > 1 ? (
           <Link
             href={'/projects/' + projectId + '/' + (PHASES[phase - 2] ? PHASES[phase - 2].path : '')}
-            className="flex items-center gap-2 text-gray-500 hover:text-gray-700 text-sm transition-colors"
+            className="flex items-center gap-2 text-gray-500 hover:text-gray-700 text-sm transition-colors min-h-[44px] px-3"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -136,7 +173,7 @@ export function PhaseLayout({ phase, title, subtitle, projectId, children }: Pha
           {phase < PHASES.length && (
             <Link
               href={'/projects/' + projectId + '/' + (PHASES[phase] ? PHASES[phase].path : '')}
-              className={'flex items-center gap-2 px-5 py-2.5 text-sm text-white rounded-xl font-medium transition-colors shadow-sm ' + (
+              className={'flex items-center gap-2 px-5 py-3 text-sm text-white rounded-xl font-medium transition-colors shadow-sm min-h-[44px] ' + (
                 phase === PHASES.length - 1 ? 'bg-purple-600 hover:bg-purple-700' :
                 phase >= 6 ? 'bg-green-600 hover:bg-green-700' :
                 'bg-blue-600 hover:bg-blue-700'

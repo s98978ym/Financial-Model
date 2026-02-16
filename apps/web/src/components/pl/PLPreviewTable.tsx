@@ -1,7 +1,19 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { formatValue, categorizePL, PL_COLORS, PURPOSE_LABELS, type PLCategory } from './formatters'
+
+/** Hook to detect mobile viewport */
+function useIsMobile(breakpoint: number = 768) {
+  var [isMobile, setIsMobile] = useState(false)
+  useEffect(function() {
+    function check() { setIsMobile(window.innerWidth < breakpoint) }
+    check()
+    window.addEventListener('resize', check)
+    return function() { window.removeEventListener('resize', check) }
+  }, [breakpoint])
+  return isMobile
+}
 
 interface PLPreviewTableProps {
   /** Phase 5 extractions or Phase 4 assignments */
@@ -372,6 +384,119 @@ export function PLPreviewTable({
   )
 }
 
+/** Mobile card view for a single year-grouped row */
+function MobileYearCard({
+  row,
+  colors,
+  onRowClick,
+  isSelected,
+}: {
+  row: YearGroupedRow
+  colors: typeof PL_COLORS[PLCategory]
+  onRowClick?: (item: any) => void
+  isSelected: boolean
+}) {
+  var [expanded, setExpanded] = useState(false)
+  var pct = Math.round(row.avgConfidence * 100)
+  var confColor = pct >= 80 ? 'text-green-600' : pct >= 50 ? 'text-yellow-600' : 'text-red-600'
+  var confBg = pct >= 80 ? 'bg-green-100' : pct >= 50 ? 'bg-yellow-100' : 'bg-red-100'
+
+  // Find first non-null year value for quick display
+  var firstVal = row.yearValues.find(function(yv): yv is EnrichedItem { return yv !== null })
+
+  return (
+    <div
+      className={
+        'rounded-lg border p-3 transition-all ' +
+        (isSelected ? 'ring-2 ring-blue-400 border-blue-200 bg-blue-50/50' : 'border-gray-200 bg-white')
+      }
+    >
+      {/* Card Header */}
+      <button
+        onClick={function() { setExpanded(!expanded) }}
+        className="w-full"
+      >
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex-1 min-w-0 text-left">
+            <div className="flex items-center gap-1.5">
+              {row.isEstimated && (
+                <span className="inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-700 flex-shrink-0">
+                  推定
+                </span>
+              )}
+              <span className={'font-medium text-sm truncate ' + colors.text}>
+                {row.label}
+              </span>
+            </div>
+            {row.unit && (
+              <span className="text-[10px] text-gray-400 mt-0.5 block">単位: {row.unit}</span>
+            )}
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <span className={'text-xs font-mono font-bold px-1.5 py-0.5 rounded ' + confBg + ' ' + confColor}>
+              {pct}%
+            </span>
+            <SourceBadge source={row.primarySource} />
+            <svg
+              className={'w-4 h-4 text-gray-400 transition-transform ' + (expanded ? 'rotate-180' : '')}
+              fill="none" viewBox="0 0 24 24" stroke="currentColor"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </div>
+        </div>
+        {/* Quick FY1 value preview */}
+        {!expanded && firstVal && (
+          <div className="mt-1.5 text-left">
+            <span className="text-[10px] text-gray-400">FY1: </span>
+            <span className={
+              'font-mono font-semibold text-sm ' +
+              (firstVal.source === 'document' ? 'text-blue-700' :
+               firstVal.source === 'inferred' ? 'text-amber-700' : 'text-gray-600')
+            }>
+              {firstVal.formattedValue}
+            </span>
+          </div>
+        )}
+      </button>
+
+      {/* Expanded: all year values */}
+      {expanded && (
+        <div className="mt-3 pt-3 border-t border-gray-100 space-y-1.5">
+          {YEAR_HEADERS.map(function(header, yi) {
+            var yv = row.yearValues[yi]
+            return (
+              <div
+                key={yi}
+                onClick={function() { if (yv) onRowClick?.(yv.raw) }}
+                className={
+                  'flex items-center justify-between py-1.5 px-2 rounded ' +
+                  (yv ? 'cursor-pointer hover:bg-blue-50 active:bg-blue-100' : '') +
+                  (!yv ? ' opacity-50' : '')
+                }
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-gray-400 w-7">FY{yi + 1}</span>
+                  <span className="text-xs text-gray-600">{header}</span>
+                </div>
+                <span className={
+                  'font-mono font-semibold text-sm ' +
+                  (yv
+                    ? (yv.source === 'document' ? 'text-blue-700' :
+                       yv.source === 'inferred' ? 'text-amber-700' : 'text-gray-600')
+                    : 'text-gray-300')
+                }>
+                  {yv ? yv.formattedValue : '—'}
+                </span>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 /** Year-grouped table for extraction mode: shows FY1-FY5 in columns */
 function YearGroupedTable({
   items,
@@ -384,10 +509,37 @@ function YearGroupedTable({
   onRowClick?: (item: any) => void
   selectedItem?: any
 }) {
+  var isMobile = useIsMobile()
   var groupedRows = useMemo(function() {
     return groupByYears(items)
   }, [items])
 
+  // Mobile: card view
+  if (isMobile) {
+    return (
+      <div className="space-y-2">
+        {groupedRows.map(function(row, idx) {
+          var isRowSelected = false
+          row.yearValues.forEach(function(yv) {
+            if (yv && selectedItem && selectedItem.sheet === yv.sheet && selectedItem.cell === yv.cell) {
+              isRowSelected = true
+            }
+          })
+          return (
+            <MobileYearCard
+              key={idx}
+              row={row}
+              colors={colors}
+              onRowClick={onRowClick}
+              isSelected={isRowSelected}
+            />
+          )
+        })}
+      </div>
+    )
+  }
+
+  // Desktop: table view
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
