@@ -6,8 +6,16 @@ and returns a ProviderAdapter ready for agent use.
 from __future__ import annotations
 
 import logging
+import os
 
 logger = logging.getLogger(__name__)
+
+# Map of provider name → required env var for API key
+_PROVIDER_API_KEY_ENV = {
+    "anthropic": "ANTHROPIC_API_KEY",
+    "openai": "OPENAI_API_KEY",
+    "google": "GOOGLE_API_KEY",
+}
 
 
 def get_adapter_for_run(run_id: str):
@@ -40,6 +48,14 @@ def get_adapter_for_run(run_id: str):
 
     provider_name = llm_config.get("provider", "anthropic")
     model_id = llm_config.get("model")
+
+    # Validate API key is set before attempting to use the provider
+    env_var = _PROVIDER_API_KEY_ENV.get(provider_name)
+    if env_var and not os.environ.get(env_var):
+        raise RuntimeError(
+            f"{provider_name}プロバイダーのAPIキー({env_var})が設定されていません。"
+            f"Renderダッシュボードの環境変数で{env_var}を設定してください。"
+        )
 
     logger.info(
         "Run %s: using provider=%s model=%s",
