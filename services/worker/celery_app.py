@@ -28,36 +28,35 @@ if DATABASE_URL and not os.environ.get("DATABASE_URL"):
 
 # -------------------------------------------------------------------
 # Startup validation — fail fast with clear error messages
+# Only enforce when running as actual Celery worker (not during test imports).
 # -------------------------------------------------------------------
-_REQUIRED_VARS = {
-    "REDIS_URL": "Upstash Redis TLS URL (rediss://...)",
-}
-_RECOMMENDED_VARS = {
-    "ANTHROPIC_API_KEY": "Required for Claude LLM tasks",
-}
+_is_celery_worker = (
+    len(sys.argv) > 0
+    and ("celery" in sys.argv[0] or any(a == "worker" for a in sys.argv))
+)
 
-_missing = [k for k in _REQUIRED_VARS if not os.environ.get(k)]
-_missing_rec = [k for k in _RECOMMENDED_VARS if not os.environ.get(k)]
+if _is_celery_worker:
+    _REQUIRED_VARS = {
+        "REDIS_URL": "Upstash Redis TLS URL (rediss://...)",
+    }
+    _missing = [k for k in _REQUIRED_VARS if not os.environ.get(k)]
+    if _missing:
+        for k in _missing:
+            print(f"[WORKER ERROR] Missing required env var: {k} — {_REQUIRED_VARS[k]}", file=sys.stderr)
+        print(
+            "[WORKER ERROR] Set these in the Render dashboard (Environment tab). "
+            "Worker cannot start without them.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
-if _missing:
-    for k in _missing:
-        print(f"[WORKER ERROR] Missing required env var: {k} — {_REQUIRED_VARS[k]}", file=sys.stderr)
-    print(
-        "[WORKER ERROR] Set these in the Render dashboard (Environment tab). "
-        "Worker cannot start without them.",
-        file=sys.stderr,
-    )
-    sys.exit(1)
-
-if not DATABASE_URL:
-    logger.warning(
-        "Neither DATABASE_URL nor SUPABASE_URL is set — "
-        "worker will use in-memory fallback (data will not persist)"
-    )
-
-if _missing_rec:
-    for k in _missing_rec:
-        logger.warning("Missing recommended env var: %s — %s", k, _RECOMMENDED_VARS[k])
+    if not DATABASE_URL:
+        logger.warning(
+            "Neither DATABASE_URL nor SUPABASE_URL is set — "
+            "worker will use in-memory fallback (data will not persist)"
+        )
+    if not os.environ.get("ANTHROPIC_API_KEY"):
+        logger.warning("Missing recommended env var: ANTHROPIC_API_KEY — Required for Claude LLM tasks")
 
 # -------------------------------------------------------------------
 # TLS / SSL configuration for Upstash Redis
