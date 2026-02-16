@@ -309,7 +309,16 @@ def _generate_local_excel(job_id: str, run_id: str, body: dict):
             sga_rd_mode = "inline"
 
         # R&D themes: 開発テーマの大カテゴリ/小カテゴリ構造 (optional)
+        # Fallback chain: API body → Phase 2 result → DEFAULT_RD_THEMES
         rd_themes = options.get("rd_themes")
+        if not rd_themes:
+            try:
+                phase2 = db.get_phase_result(run_id, 2)
+                if phase2 and phase2.get("raw_json", {}).get("rd_themes"):
+                    rd_themes = phase2["raw_json"]["rd_themes"]
+                    logger.info("Using rd_themes from Phase 2 result (%d categories)", len(rd_themes))
+            except Exception as e:
+                logger.debug("Could not load rd_themes from Phase 2: %s", e)
 
         # Create full v2 workbook
         from src.excel.template_v2 import (

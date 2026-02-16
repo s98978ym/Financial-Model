@@ -436,6 +436,73 @@ class TestGroundingValidation:
 
 
 # ---------------------------------------------------------------------------
+# R&D Themes Extraction
+# ---------------------------------------------------------------------------
+
+MOCK_BM_WITH_RD_THEMES = {
+    **MOCK_BM_PROPOSALS_RESPONSE,
+    "rd_themes": [
+        {"name": "アカデミーサービス", "items": ["栄養士DX化", "コンテンツ高度化"]},
+        {"name": "ミールサービス", "items": ["ロジスティクス効率化"]},
+        {"name": "共通", "items": ["CSシステム構築"]},
+    ],
+}
+
+
+class TestRDThemesExtraction:
+    def test_rd_themes_parsed_from_llm_response(self) -> None:
+        """rd_themes should be parsed from LLM response."""
+        llm = _make_mock_llm([MOCK_BM_WITH_RD_THEMES])
+        result = BusinessModelAnalyzer(llm).analyze("事業計画書テキスト")
+        assert len(result.rd_themes) == 3
+        assert result.rd_themes[0].name == "アカデミーサービス"
+        assert result.rd_themes[0].items == ["栄養士DX化", "コンテンツ高度化"]
+        assert result.rd_themes[1].name == "ミールサービス"
+        assert result.rd_themes[1].items == ["ロジスティクス効率化"]
+        assert result.rd_themes[2].name == "共通"
+        assert result.rd_themes[2].items == ["CSシステム構築"]
+
+    def test_rd_themes_empty_when_not_in_response(self) -> None:
+        """rd_themes should be empty list when LLM doesn't return it."""
+        llm = _make_mock_llm([MOCK_BM_PROPOSALS_RESPONSE])
+        result = BusinessModelAnalyzer(llm).analyze("事業計画書テキスト")
+        assert result.rd_themes == []
+
+    def test_rd_themes_in_raw_json_after_select(self) -> None:
+        """rd_themes should appear in raw_json after select_proposal."""
+        llm = _make_mock_llm([MOCK_BM_WITH_RD_THEMES])
+        result = BusinessModelAnalyzer(llm).analyze("事業計画書テキスト")
+        selected = result.select_proposal(0)
+        assert "rd_themes" in selected.raw_json
+        assert len(selected.raw_json["rd_themes"]) == 3
+
+    def test_rd_themes_in_model_dump(self) -> None:
+        """rd_themes should be serializable via model_dump()."""
+        llm = _make_mock_llm([MOCK_BM_WITH_RD_THEMES])
+        result = BusinessModelAnalyzer(llm).analyze("事業計画書テキスト")
+        dumped = result.model_dump()
+        assert "rd_themes" in dumped
+        assert len(dumped["rd_themes"]) == 3
+        assert dumped["rd_themes"][0]["name"] == "アカデミーサービス"
+
+    def test_rd_themes_skips_invalid_entries(self) -> None:
+        """Invalid rd_themes entries (no name, not dict) should be skipped."""
+        response = {
+            **MOCK_BM_PROPOSALS_RESPONSE,
+            "rd_themes": [
+                {"name": "有効カテゴリ", "items": ["テーマA"]},
+                {"name": "", "items": ["テーマB"]},      # empty name → skip
+                "invalid_string",                         # not dict → skip
+                {"name": "空アイテム", "items": []},      # empty items → skip
+            ],
+        }
+        llm = _make_mock_llm([response])
+        result = BusinessModelAnalyzer(llm).analyze("事業計画書テキスト")
+        assert len(result.rd_themes) == 1
+        assert result.rd_themes[0].name == "有効カテゴリ"
+
+
+# ---------------------------------------------------------------------------
 # Agent 2: FM Designer
 # ---------------------------------------------------------------------------
 
