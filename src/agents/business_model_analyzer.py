@@ -110,6 +110,12 @@ class BusinessModelProposal(BaseModel):
     grounding_score: float = Field(default=0.0, description="Fraction of claims backed by document evidence")
 
 
+class RDThemeItem(BaseModel):
+    """A single R&D development theme category with sub-items."""
+    name: str = Field(description="e.g. 'アカデミーサービス', 'ミールサービス', '共通'")
+    items: List[str] = Field(default_factory=list, description="e.g. ['栄養士DX化', 'コンテンツ高度化']")
+
+
 class BusinessModelAnalysis(BaseModel):
     """Complete analysis: narrative understanding + multiple proposals.
 
@@ -139,6 +145,9 @@ class BusinessModelAnalysis(BaseModel):
     # --- financial targets (v2) ---
     financial_targets: Optional[FinancialTargets] = Field(default=None, description="Revenue/OP targets and breakeven timing from document")
 
+    # --- R&D development themes (v2) ---
+    rd_themes: List[RDThemeItem] = Field(default_factory=list, description="Development cost themes extracted from document")
+
     def select_proposal(self, index: int) -> "BusinessModelAnalysis":
         """Select a proposal and populate main fields from it.
 
@@ -163,6 +172,7 @@ class BusinessModelAnalysis(BaseModel):
             "document_narrative": self.document_narrative,
             "key_facts": self.key_facts,
             "financial_targets": ft_dump,
+            "rd_themes": [t.model_dump() for t in self.rd_themes],
         }
         return BusinessModelAnalysis(
             company_name=self.company_name,
@@ -181,6 +191,7 @@ class BusinessModelAnalysis(BaseModel):
             proposals=self.proposals,
             selected_index=index,
             financial_targets=self.financial_targets,
+            rd_themes=self.rd_themes,
         )
 
 
@@ -234,6 +245,14 @@ BM_ANALYZER_SYSTEM_PROMPT = """\
   - 黒字化時期（単年黒字・累積黒字）の記載があれば抽出する
   - 計画期間（何年分か）を特定する
   - 文書に記載がない場合は空配列またはnullを返す（でっち上げない）
+
+■ STEP 6: 開発費テーマ（rd_themes）を抽出する
+  - 文書に記載された開発投資・システム開発・技術投資の項目を抽出する
+  - 事業ライン別（サービス別）の開発テーマをグルーピングする
+  - 各事業ラインに紐づく具体的な開発項目（DX化、システム構築等）を列挙する
+  - 複数サービスに共通する開発（CS基盤、共通インフラ等）は「共通」カテゴリにまとめる
+  - 文書に開発費の記載がない場合は空配列を返す（でっち上げない）
+  - 出力形式: [{"name": "事業ライン名", "items": ["開発テーマ1", "開発テーマ2"]}]
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 【出力ルール】
@@ -296,10 +315,14 @@ BM_ANALYZER_USER_PROMPT = """\
     "single_year_breakeven": {{"year": "FY3", "evidence": "「3年目に単月黒字化」", "source": "document"}},
     "cumulative_breakeven": {{"year": "FY5", "evidence": "「5年目に累積黒字」", "source": "document"}}
   }},
+  "rd_themes": [
+    {{"name": "事業ライン名（例: アカデミーサービス）", "items": ["開発テーマ1（例: 栄養士DX化）", "開発テーマ2"]}},
+    {{"name": "共通", "items": ["CSシステム構築"]}}
+  ],
   "currency": "JPY"
 }}
 
-proposalsは2〜3件（速度重視、簡潔に）。各proposalは独立した解釈。confidenceの高い順に並べる。financial_targetsは文書に記載があれば抽出、なければ空配列/null。数値は円単位に正規化（億→×1億、万→×1万）。
+proposalsは2〜3件（速度重視、簡潔に）。各proposalは独立した解釈。confidenceの高い順に並べる。financial_targetsは文書に記載があれば抽出、なければ空配列/null。数値は円単位に正規化（億→×1億、万→×1万）。rd_themesは文書に開発費・システム投資の記載があればサービス別にグルーピングして抽出、なければ空配列。
 """
 
 
@@ -491,6 +514,9 @@ class BusinessModelAnalyzer:
         # Parse financial targets
         ft = self._parse_financial_targets(raw.get("financial_targets"))
 
+        # Parse R&D development themes
+        rd_themes = self._parse_rd_themes(raw.get("rd_themes"))
+
         # Build initial analysis with first proposal selected
         analysis = BusinessModelAnalysis(
             company_name=raw.get("company_name", ""),
@@ -501,6 +527,7 @@ class BusinessModelAnalyzer:
             currency=raw.get("currency", "JPY"),
             raw_json=raw,
             financial_targets=ft,
+            rd_themes=rd_themes,
         )
 
         # Auto-select first proposal to populate main fields
@@ -563,6 +590,25 @@ class BusinessModelAnalyzer:
         except Exception as e:
             logger.warning("Failed to parse financial_targets: %s", e)
             return None
+
+    @staticmethod
+    def _parse_rd_themes(rd_raw: Optional[List[Dict[str, Any]]]) -> List[RDThemeItem]:
+        """Parse rd_themes from LLM response."""
+        if not rd_raw or not isinstance(rd_raw, list):
+            return []
+        themes = []
+        for item in rd_raw:
+            if not isinstance(item, dict):
+                continue
+            name = item.get("name", "")
+            items = item.get("items", [])
+            if not name:
+                continue
+            # Ensure items are strings
+            items = [str(i) for i in items if i]
+            if items:
+                themes.append(RDThemeItem(name=name, items=items))
+        return themes
 
     # Pre-compiled pattern for extracting quoted text (「…」)
     _QUOTE_RE = re.compile(r'「(.+?)」')
