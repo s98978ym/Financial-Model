@@ -352,17 +352,17 @@ def _generate_local_excel(job_id: str, run_id: str, body: dict):
             for i, col in enumerate(FY_COLS):
                 ox = opex_list[i]
                 # SGA breakdown (88% of OPEX): payroll 45%, marketing 20%, office 15%, other 8%
-                ws_sga.cell(row=SGA_ROWS["payroll"], column=col).value = round(ox * 0.45)
-                ws_sga.cell(row=SGA_ROWS["marketing"], column=col).value = round(ox * 0.20)
-                ws_sga.cell(row=SGA_ROWS["office"], column=col).value = round(ox * 0.15)
-                ws_sga.cell(row=SGA_ROWS["other"], column=col).value = round(ox * 0.08)
+                ws_sga.cell(row=SGA_ROWS["pr_planning"], column=col).value = round(ox * 0.45)
+                ws_sga.cell(row=SGA_ROWS["mk_digital_ad"], column=col).value = round(ox * 0.20)
+                ws_sga.cell(row=SGA_ROWS["of_rent"], column=col).value = round(ox * 0.15)
+                ws_sga.cell(row=SGA_ROWS["ot_travel"], column=col).value = round(ox * 0.08)
 
                 # R&D breakdown (12% of OPEX)
                 rd_total = round(ox * 0.12)
-                ws_rd.cell(row=RD_ROWS["internal"], column=col).value = round(rd_total * 0.50)
-                ws_rd.cell(row=RD_ROWS["outsource"], column=col).value = round(rd_total * 0.25)
-                ws_rd.cell(row=RD_ROWS["cloud_infra"], column=col).value = round(rd_total * 0.20)
-                ws_rd.cell(row=RD_ROWS["other"], column=col).value = round(rd_total * 0.05)
+                ws_rd.cell(row=RD_ROWS["int_engineers"], column=col).value = round(rd_total * 0.50)
+                ws_rd.cell(row=RD_ROWS["ext_dev"], column=col).value = round(rd_total * 0.25)
+                ws_rd.cell(row=RD_ROWS["inf_cloud"], column=col).value = round(rd_total * 0.20)
+                ws_rd.cell(row=RD_ROWS["inf_other"], column=col).value = round(rd_total * 0.05)
             # PL rows 12-13 are formulas referencing detail sheets (already set by template)
         else:
             # Inline mode: write OPEX directly to PL sheet
@@ -373,6 +373,38 @@ def _generate_local_excel(job_id: str, run_id: str, body: dict):
                 ws_pl.cell(row=PL_ROWS["office"], column=col).value = round(ox * 0.15)
                 ws_pl.cell(row=PL_ROWS["system"], column=col).value = round(ox * 0.12)
                 ws_pl.cell(row=PL_ROWS["other_opex"], column=col).value = round(ox * 0.08)
+
+        # --- Populate depreciation, CAPEX, operating profit, FCF ---
+        for i, col in enumerate(FY_COLS):
+            # Depreciation
+            c = ws_pl.cell(row=PL_ROWS["depreciation"], column=col)
+            c.value = pl["depreciation"][i]
+            c.font = NUMBER_FONT
+            c.number_format = NUMBER_FMT
+
+            # CAPEX
+            c = ws_pl.cell(row=PL_ROWS["capex"], column=col)
+            c.value = pl["capex"][i]
+            c.font = NUMBER_FONT
+            c.number_format = NUMBER_FMT
+
+            # Operating Profit
+            c = ws_pl.cell(row=PL_ROWS["op"], column=col)
+            c.value = pl["operating_profit"][i]
+            c.font = NUMBER_FONT
+            c.number_format = NUMBER_FMT
+
+            # FCF
+            c = ws_pl.cell(row=PL_ROWS["fcf"], column=col)
+            c.value = pl["fcf"][i]
+            c.font = NUMBER_FONT
+            c.number_format = NUMBER_FMT
+
+            # Cumulative FCF
+            c = ws_pl.cell(row=PL_ROWS["cum_fcf"], column=col)
+            c.value = pl["cumulative_fcf"][i]
+            c.font = NUMBER_FONT
+            c.number_format = NUMBER_FMT
 
         # --- Populate segment sheets with revenue breakdown ---
         # Use largest-remainder method to avoid rounding errors (sum must equal total)

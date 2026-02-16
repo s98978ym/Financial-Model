@@ -6,6 +6,7 @@ import json
 import logging
 
 from services.worker.celery_app import app
+from services.worker.tasks.heartbeat import heartbeat
 
 logger = logging.getLogger(__name__)
 
@@ -125,14 +126,18 @@ def run_model_design(self, job_id: str):
         else:
             db.update_job(job_id, progress=20, log_msg="Starting model design")
 
-        result = designer.design(
-            analysis_json=analysis_json,
-            template_structure_json=ts_json,
-            catalog_items=catalog_items,
-            feedback=feedback,
-            estimation_mode=estimation_mode,
-            revenue_model_configs=revenue_model_configs,
-        )
+        def _hb_update(pct, msg):
+            db.update_job(job_id, progress=pct, log_msg=msg)
+
+        with heartbeat(_hb_update, message="Model design in progress..."):
+            result = designer.design(
+                analysis_json=analysis_json,
+                template_structure_json=ts_json,
+                catalog_items=catalog_items,
+                feedback=feedback,
+                estimation_mode=estimation_mode,
+                revenue_model_configs=revenue_model_configs,
+            )
 
         # --- Store result ---
         result_dict = result.model_dump()

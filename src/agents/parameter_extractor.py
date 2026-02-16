@@ -238,7 +238,8 @@ class ParameterExtractorAgent:
         feedback : str
             Optional user feedback.
         """
-        design_str = json.dumps(model_design_json, ensure_ascii=False, indent=2)
+        # Compact JSON to reduce input tokens (~30% savings vs indent=2)
+        design_str = json.dumps(model_design_json, ensure_ascii=False, separators=(",", ":"))
 
         # Truncate document if needed
         max_doc = 10000

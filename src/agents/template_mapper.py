@@ -161,8 +161,9 @@ class TemplateMapper:
                     f"{item.get('cell', '?')}: {labels}"
                 )
 
-        analysis_str = json.dumps(analysis_json, ensure_ascii=False, indent=2)
-        summary_str = json.dumps(sheet_summary, ensure_ascii=False, indent=2)
+        # Compact JSON to reduce input tokens (~30% savings vs indent=2)
+        analysis_str = json.dumps(analysis_json, ensure_ascii=False, separators=(",", ":"))
+        summary_str = json.dumps(sheet_summary, ensure_ascii=False, separators=(",", ":"))
 
         feedback_section = ""
         if feedback:

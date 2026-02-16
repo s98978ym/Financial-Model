@@ -34,10 +34,12 @@ export function usePhaseJob({ projectId, phase, autoLoad = true }: UsePhaseJobOp
   })
 
   // Auto-load existing result from project state
+  // staleTime prevents unnecessary refetches — projectState only changes on phase completion
   const { data: projectState } = useQuery({
     queryKey: ['projectState', projectId],
     queryFn: () => api.getProjectState(projectId),
     enabled: autoLoad && !!projectId,
+    staleTime: 30000,
   })
 
   useEffect(() => {

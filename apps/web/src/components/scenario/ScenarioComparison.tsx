@@ -1,5 +1,6 @@
 'use client'
 
+import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 
@@ -8,30 +9,47 @@ interface ScenarioComparisonProps {
   parameters: Record<string, number>
 }
 
+function prepareParams(p: Record<string, number>): Record<string, any> {
+  var out: Record<string, any> = {}
+  Object.keys(p).forEach(function (key) {
+    if (key === 'depreciation_mode') {
+      out[key] = p[key] === 1 ? 'auto' : 'manual'
+    } else if (key === 'depreciation_method') {
+      out[key] = p[key] === 1 ? 'declining_balance' : 'straight_line'
+    } else {
+      out[key] = p[key]
+    }
+  })
+  return out
+}
+
 export function ScenarioComparison({ projectId, parameters }: ScenarioComparisonProps) {
+  var prepared = useMemo(() => prepareParams(parameters), [parameters])
+
   // Fetch all three scenarios in parallel
-  const { data: baseData, error: baseError } = useQuery({
-    queryKey: ['recalc', projectId, 'base', parameters],
-    queryFn: () => api.recalc({ project_id: projectId, parameters, scenario: 'base' }),
+  const { data: baseData, error: baseError, isFetching: baseFetching } = useQuery({
+    queryKey: ['recalc', projectId, 'base', prepared],
+    queryFn: () => api.recalc({ project_id: projectId, parameters: prepared, scenario: 'base' }),
     staleTime: 30_000,
     retry: 2,
   })
 
-  const { data: bestData, error: bestError } = useQuery({
-    queryKey: ['recalc', projectId, 'best', parameters],
-    queryFn: () => api.recalc({ project_id: projectId, parameters, scenario: 'best' }),
+  const { data: bestData, error: bestError, isFetching: bestFetching } = useQuery({
+    queryKey: ['recalc', projectId, 'best', prepared],
+    queryFn: () => api.recalc({ project_id: projectId, parameters: prepared, scenario: 'best' }),
     staleTime: 30_000,
     retry: 2,
   })
 
-  const { data: worstData, error: worstError } = useQuery({
-    queryKey: ['recalc', projectId, 'worst', parameters],
-    queryFn: () => api.recalc({ project_id: projectId, parameters, scenario: 'worst' }),
+  const { data: worstData, error: worstError, isFetching: worstFetching } = useQuery({
+    queryKey: ['recalc', projectId, 'worst', prepared],
+    queryFn: () => api.recalc({ project_id: projectId, parameters: prepared, scenario: 'worst' }),
     staleTime: 30_000,
     retry: 2,
   })
 
   const scenarioError = baseError || bestError || worstError
+  const isLoading = baseFetching || bestFetching || worstFetching
 
   const formatYen = (v: number | undefined) => {
     if (v == null) return '-'
@@ -48,8 +66,11 @@ export function ScenarioComparison({ projectId, parameters }: ScenarioComparison
 
   return (
     <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-      <div className="px-5 py-3 border-b border-gray-100">
+      <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
         <h3 className="font-medium text-gray-900">シナリオ比較</h3>
+        {isLoading && (
+          <span className="text-xs text-blue-500 animate-pulse">計算中...</span>
+        )}
       </div>
       {scenarioError && (
         <div className="px-4 py-2 bg-red-50 border-b border-red-100 text-xs text-red-600">
@@ -66,7 +87,7 @@ export function ScenarioComparison({ projectId, parameters }: ScenarioComparison
             <th className="text-right px-4 py-2 text-gray-500 font-medium">Delta (B-W)</th>
           </tr>
         </thead>
-        <tbody>
+        <tbody className={isLoading ? 'opacity-50 transition-opacity' : 'transition-opacity'}>
           {rows.map((row) => {
             const baseVal = baseData?.pl_summary?.[row.key]?.[row.idx]
             const bestVal = bestData?.pl_summary?.[row.key]?.[row.idx]
