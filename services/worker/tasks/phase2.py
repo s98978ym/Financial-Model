@@ -15,10 +15,10 @@ logger = logging.getLogger(__name__)
 @app.task(bind=True, name="tasks.phase2.run_bm_analysis")
 def run_bm_analysis(self, job_id: str):
     """Execute Phase 2 Business Model Analysis as a Celery task."""
-    from core.providers import AnthropicProvider, ProviderAdapter
     from core.providers.base import LLMConfig
     from core.providers.guards import DocumentTruncation
     from services.api.app import db
+    from services.worker.tasks.provider_helper import get_adapter_for_run
     from src.agents.business_model_analyzer import BusinessModelAnalyzer
 
     try:
@@ -54,8 +54,7 @@ def run_bm_analysis(self, job_id: str):
         db.update_job(job_id, progress=15, log_msg="Document truncated for analysis")
 
         # --- Run BM Analysis ---
-        provider = AnthropicProvider()
-        adapter = ProviderAdapter(provider)
+        adapter = get_adapter_for_run(run_id)
         analyzer = BusinessModelAnalyzer(llm_client=adapter)
 
         db.update_job(job_id, progress=20, log_msg="Starting LLM analysis")

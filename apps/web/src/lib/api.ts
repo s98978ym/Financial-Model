@@ -90,7 +90,7 @@ async function fetchAPI(path: string, options: RequestInit = {}): Promise<any> {
 
 export const api = {
   // Projects
-  createProject: (body: { name: string; template_id?: string }) =>
+  createProject: (body: { name: string; template_id?: string; llm_provider?: string; llm_model?: string }) =>
     fetchAPI('/projects', { method: 'POST', body: JSON.stringify(body) }),
 
   listProjects: () => fetchAPI('/projects'),
@@ -221,6 +221,14 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify({ project_id: projectId || null }),
     }),
+
+  // LLM Provider / Model management
+  getLLMModels: () => fetchAPI('/llm/models'),
+
+  getLLMDefault: () => fetchAPI('/admin/llm-default'),
+
+  setLLMDefault: (body: { provider: string; model: string }) =>
+    fetchAPI('/admin/llm-default', { method: 'PUT', body: JSON.stringify(body) }),
 }
 
 /**

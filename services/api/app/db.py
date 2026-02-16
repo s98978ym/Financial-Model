@@ -59,33 +59,65 @@ def _get_pool():
 
 
 def _run_migrations(pool):
-    """Apply lightweight schema migrations (add missing columns)."""
-    global _has_memo_col
+    """Apply lightweight schema migrations (add missing columns/tables)."""
+    global _has_memo_col, _has_llm_cols
     try:
         conn = pool.getconn()
         try:
             cur = conn.cursor()
-            # Check if memo column already exists
+            # --- memo column ---
             cur.execute(
                 "SELECT column_name FROM information_schema.columns "
                 "WHERE table_name = 'projects' AND column_name = 'memo'"
             )
             if cur.fetchone():
                 _has_memo_col = True
-                logger.info("Migration check: 'memo' column already exists")
             else:
                 cur.execute("ALTER TABLE projects ADD COLUMN memo TEXT NOT NULL DEFAULT ''")
                 conn.commit()
                 _has_memo_col = True
                 logger.info("Migration: added 'memo' column to projects table")
+
+            # --- LLM provider/model columns ---
+            cur.execute(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_name = 'projects' AND column_name = 'llm_provider'"
+            )
+            if cur.fetchone():
+                _has_llm_cols = True
+            else:
+                cur.execute("ALTER TABLE projects ADD COLUMN llm_provider TEXT")
+                cur.execute("ALTER TABLE projects ADD COLUMN llm_model TEXT")
+                conn.commit()
+                _has_llm_cols = True
+                logger.info("Migration: added llm_provider/llm_model columns to projects")
+
+            # --- system_settings table ---
+            cur.execute(
+                "SELECT EXISTS (SELECT 1 FROM information_schema.tables "
+                "WHERE table_name = 'system_settings')"
+            )
+            if not cur.fetchone()[0]:
+                cur.execute(
+                    "CREATE TABLE system_settings ("
+                    "  key TEXT PRIMARY KEY,"
+                    "  value JSONB NOT NULL,"
+                    "  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()"
+                    ")"
+                )
+                cur.execute(
+                    "INSERT INTO system_settings (key, value) VALUES "
+                    "('llm_default', %s) ON CONFLICT (key) DO NOTHING",
+                    (json.dumps({"provider": "anthropic", "model": "claude-sonnet-4-5-20250929"}),),
+                )
+                conn.commit()
+                logger.info("Migration: created system_settings table")
         except Exception as e:
             conn.rollback()
-            _has_memo_col = False
             logger.warning("Migration failed (non-fatal): %s", e)
         finally:
             pool.putconn(conn)
     except Exception as e:
-        _has_memo_col = False
         logger.warning("Could not run migrations: %s", e)
 
 
@@ -119,6 +151,9 @@ _mem_edits: List[dict] = []
 _mem_jobs: Dict[str, dict] = {}
 _mem_llm_audits: List[dict] = []
 _mem_prompt_versions: List[dict] = []
+_mem_system_settings: Dict[str, Any] = {
+    "llm_default": {"provider": "anthropic", "model": "claude-sonnet-4-5-20250929"},
+}
 
 
 # ---------------------------------------------------------------------------
@@ -137,29 +172,48 @@ def _use_pg() -> bool:
     return _get_pool() is not None
 
 
-# Track whether memo column has been confirmed present
+# Track whether optional columns have been confirmed present
 _has_memo_col = False
+_has_llm_cols = False
 
 
 def _proj_cols() -> str:
     """Return SELECT/RETURNING column list for projects based on schema."""
+    base = "id, name, template_id, owner, status, current_phase"
     if _has_memo_col:
-        return "id, name, template_id, owner, status, current_phase, memo, created_at, updated_at"
-    return "id, name, template_id, owner, status, current_phase, created_at, updated_at"
+        base += ", memo"
+    if _has_llm_cols:
+        base += ", llm_provider, llm_model"
+    base += ", created_at, updated_at"
+    return base
 
 
 # ===================================================================
 # Projects
 # ===================================================================
 
-def create_project(name: str, template_id: str = "v2_ib_grade", owner: str = "") -> dict:
+def create_project(
+    name: str, template_id: str = "v2_ib_grade", owner: str = "",
+    llm_provider: Optional[str] = None, llm_model: Optional[str] = None,
+) -> dict:
     if _use_pg():
+        cols = "name, template_id, owner"
+        vals: list = [name, template_id, owner]
+        placeholders = "%s, %s, %s"
+        if llm_provider:
+            cols += ", llm_provider"
+            vals.append(llm_provider)
+            placeholders += ", %s"
+        if llm_model:
+            cols += ", llm_model"
+            vals.append(llm_model)
+            placeholders += ", %s"
         with get_conn() as conn:
             cur = conn.cursor()
             cur.execute(
-                f"INSERT INTO projects (name, template_id, owner) "
-                f"VALUES (%s, %s, %s) RETURNING {_proj_cols()}",
-                (name, template_id, owner),
+                f"INSERT INTO projects ({cols}) "
+                f"VALUES ({placeholders}) RETURNING {_proj_cols()}",
+                vals,
             )
             row = cur.fetchone()
             return _project_row_to_dict(row)
@@ -169,7 +223,8 @@ def create_project(name: str, template_id: str = "v2_ib_grade", owner: str = "")
         p = {
             "id": pid, "name": name, "template_id": template_id,
             "owner": owner, "status": "created", "current_phase": 1,
-            "memo": "", "created_at": now, "updated_at": now,
+            "memo": "", "llm_provider": llm_provider, "llm_model": llm_model,
+            "created_at": now, "updated_at": now,
         }
         _mem_projects[pid] = p
         return p
@@ -261,23 +316,28 @@ def delete_project(project_id: str) -> bool:
 def _project_row_to_dict(row) -> dict:
     if row is None:
         return {}
-    # Handle both old (8-col: no memo) and new (9-col: with memo) row formats
-    if len(row) >= 9:
-        return {
-            "id": str(row[0]), "name": row[1], "template_id": row[2],
-            "owner": row[3] or "", "status": row[4], "current_phase": row[5],
-            "memo": row[6] or "",
-            "created_at": row[7].isoformat() if hasattr(row[7], "isoformat") else str(row[7]),
-            "updated_at": row[8].isoformat() if hasattr(row[8], "isoformat") else str(row[8]),
-        }
+    # Dynamic column mapping based on _has_memo_col / _has_llm_cols flags.
+    # Base cols: id(0), name(1), template_id(2), owner(3), status(4), current_phase(5)
+    d: dict = {
+        "id": str(row[0]), "name": row[1], "template_id": row[2],
+        "owner": row[3] or "", "status": row[4], "current_phase": row[5],
+    }
+    idx = 6
+    if _has_memo_col:
+        d["memo"] = row[idx] or ""
+        idx += 1
     else:
-        return {
-            "id": str(row[0]), "name": row[1], "template_id": row[2],
-            "owner": row[3] or "", "status": row[4], "current_phase": row[5],
-            "memo": "",
-            "created_at": row[6].isoformat() if hasattr(row[6], "isoformat") else str(row[6]),
-            "updated_at": row[7].isoformat() if hasattr(row[7], "isoformat") else str(row[7]),
-        }
+        d["memo"] = ""
+    if _has_llm_cols:
+        d["llm_provider"] = row[idx] or None
+        d["llm_model"] = row[idx + 1] or None
+        idx += 2
+    else:
+        d["llm_provider"] = None
+        d["llm_model"] = None
+    d["created_at"] = row[idx].isoformat() if hasattr(row[idx], "isoformat") else str(row[idx])
+    d["updated_at"] = row[idx + 1].isoformat() if hasattr(row[idx + 1], "isoformat") else str(row[idx + 1])
+    return d
 
 
 # ===================================================================
@@ -913,3 +973,65 @@ def activate_prompt_version(version_id: str, prompt_key: str, project_id: Option
                 v["is_active"] = True
                 return v
         return None
+
+
+# ===================================================================
+# System Settings
+# ===================================================================
+
+def get_system_setting(key: str) -> Optional[Any]:
+    """Get a system setting value by key."""
+    if _use_pg():
+        with get_conn() as conn:
+            cur = conn.cursor()
+            try:
+                cur.execute("SELECT value FROM system_settings WHERE key = %s", (key,))
+                row = cur.fetchone()
+                return row[0] if row else None
+            except Exception:
+                return None
+    else:
+        return _mem_system_settings.get(key)
+
+
+def set_system_setting(key: str, value: Any) -> None:
+    """Set a system setting value (upsert)."""
+    if _use_pg():
+        with get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "INSERT INTO system_settings (key, value, updated_at) VALUES (%s, %s, now()) "
+                "ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()",
+                (key, json.dumps(value)),
+            )
+    else:
+        _mem_system_settings[key] = value
+
+
+def get_llm_default() -> dict:
+    """Get the system-wide default LLM provider/model for non-admin users."""
+    val = get_system_setting("llm_default")
+    if isinstance(val, dict):
+        return val
+    return {"provider": "anthropic", "model": "claude-sonnet-4-5-20250929"}
+
+
+def set_llm_default(provider: str, model: str) -> dict:
+    """Set the system-wide default LLM provider/model."""
+    val = {"provider": provider, "model": model}
+    set_system_setting("llm_default", val)
+    return val
+
+
+def get_project_llm_config(project_id: str) -> dict:
+    """Get the effective LLM config for a project.
+
+    Falls back to system default if the project has no explicit setting.
+    """
+    project = get_project(project_id)
+    if project and project.get("llm_provider"):
+        return {
+            "provider": project["llm_provider"],
+            "model": project.get("llm_model") or "",
+        }
+    return get_llm_default()

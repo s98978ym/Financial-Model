@@ -269,3 +269,39 @@ async def activate_version(prompt_key: str, version_id: str, body: dict = None):
     if not result:
         raise HTTPException(status_code=404, detail="Version not found")
     return result
+
+
+# -------------------------------------------------------------------
+# LLM Provider / Model management (admin-only)
+# -------------------------------------------------------------------
+
+@router.get("/llm/models")
+async def list_llm_models():
+    """List available LLM providers and models (public endpoint)."""
+    from core.providers.registry import get_model_catalog, get_providers
+    return {
+        "providers": get_providers(),
+        "models": get_model_catalog(),
+    }
+
+
+@router.get("/admin/llm-default", dependencies=[Depends(_require_admin)])
+async def get_llm_default():
+    """Get the current system-wide default LLM for non-admin users."""
+    return db.get_llm_default()
+
+
+@router.put("/admin/llm-default", dependencies=[Depends(_require_admin)])
+async def set_llm_default(body: dict):
+    """Set the system-wide default LLM for non-admin users."""
+    provider = body.get("provider", "")
+    model = body.get("model", "")
+
+    if not provider or not model:
+        raise HTTPException(status_code=422, detail="provider and model are required")
+
+    from core.providers.registry import validate_provider_model
+    if not validate_provider_model(provider, model):
+        raise HTTPException(status_code=422, detail=f"Invalid provider/model: {provider}/{model}")
+
+    return db.set_llm_default(provider, model)

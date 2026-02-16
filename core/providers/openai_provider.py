@@ -10,7 +10,7 @@ import json
 import logging
 import os
 import time
-from typing import Any, Dict, Iterator, Optional
+from typing import Any, Callable, Dict, Iterator, Optional
 
 from .base import LLMConfig, LLMError, LLMProvider, LLMResponse
 from .guards import JSONOutputGuard
@@ -60,6 +60,7 @@ class OpenAIProvider(LLMProvider):
         *,
         config: Optional[LLMConfig] = None,
         schema_hint: Optional[Dict[str, Any]] = None,
+        progress_callback: Optional[Callable[[int], None]] = None,
     ) -> LLMResponse:
         cfg = self._default_config(config)
         model = self.default_model
@@ -69,20 +70,48 @@ class OpenAIProvider(LLMProvider):
             (full_system + user_prompt).encode()
         ).hexdigest()[:16]
 
+        msgs = [
+            {"role": "system", "content": full_system},
+            {"role": "user", "content": user_prompt},
+        ]
+
         t0 = time.time()
-        response = self.client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": full_system},
-                {"role": "user", "content": user_prompt},
-            ],
-            temperature=cfg.temperature,
-            max_tokens=cfg.max_tokens,
-            response_format={"type": "json_object"} if schema_hint else None,
-        )
+
+        if progress_callback:
+            # Stream for progress tracking
+            stream = self.client.chat.completions.create(
+                model=model, messages=msgs,
+                temperature=cfg.temperature, max_tokens=cfg.max_tokens,
+                response_format={"type": "json_object"} if schema_hint else None,
+                stream=True,
+            )
+            chunks = []
+            received_chars = 0
+            for chunk in stream:
+                delta = chunk.choices[0].delta
+                if delta and delta.content:
+                    chunks.append(delta.content)
+                    received_chars += len(delta.content)
+                    try:
+                        progress_callback(received_chars)
+                    except Exception:
+                        pass
+            raw_text = "".join(chunks)
+            input_tokens = 0
+            output_tokens = 0
+            stop_reason = chunk.choices[0].finish_reason or "" if chunk else ""
+        else:
+            response = self.client.chat.completions.create(
+                model=model, messages=msgs,
+                temperature=cfg.temperature, max_tokens=cfg.max_tokens,
+                response_format={"type": "json_object"} if schema_hint else None,
+            )
+            raw_text = response.choices[0].message.content or ""
+            input_tokens = response.usage.prompt_tokens if response.usage else 0
+            output_tokens = response.usage.completion_tokens if response.usage else 0
+            stop_reason = response.choices[0].finish_reason or ""
 
         latency_ms = int((time.time() - t0) * 1000)
-        raw_text = response.choices[0].message.content or ""
         parsed = JSONOutputGuard.enforce(raw_text)
 
         result_hash = hashlib.sha256(
@@ -94,10 +123,10 @@ class OpenAIProvider(LLMProvider):
             parsed_json=parsed,
             model=model,
             provider=self.provider_name,
-            input_tokens=response.usage.prompt_tokens if response.usage else 0,
-            output_tokens=response.usage.completion_tokens if response.usage else 0,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
             latency_ms=latency_ms,
-            stop_reason=response.choices[0].finish_reason or "",
+            stop_reason=stop_reason,
             prompt_hash=prompt_hash,
             result_hash=result_hash,
         )

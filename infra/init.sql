@@ -102,6 +102,28 @@ CREATE TABLE IF NOT EXISTS prompt_versions (
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- System-wide settings (key-value store for admin config)
+CREATE TABLE IF NOT EXISTS system_settings (
+    key         TEXT PRIMARY KEY,
+    value       JSONB NOT NULL,
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Default LLM setting
+INSERT INTO system_settings (key, value) VALUES
+    ('llm_default', '{"provider": "anthropic", "model": "claude-sonnet-4-5-20250929"}')
+ON CONFLICT (key) DO NOTHING;
+
+-- Add LLM selection columns to projects (safe for existing DBs)
+DO $$ BEGIN
+    ALTER TABLE projects ADD COLUMN llm_provider TEXT;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+DO $$ BEGIN
+    ALTER TABLE projects ADD COLUMN llm_model TEXT;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_documents_project ON documents(project_id);
 CREATE INDEX IF NOT EXISTS idx_runs_project ON runs(project_id);

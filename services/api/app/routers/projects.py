@@ -16,6 +16,8 @@ class _ProjectCreateBody(BaseModel):
     name: str = Field(default="Untitled", min_length=1, max_length=200)
     template_id: str = Field(default="v2_ib_grade")
     owner: Optional[str] = Field(default="")
+    llm_provider: Optional[str] = Field(default=None)
+    llm_model: Optional[str] = Field(default=None)
 
 
 @router.post("/projects", status_code=201)
@@ -25,6 +27,8 @@ async def create_project(body: _ProjectCreateBody):
         name=body.name,
         template_id=body.template_id,
         owner=body.owner or "",
+        llm_provider=body.llm_provider,
+        llm_model=body.llm_model,
     )
     return project
 

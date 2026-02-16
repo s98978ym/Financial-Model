@@ -1,7 +1,7 @@
-"""Adapter: bridge AnthropicProvider → legacy agent extract(messages) interface.
+"""Adapter: bridge LLMProvider → legacy agent extract(messages) interface.
 
 Existing agents call ``self.llm.extract(messages)`` where messages is
-a list of dicts in OpenAI chat format.  This adapter wraps AnthropicProvider
+a list of dicts in OpenAI chat format.  This adapter wraps any LLMProvider
 so it can be passed as ``llm_client`` to any agent.
 """
 
@@ -10,18 +10,20 @@ from __future__ import annotations
 import logging
 from typing import Any, Callable, Dict, List, Optional
 
-from .anthropic_provider import AnthropicProvider
-from .base import LLMConfig
+from .base import LLMConfig, LLMProvider
 
 logger = logging.getLogger(__name__)
 
 
 class ProviderAdapter:
-    """Wraps AnthropicProvider to expose the ``extract(messages)`` interface
+    """Wraps any LLMProvider to expose the ``extract(messages)`` interface
     expected by src/agents/*.py classes."""
 
-    def __init__(self, provider: Optional[AnthropicProvider] = None):
-        self._provider = provider or AnthropicProvider()
+    def __init__(self, provider: Optional[LLMProvider] = None):
+        if provider is None:
+            from .anthropic_provider import AnthropicProvider
+            provider = AnthropicProvider()
+        self._provider = provider
 
     def extract(
         self,
