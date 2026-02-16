@@ -344,35 +344,85 @@ def _generate_local_excel(job_id: str, run_id: str, body: dict):
         # Split OPEX into components (driven by opex_base + opex_growth)
         opex_list = pl["opex"]
 
+        # Use computed sga_detail from _compute_pl instead of hardcoded ratios
+        sga_detail = pl.get("sga_detail", {})
+        sga_breakdown = pl.get("sga_breakdown", {})
+
         if sga_rd_mode == "separate":
             # Populate detail sheets: 販管費明細 and 開発費明細
             ws_sga = wb["販管費明細"]
             ws_rd = wb["開発費明細"]
 
             for i, col in enumerate(FY_COLS):
-                ox = opex_list[i]
-                # SGA breakdown (88% of OPEX): payroll 45%, marketing 20%, office 15%, other 8%
-                ws_sga.cell(row=SGA_ROWS["pr_planning"], column=col).value = round(ox * 0.45)
-                ws_sga.cell(row=SGA_ROWS["mk_digital_ad"], column=col).value = round(ox * 0.20)
-                ws_sga.cell(row=SGA_ROWS["of_rent"], column=col).value = round(ox * 0.15)
-                ws_sga.cell(row=SGA_ROWS["ot_travel"], column=col).value = round(ox * 0.08)
+                # --- Payroll by role ---
+                payroll_roles = sga_detail.get("payroll", {}).get("roles", {})
+                for role_key, role_data in payroll_roles.items():
+                    row_key = f"pr_{role_key}"
+                    if row_key in SGA_ROWS and isinstance(role_data.get("cost"), list) and i < len(role_data["cost"]):
+                        ws_sga.cell(row=SGA_ROWS[row_key], column=col).value = role_data["cost"][i]
+                # Payroll total
+                payroll_total = sga_detail.get("payroll", {}).get("total", [])
+                if payroll_total and i < len(payroll_total):
+                    ws_sga.cell(row=SGA_ROWS["payroll_total"], column=col).value = payroll_total[i]
 
-                # R&D breakdown (12% of OPEX)
-                rd_total = round(ox * 0.12)
+                # --- Marketing by subcategory ---
+                mktg_cats = sga_detail.get("marketing", {}).get("categories", {})
+                for cat_key, amounts in mktg_cats.items():
+                    row_key = f"mk_{cat_key}"
+                    if row_key in SGA_ROWS and isinstance(amounts, list) and i < len(amounts):
+                        ws_sga.cell(row=SGA_ROWS[row_key], column=col).value = amounts[i]
+                # Marketing total
+                mktg_total = sga_detail.get("marketing", {}).get("total", [])
+                if mktg_total and i < len(mktg_total):
+                    ws_sga.cell(row=SGA_ROWS["mktg_total"], column=col).value = mktg_total[i]
+
+                # --- Office costs ---
+                office_list = sga_detail.get("office", [])
+                if office_list and i < len(office_list):
+                    ws_sga.cell(row=SGA_ROWS["of_rent"], column=col).value = office_list[i]
+                    ws_sga.cell(row=SGA_ROWS["office_total"], column=col).value = office_list[i]
+
+                # --- Other ---
+                other_list = sga_detail.get("other", [])
+                if other_list and i < len(other_list):
+                    ws_sga.cell(row=SGA_ROWS["ot_travel"], column=col).value = other_list[i]
+                    ws_sga.cell(row=SGA_ROWS["other_total"], column=col).value = other_list[i]
+
+                # --- SGA grand total ---
+                sga_grand = (
+                    (payroll_total[i] if payroll_total and i < len(payroll_total) else 0)
+                    + (mktg_total[i] if mktg_total and i < len(mktg_total) else 0)
+                    + (office_list[i] if office_list and i < len(office_list) else 0)
+                    + (other_list[i] if other_list and i < len(other_list) else 0)
+                )
+                ws_sga.cell(row=SGA_ROWS["total"], column=col).value = sga_grand
+
+                # --- R&D / System ---
+                system_list = sga_detail.get("system", [])
+                rd_total = system_list[i] if system_list and i < len(system_list) else round(opex_list[i] * 0.12)
                 ws_rd.cell(row=RD_ROWS["int_engineers"], column=col).value = round(rd_total * 0.50)
                 ws_rd.cell(row=RD_ROWS["ext_dev"], column=col).value = round(rd_total * 0.25)
                 ws_rd.cell(row=RD_ROWS["inf_cloud"], column=col).value = round(rd_total * 0.20)
                 ws_rd.cell(row=RD_ROWS["inf_other"], column=col).value = round(rd_total * 0.05)
             # PL rows 12-13 are formulas referencing detail sheets (already set by template)
         else:
-            # Inline mode: write OPEX directly to PL sheet
+            # Inline mode: write OPEX directly to PL sheet using computed breakdown
             for i, col in enumerate(FY_COLS):
-                ox = opex_list[i]
-                ws_pl.cell(row=PL_ROWS["payroll"], column=col).value = round(ox * 0.45)
-                ws_pl.cell(row=PL_ROWS["marketing"], column=col).value = round(ox * 0.20)
-                ws_pl.cell(row=PL_ROWS["office"], column=col).value = round(ox * 0.15)
-                ws_pl.cell(row=PL_ROWS["system"], column=col).value = round(ox * 0.12)
-                ws_pl.cell(row=PL_ROWS["other_opex"], column=col).value = round(ox * 0.08)
+                ws_pl.cell(row=PL_ROWS["payroll"], column=col).value = (
+                    sga_breakdown["payroll"][i] if sga_breakdown.get("payroll") else round(opex_list[i] * 0.45)
+                )
+                ws_pl.cell(row=PL_ROWS["marketing"], column=col).value = (
+                    sga_breakdown["marketing"][i] if sga_breakdown.get("marketing") else round(opex_list[i] * 0.20)
+                )
+                ws_pl.cell(row=PL_ROWS["office"], column=col).value = (
+                    sga_breakdown["office"][i] if sga_breakdown.get("office") else round(opex_list[i] * 0.15)
+                )
+                ws_pl.cell(row=PL_ROWS["system"], column=col).value = (
+                    sga_breakdown["system"][i] if sga_breakdown.get("system") else round(opex_list[i] * 0.12)
+                )
+                ws_pl.cell(row=PL_ROWS["other_opex"], column=col).value = (
+                    sga_breakdown["other"][i] if sga_breakdown.get("other") else round(opex_list[i] * 0.08)
+                )
 
         # --- Populate depreciation, CAPEX, operating profit, FCF ---
         for i, col in enumerate(FY_COLS):

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import type { IndustryKey, DriverBenchmark } from '@/data/industryBenchmarks'
 import { INDUSTRY_BENCHMARKS } from '@/data/industryBenchmarks'
 
@@ -548,8 +548,15 @@ export function DriverSliders({ parameters, onChange, onBatchChange, industry, s
   var [mktgExpanded, setMktgExpanded] = useState(false)
   var [sgaMaterialized, setSgaMaterialized] = useState(false)
   var [deprMode, setDeprMode] = useState<'manual' | 'auto'>(
-    (parameters.depreciation_mode as any) === 'auto' ? 'auto' : 'manual'
+    parameters.depreciation_mode === 1 ? 'auto' : 'manual'
   )
+
+  // Sync deprMode with parent parameters when depreciation_mode changes
+  useEffect(function() {
+    var newMode: 'manual' | 'auto' = parameters.depreciation_mode === 1 ? 'auto' : 'manual'
+    setDeprMode(newMode)
+  }, [parameters.depreciation_mode])
+
   var benchmarks = industry ? INDUSTRY_BENCHMARKS[industry]?.drivers : null
 
   var opexBase = parameters.opex_base || 80_000_000
