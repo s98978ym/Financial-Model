@@ -14,6 +14,7 @@ export default function Phase5Page() {
   const projectId = params.id as string
   const [selectedCell, setSelectedCell] = useState<any>(null)
   const [viewMode, setViewMode] = useState<'pl' | 'flat'>('pl')
+  const [lowConfFilter, setLowConfFilter] = useState(false)
 
   const { result, isProcessing, isComplete, isFailed, trigger, progress, error, projectState } =
     usePhaseJob({ projectId, phase: 5 })
@@ -38,6 +39,11 @@ export default function Phase5Page() {
     const lowConf = extractions.filter((e: any) => (e.confidence || 0) < 0.5).length
     return { total, docSource, highConf, lowConf }
   }, [extractions])
+
+  const displayedExtractions = useMemo(() => {
+    if (!lowConfFilter) return extractions
+    return extractions.filter((e: any) => (e.confidence || 0) < 0.5)
+  }, [extractions, lowConfFilter])
 
   return (
     <PhaseLayout
@@ -126,10 +132,21 @@ export default function Phase5Page() {
 
           {/* View Mode Toggle */}
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-semibold text-gray-700">抽出結果</h3>
+            <div className="flex items-center gap-3">
+              <h3 className="text-sm font-semibold text-gray-700">抽出結果</h3>
+              {lowConfFilter && (
+                <button
+                  onClick={() => { setLowConfFilter(false); setViewMode('pl') }}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700 hover:bg-amber-200 transition-colors"
+                >
+                  低確信度のみ表示中
+                  <span className="ml-0.5">✕</span>
+                </button>
+              )}
+            </div>
             <div className="flex bg-gray-100 rounded-lg p-0.5">
               <button
-                onClick={() => setViewMode('pl')}
+                onClick={() => { setViewMode('pl'); setLowConfFilter(false) }}
                 className={`px-3 py-1.5 text-xs rounded-md transition-colors ${
                   viewMode === 'pl'
                     ? 'bg-white text-gray-800 shadow-sm font-medium'
@@ -139,9 +156,9 @@ export default function Phase5Page() {
                 年次ビュー（1〜5年目）
               </button>
               <button
-                onClick={() => setViewMode('flat')}
+                onClick={() => { setViewMode('flat'); setLowConfFilter(false) }}
                 className={`px-3 py-1.5 text-xs rounded-md transition-colors ${
-                  viewMode === 'flat'
+                  viewMode === 'flat' && !lowConfFilter
                     ? 'bg-white text-gray-800 shadow-sm font-medium'
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
@@ -154,9 +171,9 @@ export default function Phase5Page() {
           {/* Content Area */}
           <div className="flex gap-6">
             <div className="flex-1 min-w-0">
-              {viewMode === 'pl' ? (
+              {viewMode === 'pl' && !lowConfFilter ? (
                 <PLPreviewTable
-                  items={extractions}
+                  items={displayedExtractions}
                   assignments={assignments}
                   sheetMappings={sheetMappings}
                   mode="extraction"
@@ -165,7 +182,7 @@ export default function Phase5Page() {
                 />
               ) : (
                 <FlatExtractionTable
-                  extractions={extractions}
+                  extractions={displayedExtractions}
                   onRowClick={(item) => setSelectedCell(item)}
                   selectedItem={selectedCell}
                 />
@@ -200,6 +217,11 @@ export default function Phase5Page() {
                   title={`低確信度 ${stats.lowConf} 件を確認`}
                   description="推定値を文書の正確な数値に置き換えましょう"
                   priority="medium"
+                  onClick={() => {
+                    setLowConfFilter(true)
+                    setViewMode('flat')
+                    window.scrollTo({ top: 0, behavior: 'smooth' })
+                  }}
                 />
               )}
               <NextStepCard
