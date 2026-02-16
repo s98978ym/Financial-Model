@@ -308,6 +308,9 @@ def _generate_local_excel(job_id: str, run_id: str, body: dict):
         if sga_rd_mode not in ("inline", "separate"):
             sga_rd_mode = "inline"
 
+        # R&D themes: 開発テーマの大カテゴリ/小カテゴリ構造 (optional)
+        rd_themes = options.get("rd_themes")
+
         # Create full v2 workbook
         from src.excel.template_v2 import (
             create_v2_workbook, PL_ROWS, FY_COLS, SEG_ROWS, SEG_STREAM_ROWS_PER,
@@ -320,6 +323,7 @@ def _generate_local_excel(job_id: str, run_id: str, body: dict):
             num_segments=num_segments,
             extra_sheets=extra_sheets,
             sga_rd_mode=sga_rd_mode,
+            rd_themes=rd_themes,
         )
 
         db.update_job(job_id, status="running", progress=70, log_msg="Populating data")
@@ -397,26 +401,21 @@ def _generate_local_excel(job_id: str, run_id: str, body: dict):
                 )
                 ws_sga.cell(row=SGA_ROWS["total"], column=col).value = sga_grand
 
-                # --- R&D / System (開発テーマベース4大カテゴリ) ---
+                # --- R&D / System (動的テーマ構造に均等配分) ---
                 system_list = sga_detail.get("system", [])
                 rd_total = system_list[i] if system_list and i < len(system_list) else round(opex_list[i] * 0.12)
-                # 大カテゴリ1: コアプロダクト開発 (40%)
-                ws_rd.cell(row=RD_ROWS["cat1_sub1"], column=col).value = round(rd_total * 0.20)  # バックエンド
-                ws_rd.cell(row=RD_ROWS["cat1_sub2"], column=col).value = round(rd_total * 0.10)  # フロントエンド
-                ws_rd.cell(row=RD_ROWS["cat1_sub3"], column=col).value = round(rd_total * 0.05)  # UI/UX
-                ws_rd.cell(row=RD_ROWS["cat1_sub4"], column=col).value = round(rd_total * 0.05)  # QA
-                # 大カテゴリ2: 新規事業・機能開発 (25%)
-                ws_rd.cell(row=RD_ROWS["cat2_sub1"], column=col).value = round(rd_total * 0.15)  # 新機能
-                ws_rd.cell(row=RD_ROWS["cat2_sub2"], column=col).value = round(rd_total * 0.05)  # PoC
-                ws_rd.cell(row=RD_ROWS["cat2_sub3"], column=col).value = round(rd_total * 0.05)  # 外注
-                # 大カテゴリ3: インフラ・技術基盤 (20%)
-                ws_rd.cell(row=RD_ROWS["cat3_sub1"], column=col).value = round(rd_total * 0.12)  # クラウド
-                ws_rd.cell(row=RD_ROWS["cat3_sub2"], column=col).value = round(rd_total * 0.05)  # DevOps
-                ws_rd.cell(row=RD_ROWS["cat3_sub3"], column=col).value = round(rd_total * 0.03)  # セキュリティ
-                # 大カテゴリ4: 保守・運用 (15%)
-                ws_rd.cell(row=RD_ROWS["cat4_sub1"], column=col).value = round(rd_total * 0.08)  # バグ修正
-                ws_rd.cell(row=RD_ROWS["cat4_sub2"], column=col).value = round(rd_total * 0.04)  # 監視
-                ws_rd.cell(row=RD_ROWS["cat4_sub3"], column=col).value = round(rd_total * 0.03)  # その他
+
+                # 全小カテゴリの行を収集して均等配分
+                num_cats = RD_ROWS.get("_num_cats", 0)
+                all_sub_rows = []
+                for ci in range(1, num_cats + 1):
+                    cat_count = RD_ROWS.get(f"cat{ci}_count", 0)
+                    for si in range(1, cat_count + 1):
+                        all_sub_rows.append(RD_ROWS[f"cat{ci}_sub{si}"])
+                if all_sub_rows:
+                    share = rd_total / len(all_sub_rows)
+                    for sub_row in all_sub_rows:
+                        ws_rd.cell(row=sub_row, column=col).value = round(share)
             # PL rows 12-13 are formulas referencing detail sheets (already set by template)
         else:
             # Inline mode: write OPEX directly to PL sheet using computed breakdown
