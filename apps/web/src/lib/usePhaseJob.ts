@@ -21,6 +21,7 @@ interface PhaseJobState {
   progress: number
   result: any
   error: string | null
+  logMsg: string | null
 }
 
 export function usePhaseJob({ projectId, phase, autoLoad = true }: UsePhaseJobOptions) {
@@ -31,6 +32,7 @@ export function usePhaseJob({ projectId, phase, autoLoad = true }: UsePhaseJobOp
     progress: 0,
     result: null,
     error: null,
+    logMsg: null,
   })
 
   // Auto-load existing result from project state
@@ -100,6 +102,7 @@ export function usePhaseJob({ projectId, phase, autoLoad = true }: UsePhaseJobOp
         status: jobData.status,
         progress: jobData.progress || 0,
         error: jobData.error_msg || null,
+        logMsg: jobData.log_msg || null,
       }))
     }
   }, [jobData, projectId, queryClient])

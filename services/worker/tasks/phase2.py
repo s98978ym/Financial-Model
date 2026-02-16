@@ -1,13 +1,13 @@
 """Celery task for Phase 2: Business Model Analysis.
 
 Wraps src.agents.business_model_analyzer with job progress tracking.
+Uses streaming token progress for real-time feedback during LLM calls.
 """
 from __future__ import annotations
 
 import logging
 
 from services.worker.celery_app import app
-from services.worker.tasks.heartbeat import heartbeat
 
 logger = logging.getLogger(__name__)
 
@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 def run_bm_analysis(self, job_id: str):
     """Execute Phase 2 Business Model Analysis as a Celery task."""
     from core.providers import AnthropicProvider, ProviderAdapter
+    from core.providers.base import LLMConfig
     from core.providers.guards import DocumentTruncation
     from services.api.app import db
     from src.agents.business_model_analyzer import BusinessModelAnalyzer
@@ -59,13 +60,28 @@ def run_bm_analysis(self, job_id: str):
 
         db.update_job(job_id, progress=20, log_msg="Starting LLM analysis")
 
-        # Run analysis with a heartbeat that updates progress
-        # so the frontend knows the job is still alive during the LLM call
-        def _hb_update(pct, msg):
-            db.update_job(job_id, progress=pct, log_msg=msg)
+        # Streaming token progress: track actual generation instead of time-based heartbeat.
+        # Estimated output: max_tokens * ~4 chars/token. Progress mapped to 20-95%.
+        _ESTIMATED_OUTPUT_CHARS = 8192 * 4  # ~32K chars
+        _last_reported_pct = [20]
 
-        with heartbeat(_hb_update):
-            result = analyzer.analyze(truncated, feedback=feedback)
+        def _streaming_progress(chars_received: int):
+            frac = min(chars_received / _ESTIMATED_OUTPUT_CHARS, 1.0)
+            pct = min(int(20 + 75 * frac), 95)
+            # Only update DB when progress actually changes (avoid flooding)
+            if pct > _last_reported_pct[0]:
+                _last_reported_pct[0] = pct
+                tokens_est = chars_received // 4
+                db.update_job(
+                    job_id, progress=pct,
+                    log_msg=f"LLM generating... (~{tokens_est} tokens)",
+                )
+
+        result = analyzer.analyze(
+            truncated,
+            feedback=feedback,
+            progress_callback=_streaming_progress,
+        )
 
         # --- Store result ---
         result_dict = result.model_dump()

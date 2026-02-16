@@ -12,7 +12,7 @@ import logging
 import os
 import re
 import time
-from typing import Any, Dict, Iterator, Optional
+from typing import Any, Callable, Dict, Iterator, Optional
 
 from .base import LLMConfig, LLMError, LLMJSONError, LLMProvider, LLMResponse, LLMTimeoutError
 from .guards import JSONOutputGuard
@@ -65,6 +65,7 @@ class AnthropicProvider(LLMProvider):
         *,
         config: Optional[LLMConfig] = None,
         schema_hint: Optional[Dict[str, Any]] = None,
+        progress_callback: Optional[Callable[[int], None]] = None,
     ) -> LLMResponse:
         cfg = self._default_config(config)
         model = cfg.model if cfg.model != "claude-sonnet-4-5-20250929" else self.default_model
@@ -107,6 +108,15 @@ class AnthropicProvider(LLMProvider):
                 # Use streaming to avoid HTTP-level timeout on large responses
                 # and to ensure the connection stays alive during generation.
                 with self.client.messages.stream(**kwargs) as stream:
+                    if progress_callback:
+                        # Iterate tokens for real-time progress tracking
+                        received_chars = 0
+                        for text_chunk in stream.text_stream:
+                            received_chars += len(text_chunk)
+                            try:
+                                progress_callback(received_chars)
+                            except Exception:
+                                pass
                     response = stream.get_final_message()
 
                 latency_ms = int((time.time() - t0) * 1000)

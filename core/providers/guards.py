@@ -321,7 +321,7 @@ class DocumentTruncation:
     """Fixed truncation strategies per phase."""
 
     @staticmethod
-    def for_phase2(text: str, max_chars: int = 30000) -> str:
+    def for_phase2(text: str, max_chars: int = 20000) -> str:
         """Phase 2: First 70% + Last 25% (with overlap marker)."""
         if len(text) <= max_chars:
             return text

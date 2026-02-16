@@ -59,6 +59,7 @@ async def get_job(job_id: str):
         "logs": job.get("logs", []),
         "result": job.get("result_ref"),
         "error_msg": job.get("error_msg"),
+        "log_msg": job["logs"][-1]["msg"] if job.get("logs") else None,
         "created_at": job["created_at"],
         "updated_at": job["updated_at"],
     }

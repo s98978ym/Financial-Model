@@ -221,7 +221,7 @@ BM_ANALYZER_SYSTEM_PROMPT = """\
 ■ STEP 3: 事実に基づいて複数のビジネスモデル解釈を検討する
   - 同じ事実から、異なるセグメント分割・収益構造の解釈がありうる
   - 各解釈は文書の事実に基づくこと（空想のモデルを提案しない）
-  - 3〜5つの合理的な解釈パターンを提案する
+  - 2〜3つの合理的な解釈パターンを提案する（速度重視）
   - 各パターンの違いは「同じ事実をどう構造化するか」の違いであること
 
 ■ STEP 4: 各パターンを構造化する
@@ -238,7 +238,7 @@ BM_ANALYZER_SYSTEM_PROMPT = """\
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 【出力ルール】
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-- proposals（パターン案）は必ず3件以上返すこと
+- proposals（パターン案）は2〜3件返すこと（速度重視で簡潔に）
 - 各proposalのsegmentsは必ず1件以上
 - evidenceフィールドは文書の原文を「」で囲んで引用すること
 - 文書に記載がない項目のevidenceは「文書に記載なし」とすること
@@ -299,7 +299,7 @@ BM_ANALYZER_USER_PROMPT = """\
   "currency": "JPY"
 }}
 
-proposalsは3〜5件。各proposalは独立した解釈（セグメント構成が異なりうる）。confidenceの高い順に並べる。financial_targetsは文書に記載があれば抽出、なければ空配列/null。数値は円単位に正規化（億→×1億、万→×1万）。
+proposalsは2〜3件（速度重視、簡潔に）。各proposalは独立した解釈。confidenceの高い順に並べる。financial_targetsは文書に記載があれば抽出、なければ空配列/null。数値は円単位に正規化（億→×1億、万→×1万）。
 """
 
 
@@ -326,7 +326,7 @@ class BusinessModelAnalyzer:
         self._system_prompt = system_prompt or BM_ANALYZER_SYSTEM_PROMPT
         self._user_prompt = user_prompt or BM_ANALYZER_USER_PROMPT
 
-    def analyze(self, document_text: str, feedback: str = "") -> BusinessModelAnalysis:
+    def analyze(self, document_text: str, feedback: str = "", progress_callback=None) -> BusinessModelAnalysis:
         """Analyze a business plan document and return narrative + proposals.
 
         Parameters
@@ -369,7 +369,13 @@ class BusinessModelAnalyzer:
 
         logger.info("BusinessModelAnalyzer: sending document (%d chars, original %d) to LLM",
                      len(truncated), len(document_text))
-        result = self.llm.extract(messages)
+        from core.providers.base import LLMConfig
+        extract_kwargs: dict = {
+            "config": LLMConfig(max_tokens=8192),
+        }
+        if progress_callback is not None:
+            extract_kwargs["progress_callback"] = progress_callback
+        result = self.llm.extract(messages, **extract_kwargs)
         logger.info("BusinessModelAnalyzer: received response keys=%s", list(result.keys()))
 
         # Auto-unwrap: LLM sometimes wraps in a container key
@@ -406,7 +412,7 @@ class BusinessModelAnalyzer:
         return analysis
 
     @staticmethod
-    def _smart_truncate(text: str, max_chars: int = 30000) -> str:
+    def _smart_truncate(text: str, max_chars: int = 20000) -> str:
         """Smart truncation that preserves start and end of document.
 
         Instead of blindly cutting at max_chars, this keeps:

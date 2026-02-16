@@ -8,7 +8,7 @@ so it can be passed as ``llm_client`` to any agent.
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from .anthropic_provider import AnthropicProvider
 from .base import LLMConfig
@@ -27,6 +27,8 @@ class ProviderAdapter:
         self,
         messages: List[Dict[str, str]],
         temperature: float = 0.1,
+        config: Optional[LLMConfig] = None,
+        progress_callback: Optional[Callable[[int], None]] = None,
     ) -> Dict[str, Any]:
         """Convert OpenAI-format messages to provider call and return parsed JSON."""
         system_text = ""
@@ -42,11 +44,12 @@ class ProviderAdapter:
 
         user_prompt = "\n\n".join(user_parts)
 
-        config = LLMConfig(temperature=temperature)
+        cfg = config or LLMConfig(temperature=temperature)
         response = self._provider.generate_json(
             system_prompt=system_text,
             user_prompt=user_prompt,
-            config=config,
+            config=cfg,
+            progress_callback=progress_callback,
         )
 
         return response.parsed_json or {}

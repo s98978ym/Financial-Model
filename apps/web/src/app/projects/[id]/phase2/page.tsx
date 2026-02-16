@@ -13,7 +13,7 @@ export default function Phase2Page() {
   var projectId = params.id as string
   var [selectedIndex, setSelectedIndex] = useState<number | null>(null)
 
-  var { result, isProcessing, isComplete, isFailed, trigger, progress, error, projectState } =
+  var { result, isProcessing, isComplete, isFailed, trigger, progress, error, projectState, logMsg } =
     usePhaseJob({ projectId, phase: 2 })
 
   // Get document_id from project state
@@ -87,12 +87,18 @@ export default function Phase2Page() {
         <div className="text-center py-12">
           <div className="inline-block w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mb-4" />
           <p className="text-gray-600">ビジネスモデルを分析中... ({progress}%)</p>
-          <p className="text-xs text-gray-400 mt-1">
-            {progress < 50
-              ? 'LLMが事業計画書を読み解いています'
+          <div className="w-64 mx-auto mt-2 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-blue-500 rounded-full transition-all duration-500"
+              style={{ width: progress + '%' }}
+            />
+          </div>
+          <p className="text-xs text-gray-400 mt-2">
+            {logMsg || (progress < 20
+              ? 'ドキュメントを準備中...'
               : progress < 80
-                ? '収益構造を分析しています'
-                : '最終処理中です。もうしばらくお待ちください'}
+                ? 'LLMが事業計画書を分析中...'
+                : '最終処理中です。もうしばらくお待ちください')}
           </p>
         </div>
       )}
