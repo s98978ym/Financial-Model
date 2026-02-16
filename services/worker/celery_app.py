@@ -6,14 +6,49 @@ Supports TLS connections (rediss://) required by Upstash.
 
 from __future__ import annotations
 
+import logging
 import os
 import ssl
+import sys
 
 from celery import Celery
+from celery.signals import worker_ready
+
+logger = logging.getLogger(__name__)
 
 REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
 
-# Upstash requires TLS — detect rediss:// and configure SSL
+# -------------------------------------------------------------------
+# Startup validation — fail fast with clear error messages
+# -------------------------------------------------------------------
+_REQUIRED_VARS = {
+    "REDIS_URL": "Upstash Redis TLS URL (rediss://...)",
+    "DATABASE_URL": "Supabase PostgreSQL connection string",
+}
+_RECOMMENDED_VARS = {
+    "ANTHROPIC_API_KEY": "Required for Claude LLM tasks",
+}
+
+_missing = [k for k in _REQUIRED_VARS if not os.environ.get(k)]
+_missing_rec = [k for k in _RECOMMENDED_VARS if not os.environ.get(k)]
+
+if _missing:
+    for k in _missing:
+        print(f"[WORKER ERROR] Missing required env var: {k} — {_REQUIRED_VARS[k]}", file=sys.stderr)
+    print(
+        "[WORKER ERROR] Set these in the Render dashboard (Environment tab). "
+        "Worker cannot start without them.",
+        file=sys.stderr,
+    )
+    sys.exit(1)
+
+if _missing_rec:
+    for k in _missing_rec:
+        logger.warning("Missing recommended env var: %s — %s", k, _RECOMMENDED_VARS[k])
+
+# -------------------------------------------------------------------
+# TLS / SSL configuration for Upstash Redis
+# -------------------------------------------------------------------
 _use_tls = REDIS_URL.startswith("rediss://")
 
 broker_opts = {}
@@ -62,5 +97,23 @@ app.conf.update(
     worker_concurrency=2,  # Low concurrency for LLM-bound tasks
     task_acks_late=True,
     task_reject_on_worker_lost=True,
+    broker_connection_retry_on_startup=True,
+    broker_connection_max_retries=5,
     **broker_opts,
 )
+
+
+@worker_ready.connect
+def _on_worker_ready(**kwargs):
+    """Log connection status when worker successfully starts."""
+    masked = REDIS_URL[:20] + "..." if len(REDIS_URL) > 20 else REDIS_URL
+    logger.info("Worker ready — broker: %s (TLS=%s)", masked, _use_tls)
+    db_url = os.environ.get("DATABASE_URL", "")
+    if db_url:
+        logger.info("Database configured (Supabase)")
+    else:
+        logger.warning("No DATABASE_URL — using in-memory fallback")
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        logger.info("ANTHROPIC_API_KEY configured")
+    else:
+        logger.warning("No ANTHROPIC_API_KEY — LLM tasks will fail")

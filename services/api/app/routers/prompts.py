@@ -5,10 +5,12 @@ All endpoints are under /v1/admin/prompts.
 """
 from __future__ import annotations
 
+import hashlib
+import hmac
 import logging
-import secrets
 import sys
 import os
+import time
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException
@@ -19,9 +21,42 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 # -------------------------------------------------------------------
-# Admin authentication
+# Admin authentication (HMAC-signed tokens — survive server restarts)
 # -------------------------------------------------------------------
-_valid_tokens: set = set()
+_ADMIN_SECRET = os.environ.get(
+    "ADMIN_SECRET",
+    "plgen-admin-" + os.environ.get("ADMIN_PASSWORD", "archeco01"),
+)
+_TOKEN_TTL = 86400  # 24 hours
+
+
+def _create_signed_token(admin_id: str) -> str:
+    """Create an HMAC-signed admin token that survives server restarts."""
+    ts = str(int(time.time()))
+    payload = f"{admin_id}:{ts}"
+    sig = hmac.new(
+        _ADMIN_SECRET.encode(), payload.encode(), hashlib.sha256
+    ).hexdigest()
+    return f"{payload}:{sig}"
+
+
+def _verify_signed_token(token: str) -> bool:
+    """Verify an HMAC-signed token without server-side storage."""
+    parts = token.split(":")
+    if len(parts) != 3:
+        return False
+    admin_id, ts, sig = parts
+    expected = hmac.new(
+        _ADMIN_SECRET.encode(), f"{admin_id}:{ts}".encode(), hashlib.sha256
+    ).hexdigest()
+    if not hmac.compare_digest(sig, expected):
+        return False
+    try:
+        if time.time() - int(ts) > _TOKEN_TTL:
+            return False
+    except ValueError:
+        return False
+    return True
 
 
 def _require_admin(authorization: Optional[str] = Header(default=None)):
@@ -29,7 +64,7 @@ def _require_admin(authorization: Optional[str] = Header(default=None)):
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="管理者認証が必要です")
     token = authorization[7:]
-    if token not in _valid_tokens:
+    if not _verify_signed_token(token):
         raise HTTPException(status_code=401, detail="認証トークンが無効または期限切れです")
 
 
@@ -46,9 +81,8 @@ async def admin_auth(body: dict):
     expected_pw = os.environ.get("ADMIN_PASSWORD", "archeco01")
 
     if admin_id == expected_id and password == expected_pw:
-        token = secrets.token_hex(32)
-        _valid_tokens.add(token)
-        logger.info("Admin authenticated (token count: %d)", len(_valid_tokens))
+        token = _create_signed_token(admin_id)
+        logger.info("Admin authenticated (HMAC token issued for %s)", admin_id)
         return {"authenticated": True, "token": token}
 
     raise HTTPException(status_code=401, detail="IDまたはパスワードが正しくありません")

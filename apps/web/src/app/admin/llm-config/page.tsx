@@ -167,6 +167,12 @@ export default function AdminLLMConfigPage() {
       setToast({ type: 'success', text: 'デフォルトLLMを更新しました' })
     },
     onError: function(err: any) {
+      if (err.status === 401) {
+        setAdminToken(null)
+        setIsAuthed(false)
+        setToast({ type: 'error', text: 'セッションが切れました。再ログインしてください' })
+        return
+      }
       setToast({ type: 'error', text: 'デフォルトLLM更新に失敗: ' + (err.message || String(err)) })
     },
   })
@@ -219,6 +225,7 @@ export default function AdminLLMConfigPage() {
       setToast({type: 'success', text: '保存しました'})
     },
     onError: function(err: any) {
+      if (err.status === 401) { setAdminToken(null); setIsAuthed(false); setToast({type: 'error', text: 'セッションが切れました。再ログインしてください'}); return }
       setToast({type: 'error', text: '保存に失敗: ' + (err.message || String(err))})
     },
   })
@@ -233,6 +240,7 @@ export default function AdminLLMConfigPage() {
       setToast({type: 'success', text: 'デフォルトに戻しました'})
     },
     onError: function(err: any) {
+      if (err.status === 401) { setAdminToken(null); setIsAuthed(false); setToast({type: 'error', text: 'セッションが切れました。再ログインしてください'}); return }
       setToast({type: 'error', text: 'リセットに失敗: ' + (err.message || String(err))})
     },
   })
@@ -248,6 +256,7 @@ export default function AdminLLMConfigPage() {
       setToast({type: 'success', text: 'バージョンを適用しました'})
     },
     onError: function(err: any) {
+      if (err.status === 401) { setAdminToken(null); setIsAuthed(false); setToast({type: 'error', text: 'セッションが切れました。再ログインしてください'}); return }
       setToast({type: 'error', text: 'バージョン適用に失敗: ' + (err.message || String(err))})
     },
   })
