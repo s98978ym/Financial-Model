@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field, field_validator
@@ -308,6 +309,11 @@ class ParameterExtractorAgent:
                     if not llm_label:
                         actual_label = design_lbl
 
+            # Normalize period: derive from cell column if period is missing or
+            # inconsistent with the cell address
+            raw_period = ex.get("period", "")
+            period = self._normalize_period(cell, raw_period)
+
             extractions.append(ExtractedValue(
                 sheet=sheet,
                 cell=cell,
@@ -319,7 +325,7 @@ class ParameterExtractorAgent:
                 confidence=float(ex.get("confidence", 0.5)),
                 evidence=ex.get("evidence", ""),
                 segment=ex.get("segment", ""),
-                period=ex.get("period", ""),
+                period=period,
             ))
         return ParameterExtractionResult(
             extractions=extractions,
@@ -327,3 +333,27 @@ class ParameterExtractorAgent:
             warnings=raw.get("warnings", []),
             raw_json=raw,
         )
+
+    # Column → FY mapping (C=FY1, D=FY2, ..., G=FY5)
+    _COL_TO_FY = {"C": "FY1", "D": "FY2", "E": "FY3", "F": "FY4", "G": "FY5"}
+
+    @staticmethod
+    def _normalize_period(cell: str, raw_period: str) -> str:
+        """Normalize period label to FY1-FY5 based on cell column.
+
+        Handles cases where LLM returns the same absolute year (e.g. "FY26")
+        for all entries instead of the relative FY1-FY5 labels.
+        """
+        # Extract column letter from cell address (e.g. "C5" → "C", "AB10" → "AB")
+        col_match = re.match(r'([A-Z]+)', cell.upper()) if cell else None
+        col = col_match.group(1) if col_match else ""
+
+        # If column maps to a known FY, use that as the canonical period
+        canonical = ParameterExtractorAgent._COL_TO_FY.get(col, "")
+
+        if canonical:
+            # Always use column-derived period to avoid LLM inconsistencies
+            return canonical
+
+        # Fallback: use raw_period if column doesn't match known FY columns
+        return raw_period

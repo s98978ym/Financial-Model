@@ -585,6 +585,39 @@ class BusinessModelAnalyzer:
         return analysis
 
     @staticmethod
+    def _fix_duplicate_years(targets: List[YearTarget]) -> List[YearTarget]:
+        """Fix duplicate year labels in financial targets.
+
+        When LLM returns all entries with the same year (e.g. all "FY26"),
+        increment the year number for each subsequent entry.
+        """
+        if len(targets) <= 1:
+            return targets
+
+        # Check if all years are the same
+        years = [t.year for t in targets]
+        if len(set(years)) >= len(years):
+            return targets  # Already unique
+
+        # Extract base year number from the first entry
+        first_year = years[0]
+        m = re.match(r'(FY)(\d+)', first_year, re.IGNORECASE)
+        if m:
+            prefix = m.group(1)
+            base_num = int(m.group(2))
+            for i, t in enumerate(targets):
+                t.year = f"{prefix}{base_num + i}"
+            logger.info("Fixed duplicate year labels: %s → %s",
+                        years, [t.year for t in targets])
+        else:
+            # Fallback: use FY1, FY2, ... if no recognizable pattern
+            for i, t in enumerate(targets):
+                t.year = f"FY{i + 1}"
+            logger.info("Normalized year labels to FY1-FY%d", len(targets))
+
+        return targets
+
+    @staticmethod
     def _parse_financial_targets(ft_raw: Optional[Dict[str, Any]]) -> Optional[FinancialTargets]:
         """Parse financial_targets from LLM response."""
         if not ft_raw or not isinstance(ft_raw, dict):
@@ -627,6 +660,10 @@ class BusinessModelAnalyzer:
                     evidence=str(cum_raw.get("evidence", "")),
                     source=str(cum_raw.get("source", "document")),
                 )
+
+            # Fix duplicate year labels (e.g. all "FY26" → FY26, FY27, FY28...)
+            rev_targets = BusinessModelAnalyzer._fix_duplicate_years(rev_targets)
+            op_targets = BusinessModelAnalyzer._fix_duplicate_years(op_targets)
 
             return FinancialTargets(
                 horizon_years=int(ft_raw.get("horizon_years") or 5),
