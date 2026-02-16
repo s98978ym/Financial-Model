@@ -1,10 +1,11 @@
 'use client'
 
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { PLPreviewTable } from '@/components/pl/PLPreviewTable'
 import { KPISummaryCards } from '@/components/pl/KPISummaryCards'
 import { EvidencePanel } from '@/components/grid/EvidencePanel'
+import { MobileEvidenceSheet } from '@/components/grid/MobileEvidenceSheet'
 import { PhaseLayout } from '@/components/ui/PhaseLayout'
 import { usePhaseJob } from '@/lib/usePhaseJob'
 import { api } from '@/lib/api'
@@ -321,7 +322,7 @@ export default function Phase5Page() {
                   )}
                 </div>
 
-                {/* Evidence Panel */}
+                {/* Evidence Panel - Desktop */}
                 <div className="w-80 flex-shrink-0 hidden lg:block">
                   <div className="sticky top-4">
                     <EvidencePanel cell={selectedCell} />
@@ -330,6 +331,12 @@ export default function Phase5Page() {
               </div>
             </>
           )}
+
+          {/* Evidence Panel - Mobile Bottom Sheet */}
+          <MobileEvidenceSheet
+            cell={selectedCell}
+            onClose={() => setSelectedCell(null)}
+          />
 
           {/* Summary & Actions */}
           <div className="mt-8 bg-gradient-to-r from-gray-50 to-white rounded-xl border border-gray-200 p-6">
@@ -396,6 +403,18 @@ export default function Phase5Page() {
   )
 }
 
+/** Hook to detect mobile viewport */
+function useIsMobile(breakpoint: number = 768) {
+  var [isMobile, setIsMobile] = useState(false)
+  useEffect(function() {
+    function check() { setIsMobile(window.innerWidth < breakpoint) }
+    check()
+    window.addEventListener('resize', check)
+    return function() { window.removeEventListener('resize', check) }
+  }, [breakpoint])
+  return isMobile
+}
+
 /**
  * Flat table view (alternative to PLPreviewTable).
  */
@@ -408,6 +427,10 @@ function FlatExtractionTable({
   onRowClick?: (item: any) => void
   selectedItem?: any
 }) {
+  var isMobile = useIsMobile()
+  var [searchQuery, setSearchQuery] = useState('')
+  var [sourceFilter, setSourceFilter] = useState<string>('all')
+
   function getPeriodLabel(ext: any): string {
     // From period field
     if (ext.period) {
@@ -420,6 +443,122 @@ function FlatExtractionTable({
     return map[col] || '—'
   }
 
+  var filteredExtractions = useMemo(function() {
+    return extractions.filter(function(ext: any) {
+      // Source filter
+      if (sourceFilter !== 'all' && ext.source !== sourceFilter) return false
+      // Search filter
+      if (searchQuery) {
+        var q = searchQuery.toLowerCase()
+        var label = (ext.label || ext.original_text || '').toLowerCase()
+        var sheet = (ext.sheet || '').toLowerCase()
+        if (!label.includes(q) && !sheet.includes(q)) return false
+      }
+      return true
+    })
+  }, [extractions, sourceFilter, searchQuery])
+
+  // Mobile: card list view
+  if (isMobile) {
+    return (
+      <div className="space-y-3">
+        {/* Search & Filter */}
+        <div className="space-y-2">
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={function(e) { setSearchQuery(e.target.value) }}
+            placeholder="ラベルで検索..."
+            className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          />
+          <div className="flex gap-1.5 overflow-x-auto pb-1">
+            {[
+              { key: 'all', label: '全て' },
+              { key: 'document', label: '文書' },
+              { key: 'inferred', label: '推定' },
+              { key: 'default', label: '初期値' },
+            ].map(function(f) {
+              return (
+                <button
+                  key={f.key}
+                  onClick={function() { setSourceFilter(f.key) }}
+                  className={'flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-colors min-h-[32px] ' + (
+                    sourceFilter === f.key
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  )}
+                >
+                  {f.label}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* Card list */}
+        <div className="space-y-2">
+          {filteredExtractions.map(function(ext: any, idx: number) {
+            var isSelected = selectedItem?.sheet === ext.sheet && selectedItem?.cell === ext.cell
+            var pct = Math.round((ext.confidence || 0) * 100)
+            var confColor = pct >= 80 ? 'text-green-600' : pct >= 50 ? 'text-yellow-600' : 'text-red-600'
+            var confBg = pct >= 80 ? 'bg-green-100' : pct >= 50 ? 'bg-yellow-100' : 'bg-red-100'
+            var periodLabel = getPeriodLabel(ext)
+
+            return (
+              <div
+                key={ext.sheet + '-' + ext.cell + '-' + idx}
+                onClick={function() { onRowClick?.(ext) }}
+                className={
+                  'rounded-lg border p-3 cursor-pointer active:scale-[0.98] transition-all ' +
+                  (isSelected ? 'ring-2 ring-blue-400 border-blue-200 bg-blue-50/50' : 'border-gray-200 bg-white hover:bg-gray-50')
+                }
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-sm text-gray-800 truncate">
+                      {ext.label || ext.original_text || '—'}
+                    </div>
+                    <div className="flex items-center gap-2 mt-1 text-[11px] text-gray-400">
+                      <span className="font-mono">{ext.sheet}/{ext.cell}</span>
+                      <span className={'inline-flex px-1.5 py-0.5 rounded-full text-[10px] font-semibold ' + (
+                        periodLabel === '—' ? 'bg-gray-100 text-gray-400' : 'bg-indigo-100 text-indigo-700'
+                      )}>
+                        {periodLabel}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                    <span className="font-mono font-semibold text-sm text-blue-700">
+                      {typeof ext.value === 'number' ? ext.value.toLocaleString() : ext.value}
+                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <span className={'inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium ' + (
+                        ext.source === 'document' ? 'bg-blue-100 text-blue-700' :
+                        ext.source === 'inferred' ? 'bg-amber-100 text-amber-700' :
+                        'bg-gray-100 text-gray-500'
+                      )}>
+                        {ext.source === 'document' ? '文書' : ext.source === 'inferred' ? '推定' : '初期値'}
+                      </span>
+                      <span className={'text-xs font-mono font-bold px-1.5 py-0.5 rounded ' + confBg + ' ' + confColor}>
+                        {pct}%
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+        {filteredExtractions.length === 0 && (
+          <div className="text-center py-8 text-gray-400 text-sm">
+            該当する項目がありません
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // Desktop: table view
   return (
     <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
       <table className="w-full text-sm">

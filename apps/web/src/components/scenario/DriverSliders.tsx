@@ -714,7 +714,7 @@ export function DriverSliders({ parameters, onChange, onBatchChange, industry, s
   }
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-5 space-y-1">
+    <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-5 space-y-1">
       <h3 className="font-medium text-gray-900">ドライバー調整</h3>
       <p className="text-xs text-gray-500 pb-2">
         スライダーを動かすとPLがリアルタイムで変化します
@@ -765,7 +765,7 @@ export function DriverSliders({ parameters, onChange, onBatchChange, industry, s
                 step={driver.step}
                 value={value}
                 onChange={function(e) { onChange(driver.key, parseFloat(e.target.value)) }}
-                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600 touch-pan-x"
               />
               <div className="flex justify-between text-xs text-gray-400 mt-0.5">
                 <span>{driver.format(driver.min)}</span>
@@ -1061,7 +1061,7 @@ export function DriverSliders({ parameters, onChange, onBatchChange, industry, s
               </p>
               <div>
                 <label className="text-xs text-gray-600 block mb-1">耐用年数</label>
-                <div className="grid grid-cols-4 gap-1">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-1">
                   {USEFUL_LIFE_OPTIONS.map(function(opt) {
                     var current = parameters.useful_life || 5
                     var isActive = current === opt.value

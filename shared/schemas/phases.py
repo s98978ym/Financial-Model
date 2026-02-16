@@ -65,6 +65,7 @@ class Phase2Result(BaseModel):
     financial_targets: Dict[str, Any]
     industry: str = ""
     business_model_type: str = ""
+    rd_themes: List[Dict[str, Any]] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
