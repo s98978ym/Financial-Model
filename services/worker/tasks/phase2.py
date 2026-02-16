@@ -61,7 +61,7 @@ def run_bm_analysis(self, job_id: str):
 
         # Streaming token progress: track actual generation instead of time-based heartbeat.
         # Estimated output: max_tokens * ~4 chars/token. Progress mapped to 20-95%.
-        _ESTIMATED_OUTPUT_CHARS = 8192 * 4  # ~32K chars
+        _ESTIMATED_OUTPUT_CHARS = 12288 * 4  # ~49K chars
         _last_reported_pct = [20]
 
         def _streaming_progress(chars_received: int):
