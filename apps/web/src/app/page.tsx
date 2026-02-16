@@ -109,19 +109,20 @@ export default function DashboardPage() {
   return (
     <div className="max-w-6xl mx-auto">
       {/* Header */}
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">プロジェクト管理</h1>
-          <p className="text-gray-500 mt-1">収益計画プロジェクトを管理・閲覧</p>
+      <div className="flex items-center justify-between mb-8 gap-3">
+        <div className="min-w-0">
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900">プロジェクト管理</h1>
+          <p className="text-gray-500 mt-1 text-sm hidden sm:block">収益計画プロジェクトを管理・閲覧</p>
         </div>
         <Link
           href="/projects/new"
-          className="flex items-center gap-2 bg-blue-600 text-white px-5 py-2.5 rounded-xl hover:bg-blue-700 transition-colors shadow-sm hover:shadow-md font-medium"
+          className="flex items-center gap-2 bg-blue-600 text-white px-4 sm:px-5 py-3 rounded-xl hover:bg-blue-700 transition-colors shadow-sm hover:shadow-md font-medium min-h-[44px] flex-shrink-0"
         >
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
           </svg>
-          新規プロジェクト
+          <span className="hidden sm:inline">新規プロジェクト</span>
+          <span className="sm:hidden">新規</span>
         </Link>
       </div>
 
@@ -209,15 +210,15 @@ export default function DashboardPage() {
                 key={project.id}
                 className="bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-md transition-all"
               >
-                <div className="p-5">
+                <div className="p-4 sm:p-5">
                   {/* Top Row: Name, Status, Actions */}
-                  <div className="flex items-start gap-4">
+                  <div className="flex items-start gap-3 sm:gap-4">
                     {/* Project Info */}
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-3 mb-1">
+                      <div className="flex items-center gap-2 sm:gap-3 mb-1 flex-wrap">
                         <Link
                           href={getPhaseRoute(project.id, project.current_phase)}
-                          className="text-lg font-semibold text-gray-900 hover:text-blue-600 transition-colors truncate"
+                          className="text-base sm:text-lg font-semibold text-gray-900 hover:text-blue-600 transition-colors truncate"
                         >
                           {project.name}
                         </Link>
@@ -227,10 +228,10 @@ export default function DashboardPage() {
                       </div>
 
                       {/* Meta Info */}
-                      <div className="flex items-center gap-4 text-xs text-gray-400">
+                      <div className="flex items-center gap-2 sm:gap-4 text-xs text-gray-400 flex-wrap">
                         <span>作成: {formatDate(project.created_at)}</span>
-                        <span>更新: {formatDateTime(project.updated_at)}</span>
-                        <span className="text-gray-300">{project.template_id}</span>
+                        <span className="hidden sm:inline">更新: {formatDateTime(project.updated_at)}</span>
+                        <span className="hidden sm:inline text-gray-300">{project.template_id}</span>
                       </div>
                     </div>
 
@@ -238,16 +239,16 @@ export default function DashboardPage() {
                     <div className="flex items-center gap-2 flex-shrink-0">
                       <Link
                         href={getPhaseRoute(project.id, project.current_phase)}
-                        className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 transition-colors"
+                        className="flex items-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 transition-colors min-h-[44px]"
                       >
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
                         </svg>
-                        続ける
+                        <span className="hidden sm:inline">続ける</span>
                       </Link>
                       <button
                         onClick={function() { handleStartEditMemo(project.id, project.memo || '') }}
-                        className="p-2 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-gray-700 transition-colors"
+                        className="p-2.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-gray-700 transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
                         title="メモを編集"
                       >
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -257,7 +258,7 @@ export default function DashboardPage() {
                       {!isDeleting ? (
                         <button
                           onClick={function() { setDeletingId(project.id) }}
-                          className="p-2 rounded-lg border border-gray-200 text-gray-400 hover:bg-red-50 hover:text-red-500 hover:border-red-200 transition-colors"
+                          className="p-2.5 rounded-lg border border-gray-200 text-gray-400 hover:bg-red-50 hover:text-red-500 hover:border-red-200 transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
                           title="削除"
                         >
                           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -269,13 +270,13 @@ export default function DashboardPage() {
                           <button
                             onClick={function() { deleteMutation.mutate(project.id) }}
                             disabled={deleteMutation.isPending}
-                            className="px-3 py-1.5 rounded-lg text-xs font-medium text-white bg-red-500 hover:bg-red-600 disabled:opacity-50 transition-colors"
+                            className="px-3 py-2 rounded-lg text-xs font-medium text-white bg-red-500 hover:bg-red-600 disabled:opacity-50 transition-colors min-h-[44px]"
                           >
                             {deleteMutation.isPending ? '削除中...' : '削除する'}
                           </button>
                           <button
                             onClick={function() { setDeletingId(null) }}
-                            className="px-3 py-1.5 rounded-lg text-xs font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 transition-colors"
+                            className="px-3 py-2 rounded-lg text-xs font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 transition-colors min-h-[44px]"
                           >
                             取消
                           </button>
@@ -311,13 +312,13 @@ export default function DashboardPage() {
                         )
                       })}
                     </div>
-                    {/* Phase Labels Row */}
-                    <div className="flex gap-1 mt-1">
+                    {/* Phase Labels Row - hidden on mobile, visible on sm+ */}
+                    <div className="hidden sm:flex gap-1 mt-1">
                       {[1, 2, 3, 4, 5, 6, 7, 8].map(function(phase) {
                         var isCurrent = phase === project.current_phase
                         return (
                           <div key={phase} className="flex-1 text-center">
-                            <span className={'text-[9px] ' + (isCurrent ? 'text-blue-600 font-medium' : 'text-gray-300')}>
+                            <span className={'text-[10px] ' + (isCurrent ? 'text-blue-600 font-medium' : 'text-gray-300')}>
                               {PHASE_LABELS[phase]}
                             </span>
                           </div>

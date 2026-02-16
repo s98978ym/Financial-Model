@@ -95,3 +95,63 @@ body {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.5; }
 }
+
+/* ═══════════════════════════════════════════
+   Mobile UX Enhancements
+   ═══════════════════════════════════════════ */
+
+/* Touch-friendly minimum target sizes on mobile */
+@media (max-width: 767px) {
+  /* Increase form input padding for easier touch */
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="search"],
+  textarea,
+  select {
+    min-height: 44px;
+    font-size: 16px; /* Prevents iOS zoom on focus */
+  }
+
+  /* Ensure range sliders have enough touch area */
+  input[type="range"] {
+    min-height: 32px;
+  }
+
+  /* Reduce horizontal padding on mobile for more content space */
+  .mobile-compact-px {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+}
+
+/* Bottom sheet slide-up animation */
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+.bottom-sheet-enter {
+  animation: slideUp 0.3s ease-out;
+}
+
+/* Smooth backdrop fade */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.backdrop-enter {
+  animation: fadeIn 0.2s ease-out;
+}
+
+/* Safe area inset for devices with notch/home indicator */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
