@@ -9,6 +9,7 @@ from .anthropic_provider import AnthropicProvider
 from .adapter import ProviderAdapter
 from .guards import JSONOutputGuard, EvidenceGuard, ConfidencePenalty, ExtractionCompleteness
 from .audit import AuditLogger, AuditRecord
+from .registry import get_provider, get_model_catalog, get_providers, MODEL_CATALOG
 
 __all__ = [
     "LLMProvider",
@@ -22,4 +23,8 @@ __all__ = [
     "ExtractionCompleteness",
     "AuditLogger",
     "AuditRecord",
+    "get_provider",
+    "get_model_catalog",
+    "get_providers",
+    "MODEL_CATALOG",
 ]

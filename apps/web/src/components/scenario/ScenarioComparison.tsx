@@ -1,12 +1,13 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 
 interface ScenarioComparisonProps {
   projectId: string
   parameters: Record<string, number>
+  onCompletionChange?: (status: Record<string, boolean>) => void
 }
 
 function prepareParams(p: Record<string, number>): Record<string, any> {
@@ -23,7 +24,37 @@ function prepareParams(p: Record<string, number>): Record<string, any> {
   return out
 }
 
-export function ScenarioComparison({ projectId, parameters }: ScenarioComparisonProps) {
+/** A scenario is "complete" when recalc returns valid KPI data without errors */
+function isScenarioComplete(data: any, error: any, isFetching: boolean): boolean {
+  if (error || isFetching || !data) return false
+  return !!(data.kpis && data.pl_summary?.revenue?.length > 0)
+}
+
+function CompletionBadge({ complete, loading }: { complete: boolean; loading: boolean }) {
+  if (loading) {
+    return <span className="inline-flex items-center gap-1 text-[11px] text-blue-500 animate-pulse">...</span>
+  }
+  if (complete) {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-[11px] font-medium">
+        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+        </svg>
+        完了
+      </span>
+    )
+  }
+  return (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 text-[11px] font-medium">
+      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <circle cx="12" cy="12" r="9" />
+      </svg>
+      未完了
+    </span>
+  )
+}
+
+export function ScenarioComparison({ projectId, parameters, onCompletionChange }: ScenarioComparisonProps) {
   var prepared = useMemo(() => prepareParams(parameters), [parameters])
 
   // Fetch all three scenarios in parallel
@@ -50,6 +81,17 @@ export function ScenarioComparison({ projectId, parameters }: ScenarioComparison
 
   const scenarioError = baseError || bestError || worstError
   const isLoading = baseFetching || bestFetching || worstFetching
+
+  const baseComplete = isScenarioComplete(baseData, baseError, baseFetching)
+  const bestComplete = isScenarioComplete(bestData, bestError, bestFetching)
+  const worstComplete = isScenarioComplete(worstData, worstError, worstFetching)
+
+  // Notify parent of completion status changes
+  useEffect(function() {
+    if (onCompletionChange) {
+      onCompletionChange({ base: baseComplete, best: bestComplete, worst: worstComplete })
+    }
+  }, [baseComplete, bestComplete, worstComplete, onCompletionChange])
 
   const formatYen = (v: number | undefined) => {
     if (v == null) return '-'
@@ -88,6 +130,28 @@ export function ScenarioComparison({ projectId, parameters }: ScenarioComparison
           </tr>
         </thead>
         <tbody className={isLoading ? 'opacity-50 transition-opacity' : 'transition-opacity'}>
+          {/* Completion status row */}
+          <tr className="border-t border-gray-200 bg-blue-50/50">
+            <td className="px-4 py-2 text-gray-600 font-medium">設定状況</td>
+            <td className="px-4 py-2 text-right">
+              <CompletionBadge complete={baseComplete} loading={baseFetching} />
+            </td>
+            <td className="px-4 py-2 text-right">
+              <CompletionBadge complete={bestComplete} loading={bestFetching} />
+            </td>
+            <td className="px-4 py-2 text-right">
+              <CompletionBadge complete={worstComplete} loading={worstFetching} />
+            </td>
+            <td className="px-4 py-2 text-right">
+              {baseComplete && bestComplete && worstComplete ? (
+                <span className="text-[11px] text-green-600 font-medium">全シナリオ完了</span>
+              ) : (
+                <span className="text-[11px] text-gray-400">
+                  {[baseComplete, bestComplete, worstComplete].filter(Boolean).length}/3 完了
+                </span>
+              )}
+            </td>
+          </tr>
           {rows.map((row) => {
             const baseVal = baseData?.pl_summary?.[row.key]?.[row.idx]
             const bestVal = bestData?.pl_summary?.[row.key]?.[row.idx]

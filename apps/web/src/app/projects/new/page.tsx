@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { useMutation } from '@tanstack/react-query'
-import { api } from '@/lib/api'
+import { useMutation, useQuery } from '@tanstack/react-query'
+import { api, getAdminToken } from '@/lib/api'
 
 export default function NewProjectPage() {
   const router = useRouter()
@@ -13,10 +13,38 @@ export default function NewProjectPage() {
   const [file, setFile] = useState<File | null>(null)
   const [dragOver, setDragOver] = useState(false)
 
+  // Admin-only LLM selection
+  const isAdmin = !!getAdminToken()
+  const [llmProvider, setLlmProvider] = useState('')
+  const [llmModel, setLlmModel] = useState('')
+
+  // Fetch LLM catalog (only for admin)
+  var llmModelsQuery = useQuery({
+    queryKey: ['llmModels'],
+    queryFn: function() { return api.getLLMModels() },
+    enabled: isAdmin,
+  })
+
+  var llmProviders: { id: string; label: string }[] = llmModelsQuery.data?.providers || []
+  var llmCatalog: any[] = llmModelsQuery.data?.models || []
+  var filteredModels = llmCatalog.filter(function(m: any) { return m.provider === llmProvider })
+
+  function handleLlmProviderChange(newProvider: string) {
+    setLlmProvider(newProvider)
+    var models = llmCatalog.filter(function(m: any) { return m.provider === newProvider })
+    var std = models.find(function(m: any) { return m.tier === 'standard' })
+    setLlmModel(std ? std.model_id : (models[0]?.model_id || ''))
+  }
+
   const createProject = useMutation({
     mutationFn: async () => {
-      // 1. Create project
-      const project = await api.createProject({ name: name || '新規プロジェクト' })
+      // 1. Create project (with optional LLM override for admin)
+      var createBody: any = { name: name || '新規プロジェクト' }
+      if (isAdmin && llmProvider && llmModel) {
+        createBody.llm_provider = llmProvider
+        createBody.llm_model = llmModel
+      }
+      const project = await api.createProject(createBody)
 
       // 2. Upload document
       let doc: any = null
@@ -69,6 +97,61 @@ export default function NewProjectPage() {
           className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
         />
       </div>
+
+      {/* LLM Selection (Admin Only) */}
+      {isAdmin && llmModelsQuery.data && (
+        <div className="mb-6 bg-purple-50 border border-purple-200 rounded-lg p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <svg className="w-4 h-4 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+            <span className="text-sm font-medium text-purple-700">LLM設定</span>
+            <span className="text-[10px] bg-purple-200 text-purple-700 px-1.5 py-0.5 rounded-full">管理者</span>
+          </div>
+          <p className="text-xs text-purple-600 mb-3">
+            このプロジェクトで使用するLLMを選択（未選択の場合はシステムデフォルトを使用）
+          </p>
+          <div className="flex gap-3">
+            <div className="flex-1">
+              <label className="block text-xs font-medium text-purple-700 mb-1">プロバイダー</label>
+              <select
+                value={llmProvider}
+                onChange={function(e) { handleLlmProviderChange(e.target.value) }}
+                className="w-full text-sm border border-purple-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-200 focus:border-purple-400 bg-white"
+              >
+                <option value="">デフォルト</option>
+                {llmProviders.map(function(p) {
+                  return <option key={p.id} value={p.id}>{p.label}</option>
+                })}
+              </select>
+            </div>
+            <div className="flex-1">
+              <label className="block text-xs font-medium text-purple-700 mb-1">モデル</label>
+              <select
+                value={llmModel}
+                onChange={function(e) { setLlmModel(e.target.value) }}
+                disabled={!llmProvider}
+                className="w-full text-sm border border-purple-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-200 focus:border-purple-400 bg-white disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <option value="">選択してください</option>
+                {filteredModels.map(function(m: any) {
+                  var tierBadge = m.tier === 'premium' ? ' [Premium]' : m.tier === 'fast' ? ' [Fast]' : ''
+                  return <option key={m.model_id} value={m.model_id}>{m.label}{tierBadge}</option>
+                })}
+              </select>
+            </div>
+          </div>
+          {llmProvider && llmModel && (
+            <p className="text-[10px] text-purple-500 mt-2">
+              {(function() {
+                var m = llmCatalog.find(function(x: any) { return x.model_id === llmModel })
+                return m ? m.description : ''
+              })()}
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Upload Mode Tabs */}
       <div className="mb-4">

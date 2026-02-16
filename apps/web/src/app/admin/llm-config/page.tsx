@@ -92,6 +92,10 @@ export default function AdminLLMConfigPage() {
     })
   }
 
+  // LLM default settings state
+  var [llmProvider, setLlmProvider] = useState('')
+  var [llmModel, setLlmModel] = useState('')
+
   var [selectedPromptKey, setSelectedPromptKey] = useState<string | null>(null)
   var [editContent, setEditContent] = useState('')
   var [editLabel, setEditLabel] = useState('')
@@ -131,6 +135,55 @@ export default function AdminLLMConfigPage() {
     retry: 2,
     retryDelay: 1000,
   })
+
+  // LLM models catalog (public endpoint)
+  var llmModelsQuery = useQuery({
+    queryKey: ['llmModels'],
+    queryFn: function() { return api.getLLMModels() },
+    enabled: isAuthed,
+  })
+
+  // Current default LLM
+  var llmDefaultQuery = useQuery({
+    queryKey: ['llmDefault'],
+    queryFn: function() { return api.getLLMDefault() },
+    enabled: isAuthed,
+  })
+
+  // Sync local state with fetched default
+  useEffect(function() {
+    if (llmDefaultQuery.data) {
+      setLlmProvider(llmDefaultQuery.data.provider || '')
+      setLlmModel(llmDefaultQuery.data.model || '')
+    }
+  }, [llmDefaultQuery.data])
+
+  var saveLLMDefaultMutation = useMutation({
+    mutationFn: function() {
+      return api.setLLMDefault({ provider: llmProvider, model: llmModel })
+    },
+    onSuccess: function() {
+      queryClient.invalidateQueries({ queryKey: ['llmDefault'] })
+      setToast({ type: 'success', text: 'デフォルトLLMを更新しました' })
+    },
+    onError: function(err: any) {
+      setToast({ type: 'error', text: 'デフォルトLLM更新に失敗: ' + (err.message || String(err)) })
+    },
+  })
+
+  var llmProviders: { id: string; label: string }[] = llmModelsQuery.data?.providers || []
+  var llmCatalog: any[] = llmModelsQuery.data?.models || []
+
+  // Models filtered by selected provider
+  var filteredModels = llmCatalog.filter(function(m: any) { return m.provider === llmProvider })
+
+  // When provider changes, auto-select the first standard model
+  function handleProviderChange(newProvider: string) {
+    setLlmProvider(newProvider)
+    var models = llmCatalog.filter(function(m: any) { return m.provider === newProvider })
+    var std = models.find(function(m: any) { return m.tier === 'standard' })
+    setLlmModel(std ? std.model_id : (models[0]?.model_id || ''))
+  }
 
   var phases: PhaseInfo[] = phasesQuery.data || []
   var prompts: PromptInfo[] = promptsQuery.data || []
@@ -509,6 +562,78 @@ export default function AdminLLMConfigPage() {
             <span>Model: <strong className="text-gray-600">{phases[0].model}</strong></span>
             <span>Temperature: <strong className="text-gray-600">{phases[0].temperature}</strong></span>
             <span>Max Tokens: <strong className="text-gray-600">{phases[0].max_tokens.toLocaleString()}</strong></span>
+          </div>
+        )}
+      </div>
+
+      {/* Default LLM Setting */}
+      <div className="bg-white rounded-xl border border-gray-200 p-5 mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+              デフォルトLLM設定
+            </h2>
+            <p className="text-[10px] text-gray-400 mt-1">
+              非管理者ユーザーが使用するLLMプロバイダーとモデル
+            </p>
+          </div>
+          {llmDefaultQuery.isLoading && (
+            <div className="inline-block w-4 h-4 border-2 border-purple-200 border-t-purple-600 rounded-full animate-spin" />
+          )}
+        </div>
+        {llmModelsQuery.data && (
+          <div className="flex items-end gap-4">
+            <div className="flex-1">
+              <label className="block text-xs font-medium text-gray-600 mb-1.5">
+                プロバイダー
+              </label>
+              <select
+                value={llmProvider}
+                onChange={function(e) { handleProviderChange(e.target.value) }}
+                className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-100 focus:border-purple-400 bg-white"
+              >
+                <option value="">選択してください</option>
+                {llmProviders.map(function(p) {
+                  return <option key={p.id} value={p.id}>{p.label}</option>
+                })}
+              </select>
+            </div>
+            <div className="flex-1">
+              <label className="block text-xs font-medium text-gray-600 mb-1.5">
+                モデル
+              </label>
+              <select
+                value={llmModel}
+                onChange={function(e) { setLlmModel(e.target.value) }}
+                disabled={!llmProvider}
+                className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-100 focus:border-purple-400 bg-white disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <option value="">選択してください</option>
+                {filteredModels.map(function(m: any) {
+                  var tierBadge = m.tier === 'premium' ? ' [Premium]' : m.tier === 'fast' ? ' [Fast]' : ''
+                  return <option key={m.model_id} value={m.model_id}>{m.label}{tierBadge}</option>
+                })}
+              </select>
+            </div>
+            <div className="flex-shrink-0">
+              <button
+                onClick={function() { saveLLMDefaultMutation.mutate() }}
+                disabled={saveLLMDefaultMutation.isPending || !llmProvider || !llmModel}
+                className="text-xs bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
+              >
+                {saveLLMDefaultMutation.isPending ? '保存中...' : '保存'}
+              </button>
+            </div>
+          </div>
+        )}
+        {llmProvider && llmModel && (
+          <div className="mt-3 pt-3 border-t border-gray-100">
+            <p className="text-[10px] text-gray-400">
+              {(function() {
+                var m = llmCatalog.find(function(x: any) { return x.model_id === llmModel })
+                return m ? m.description : ''
+              })()}
+            </p>
           </div>
         )}
       </div>

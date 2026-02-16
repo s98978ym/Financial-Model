@@ -14,8 +14,8 @@ logger = logging.getLogger(__name__)
 @app.task(bind=True, name="tasks.phase3.run_template_mapping")
 def run_template_mapping(self, job_id: str):
     """Execute Phase 3 Template Structure Mapping as a Celery task."""
-    from core.providers import AnthropicProvider, ProviderAdapter
     from services.api.app import db
+    from services.worker.tasks.provider_helper import get_adapter_for_run
     from src.agents.template_mapper import TemplateMapper
 
     try:
@@ -59,8 +59,7 @@ def run_template_mapping(self, job_id: str):
         db.update_job(job_id, progress=15, log_msg=f"Data loaded: {len(catalog_items)} catalog items")
 
         # --- Run Template Mapping ---
-        provider = AnthropicProvider()
-        adapter = ProviderAdapter(provider)
+        adapter = get_adapter_for_run(run_id)
         mapper = TemplateMapper(llm_client=adapter)
 
         db.update_job(job_id, progress=20, log_msg="Starting template mapping (calling Claude API)")

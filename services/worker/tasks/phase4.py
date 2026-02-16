@@ -14,8 +14,8 @@ logger = logging.getLogger(__name__)
 @app.task(bind=True, name="tasks.phase4.run_model_design")
 def run_model_design(self, job_id: str):
     """Execute Phase 4 Model Design as a Celery task."""
-    from core.providers import AnthropicProvider, ProviderAdapter
     from services.api.app import db
+    from services.worker.tasks.provider_helper import get_adapter_for_run
     from src.agents.model_designer import ModelDesigner
 
     try:
@@ -117,8 +117,7 @@ def run_model_design(self, job_id: str):
             db.update_job(job_id, progress=18, log_msg=f"Loaded user decisions as feedback")
 
         # --- Run Model Design ---
-        provider = AnthropicProvider()
-        adapter = ProviderAdapter(provider)
+        adapter = get_adapter_for_run(run_id)
         designer = ModelDesigner(llm_client=adapter)
 
         if estimation_mode:

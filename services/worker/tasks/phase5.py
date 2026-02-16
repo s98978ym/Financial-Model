@@ -14,9 +14,9 @@ logger = logging.getLogger(__name__)
 @app.task(bind=True, name="tasks.phase5.run_parameter_extraction")
 def run_parameter_extraction(self, job_id: str):
     """Execute Phase 5 Parameter Extraction as a Celery task."""
-    from core.providers import AnthropicProvider, ProviderAdapter
     from core.providers.guards import DocumentTruncation
     from services.api.app import db
+    from services.worker.tasks.provider_helper import get_adapter_for_run
     from src.agents.parameter_extractor import ParameterExtractorAgent
 
     try:
@@ -70,8 +70,7 @@ def run_parameter_extraction(self, job_id: str):
             db.update_job(job_id, progress=18, log_msg=f"Applying {len(edits)} user edits")
 
         # --- Run Parameter Extraction ---
-        provider = AnthropicProvider()
-        adapter = ProviderAdapter(provider)
+        adapter = get_adapter_for_run(run_id)
         extractor = ParameterExtractorAgent(llm_client=adapter)
 
         db.update_job(job_id, progress=20, log_msg="Starting parameter extraction")

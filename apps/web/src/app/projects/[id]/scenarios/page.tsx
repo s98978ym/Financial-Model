@@ -41,6 +41,7 @@ export default function ScenarioPlaygroundPage() {
   var [initialized, setInitialized] = useState(false)
   var [industry, setIndustry] = useState<IndustryKey>('その他')
   var [pendingProposal, setPendingProposal] = useState<ParameterProposalData | null>(null)
+  var [completionStatus, setCompletionStatus] = useState<Record<string, boolean>>({ base: false, best: false, worst: false })
   var saveTimerRef = useRef<any>(null)
   var recalcTimerRef = useRef<any>(null)
   // Keep a ref to latest params so callbacks never use stale state
@@ -269,7 +270,7 @@ export default function ScenarioPlaygroundPage() {
       </div>
 
       {/* Scenario Tabs */}
-      <ScenarioTabs active={scenario} onChange={handleScenarioChange} />
+      <ScenarioTabs active={scenario} onChange={handleScenarioChange} completionStatus={completionStatus} />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
         {/* Driver Sliders */}
@@ -291,7 +292,7 @@ export default function ScenarioPlaygroundPage() {
 
       {/* Scenario Comparison Table */}
       <div className="mt-8">
-        <ScenarioComparison projectId={projectId} parameters={parameters} />
+        <ScenarioComparison projectId={projectId} parameters={parameters} onCompletionChange={setCompletionStatus} />
       </div>
 
     </PhaseLayout>

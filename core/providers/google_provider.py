@@ -10,7 +10,7 @@ import json
 import logging
 import os
 import time
-from typing import Any, Dict, Iterator, Optional
+from typing import Any, Callable, Dict, Iterator, Optional
 
 from .base import LLMConfig, LLMError, LLMProvider, LLMResponse
 from .guards import JSONOutputGuard
@@ -61,6 +61,7 @@ class GoogleProvider(LLMProvider):
         *,
         config: Optional[LLMConfig] = None,
         schema_hint: Optional[Dict[str, Any]] = None,
+        progress_callback: Optional[Callable[[int], None]] = None,
     ) -> LLMResponse:
         cfg = self._default_config(config)
 
@@ -69,24 +70,45 @@ class GoogleProvider(LLMProvider):
             (full_system + user_prompt).encode()
         ).hexdigest()[:16]
 
+        gen_config = {
+            "temperature": cfg.temperature,
+            "max_output_tokens": cfg.max_tokens,
+        }
+        content = f"{full_system}\n\n{user_prompt}"
+
         t0 = time.time()
-        response = self.model.generate_content(
-            f"{full_system}\n\n{user_prompt}",
-            generation_config={
-                "temperature": cfg.temperature,
-                "max_output_tokens": cfg.max_tokens,
-            },
-        )
+
+        if progress_callback:
+            # Stream for progress tracking
+            stream_response = self.model.generate_content(
+                content, generation_config=gen_config, stream=True,
+            )
+            chunks = []
+            received_chars = 0
+            for chunk in stream_response:
+                if chunk.text:
+                    chunks.append(chunk.text)
+                    received_chars += len(chunk.text)
+                    try:
+                        progress_callback(received_chars)
+                    except Exception:
+                        pass
+            raw_text = "".join(chunks)
+            usage = getattr(stream_response, "usage_metadata", None)
+        else:
+            response = self.model.generate_content(
+                content, generation_config=gen_config,
+            )
+            raw_text = response.text or ""
+            usage = getattr(response, "usage_metadata", None)
 
         latency_ms = int((time.time() - t0) * 1000)
-        raw_text = response.text or ""
         parsed = JSONOutputGuard.enforce(raw_text)
 
         result_hash = hashlib.sha256(
             json.dumps(parsed, sort_keys=True).encode()
         ).hexdigest()[:16]
 
-        usage = getattr(response, "usage_metadata", None)
         return LLMResponse(
             raw_text=raw_text,
             parsed_json=parsed,
