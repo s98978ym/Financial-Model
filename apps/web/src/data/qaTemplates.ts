@@ -1,18 +1,10 @@
 /**
- * Q&A templates for financial model presentation.
- * Generates categorized Q&A from PL model parameters and results.
+ * Q&A templates v2: Full data utilization
  */
+import type { IndustryKey } from './industryBenchmarks'
+import { INDUSTRY_BENCHMARKS } from './industryBenchmarks'
 
-export type QACategory =
-  | 'revenue'
-  | 'cost'
-  | 'profitability'
-  | 'growth'
-  | 'risk'
-  | 'market'
-  | 'operations'
-  | 'funding'
-
+export type QACategory = 'revenue' | 'cost' | 'profitability' | 'growth' | 'risk' | 'market' | 'operations' | 'funding'
 export type TargetAudience = 'investor' | 'banker' | 'board' | 'team' | 'partner'
 export type DetailLevel = 'executive' | 'standard' | 'detailed'
 export type AnswerLength = 'short' | 'medium' | 'long'
@@ -76,12 +68,19 @@ function fmtPct(v: number): string {
   return (v * 100).toFixed(1) + '%'
 }
 
-interface PLContext {
+function fmtYear(i: number): string {
+  return 'FY' + (i + 1)
+}
+
+export interface PLContext {
   parameters: Record<string, number>
   kpis?: {
     break_even_year?: string | null
+    cumulative_break_even_year?: string | null
     revenue_cagr?: number
     fy5_op_margin?: number
+    gp_margin?: number
+    breakeven_gap?: { amount?: number; rate?: number } | null
   }
   plSummary?: {
     revenue: number[]
@@ -91,227 +90,289 @@ interface PLContext {
     operating_profit: number[]
     fcf: number[]
     cumulative_fcf: number[]
+    depreciation?: number[]
+    capex?: number[]
+    segments?: { name: string; revenue: number[]; cogs: number[]; gross_profit: number[]; cogs_rate: number; growth_rate: number }[]
+    sga_breakdown?: { payroll: number[]; marketing: number[]; office: number[]; system: number[]; other: number[] }
+    sga_detail?: {
+      payroll?: { roles?: Record<string, { salary?: number; headcount?: number[]; cost?: number[] }>; total?: number[] }
+      marketing?: { categories?: Record<string, number[]>; total?: number[] }
+    }
   }
   industry?: string
 }
 
-/**
- * Generate Q&A items from PL model data.
- */
-export function generateQA(
-  ctx: PLContext,
-  settings: QASettings,
-): QAItem[] {
-  var params = ctx.parameters
+function findCrossover(series: number[]): number | null {
+  for (var i = 1; i < series.length; i++) {
+    if (series[i - 1] < 0 && series[i] >= 0) return i
+  }
+  return null
+}
+
+function devFromBench(value: number, b: { low: number; high: number }): string {
+  if (value < b.low * 0.8) return 'below'
+  if (value > b.high * 1.2) return 'aggressive'
+  if (value > b.high) return 'above'
+  return 'normal'
+}
+
+export function generateQA(ctx: PLContext, settings: QASettings): QAItem[] {
+  var p = ctx.parameters
   var kpis = ctx.kpis
   var pl = ctx.plSummary
-  var industry = ctx.industry || 'その他'
+  var ik = (ctx.industry || 'その他') as IndustryKey
+  var bench = INDUSTRY_BENCHMARKS[ik] || INDUSTRY_BENCHMARKS['その他']
+  var sga = pl?.sga_breakdown
+  var sgaDet = pl?.sga_detail
+  var segs = pl?.segments
 
-  var revFy1 = params.revenue_fy1 || 100_000_000
-  var growthRate = params.growth_rate || 0.3
-  var cogsRate = params.cogs_rate || 0.3
-  var opexBase = params.opex_base || 80_000_000
-  var opexGrowth = params.opex_growth || 0.1
-  var grossMargin = 1 - cogsRate
-  var revFy5 = pl ? pl.revenue[4] : revFy1 * Math.pow(1 + growthRate, 4)
+  var revFy1 = p.revenue_fy1 || 100_000_000
+  var gr = p.growth_rate || 0.3
+  var cr = p.cogs_rate || 0.3
+  var opBase = p.opex_base || 80_000_000
+  var opGr = p.opex_growth || 0.1
+  var gm = 1 - cr
+  var revFy5 = pl ? pl.revenue[4] : revFy1 * Math.pow(1 + gr, 4)
   var opFy5 = pl ? pl.operating_profit[4] : 0
   var cumFcf = pl ? pl.cumulative_fcf[4] : 0
-  var breakEven = kpis ? kpis.break_even_year : null
-  var cagr = kpis ? kpis.revenue_cagr : growthRate
-  var opMargin = kpis ? kpis.fy5_op_margin : 0
+  var brkEven = kpis?.break_even_year || null
+  var cagr = kpis?.revenue_cagr || gr
+  var opMarg = kpis?.fy5_op_margin || 0
 
-  var isInvestor = settings.target === 'investor'
-  var isBanker = settings.target === 'banker'
-  var isBoard = settings.target === 'board'
-  var isDetailed = settings.detailLevel === 'detailed'
-  var isExecutive = settings.detailLevel === 'executive'
+  var gDev = devFromBench(gr, bench.drivers.growth_rate)
+  var cDev = devFromBench(cr, bench.drivers.cogs_rate)
+  var rDev = devFromBench(revFy1, bench.drivers.revenue_fy1)
 
-  // Build all possible Q&A items
+  var opCross = pl ? findCrossover(pl.operating_profit) : null
+  var fcfCross = pl ? findCrossover(pl.cumulative_fcf) : null
+
+  var years = ['FY1', 'FY2', 'FY3', 'FY4', 'FY5']
+  var isDet = settings.detailLevel === 'detailed'
+  var tgt = settings.target
+
   var allQA: QAItem[] = []
-  var idCounter = 0
-  function addQA(cat: QACategory, q: string, a: string, priority: number, tags: string[]) {
-    idCounter++
-    allQA.push({ id: 'qa_' + idCounter, category: cat, question: q, answer: a, priority: priority, tags: tags })
+  var idc = 0
+  function add(cat: QACategory, q: string, a: string, pri: number, tags: string[]) {
+    idc++
+    allQA.push({ id: 'qa_' + idc, category: cat, question: q, answer: a, priority: pri, tags: tags })
   }
 
-  // === Revenue Questions ===
-  addQA('revenue', '初年度の売上見通しとその根拠は？',
-    '初年度売上は' + fmtYen(revFy1) + 'を見込んでいます。' +
-    (industry !== 'その他' ? industry + '業界の市場規模とターゲットセグメントの規模から算出しており、' : '') +
-    '保守的な前提のもとで設定しています。' +
-    (isDetailed ? '売上構成は既存顧客からの安定収入と新規顧客獲得によるものです。' : ''),
+  // --- SGA totals ---
+  var sgaT0 = sga ? (sga.payroll[0] + sga.marketing[0] + sga.office[0] + sga.system[0] + sga.other[0]) : opBase
+  var sgaT4 = sga ? (sga.payroll[4] + sga.marketing[4] + sga.office[4] + sga.system[4] + sga.other[4]) : 0
+
+  // ===== REVENUE =====
+  var rbNote = rDev === 'aggressive' ? '業界上限を**大幅に超える強気**の設定です。' : rDev === 'below' ? '業界水準より**保守的**な設定です。' : '業界標準（' + bench.drivers.revenue_fy1.label + '）の範囲内です。'
+
+  add('revenue', '初年度売上' + fmtYen(revFy1) + 'の根拠は？',
+    '初年度売上 **' + fmtYen(revFy1) + '** を計画。' + rbNote +
+    (isDet && segs && segs.length > 1 ? '\n\n**セグメント別：**\n' + segs.map(function(s) { return '- ' + s.name + '：' + fmtYen(s.revenue[0]) + '（原価率' + fmtPct(s.cogs_rate) + '）' }).join('\n') : ''),
     10, ['売上', '初年度'])
 
-  addQA('revenue', '5年後の売上はどの程度まで成長する想定ですか？',
-    'FY5の売上は' + fmtYen(revFy5) + 'を目標としています。年率' + fmtPct(growthRate) + 'の成長を前提としており、' +
-    '5年間のCAGRは' + fmtPct(cagr || growthRate) + 'です。' +
-    (isDetailed ? 'この成長率は' + industry + '業界の成長トレンドと当社の競争優位性を踏まえた設定です。' : ''),
-    9, ['売上', 'FY5', '成長'])
-
-  addQA('revenue', '売上成長率' + fmtPct(growthRate) + 'の実現可能性は？',
-    '年率' + fmtPct(growthRate) + 'の成長見通しは、' + industry + '業界の市場成長率と当社の事業計画に基づいています。' +
-    (isDetailed ? '初期は高い成長率が見込まれますが、規模拡大に伴い成長率は逓減する可能性があります。ベストケースでは+20%上振れ、ワーストケースでは-20%下振れも想定しています。' : ''),
-    8, ['成長率', '実現性'])
-
-  addQA('revenue', '売上の季節変動やリスク要因は？',
-    industry + '事業の特性として、' +
-    (industry === 'SaaS' ? 'サブスクリプション型のため月次収益は安定していますが、大型契約の更新タイミングによる四半期ごとの変動は想定しています。' :
-     industry === '飲食' ? '季節・天候による来客数の変動があります。繁忙期と閑散期で売上に20-30%程度の差が出ることを見込んでいます。' :
-     industry === 'EC' ? 'セール時期やイベントに連動した需要変動があります。Q4の売上が年間の30-40%を占める傾向があります。' :
-     '業界固有の需要変動要因を考慮し、保守的な前提で計画を策定しています。'),
-    6, ['リスク', '季節性'])
-
-  // === Cost Questions ===
-  addQA('cost', '原価率' + fmtPct(cogsRate) + 'は適切ですか？業界水準との比較は？',
-    '売上原価率' + fmtPct(cogsRate) + '（粗利率' + fmtPct(grossMargin) + '）は' + industry + '業界の標準的な水準です。' +
-    (isDetailed ? 'スケールメリットにより原価率は改善余地があり、FY3以降は' + fmtPct(cogsRate * 0.9) + '程度への改善を目指しています。' : ''),
-    8, ['原価率', '粗利'])
-
-  addQA('cost', '販管費の内訳と増加ペースの妥当性は？',
-    '初年度販管費は' + fmtYen(opexBase) + 'で、年率' + fmtPct(opexGrowth) + 'で増加する見込みです。' +
-    '主な内訳は人件費（約60%）、マーケティング費（約20%）、管理費（約20%）です。' +
-    (isDetailed ? '売上成長率' + fmtPct(growthRate) + 'に対してOPEX増加率' + fmtPct(opexGrowth) + 'と低く抑えることで、オペレーティングレバレッジが効く構造です。' : ''),
-    7, ['販管費', 'OPEX'])
-
-  addQA('cost', '人件費の計画（採用計画）はどうなっていますか？',
-    '販管費' + fmtYen(opexBase) + 'のうち約60%（' + fmtYen(opexBase * 0.6) + '）が人件費です。' +
-    (isDetailed ? '初年度は' + Math.round(opexBase * 0.6 / 6_000_000) + '名程度の体制を想定しています。事業拡大に伴い年率' + fmtPct(opexGrowth) + 'で人件費が増加しますが、1人あたり生産性の向上により売上対比では改善します。' :
-    '事業成長に合わせて段階的に採用を進めます。'),
-    6, ['人件費', '採用'])
-
-  // === Profitability Questions ===
-  addQA('profitability', '黒字化の時期はいつですか？',
-    breakEven ? '営業黒字化は' + breakEven + 'を見込んでいます。' + (isDetailed ? '粗利率' + fmtPct(grossMargin) + 'の事業構造において、売上が' + fmtYen(opexBase / grossMargin) + 'を超えると黒字化します。' : '') :
-    '現在の前提では5年以内の黒字化が困難な見通しです。成長投資を優先し、6年目以降の黒字化を目指しています。',
-    10, ['黒字化', '損益分岐'])
-
-  addQA('profitability', 'FY5の営業利益率はどの程度ですか？',
-    'FY5の営業利益率は' + fmtPct(opMargin || 0) + '（営業利益' + fmtYen(opFy5) + '）を見込んでいます。' +
-    (isDetailed ? '売上成長' + fmtPct(growthRate) + 'に対してコスト増加' + fmtPct(opexGrowth) + 'と低いため、年々利益率が改善する構造です。' : ''),
-    9, ['営業利益', 'マージン'])
-
-  addQA('profitability', '累積キャッシュフローの推移は？',
-    '5年間の累積FCFは' + fmtYen(cumFcf) + 'です。' +
-    (cumFcf > 0 ? '初期投資を回収し、プラスに転じています。' : '初期投資の回収には追加時間が必要です。') +
-    (isBanker ? '返済原資として安定的なキャッシュフロー創出が可能な事業構造です。' : ''),
-    8, ['FCF', 'キャッシュフロー'])
-
-  // === Growth Questions ===
-  addQA('growth', '成長戦略は具体的にどのようなものですか？',
-    '年率' + fmtPct(growthRate) + 'の成長を実現するため、' +
-    (industry === 'SaaS' ? 'プロダクト改善によるチャーン率低減・NRR向上と、マーケティング投資による新規獲得の両面で成長を目指します。' :
-     industry === '飲食' || industry === '小売' ? '既存店の売上向上（客単価・来客数改善）と新規出店の両軸で成長を推進します。' :
-     '既存事業の深化と新規チャネル開拓の両面から成長を目指します。') +
-    (isDetailed ? 'マーケティング予算は売上の15-20%を目安に配分し、ROIを管理しながら段階的に拡大します。' : ''),
-    7, ['成長戦略', '拡大'])
-
-  addQA('growth', 'スケーラビリティについてどう考えていますか？',
-    '売上成長' + fmtPct(growthRate) + 'に対しコスト増加' + fmtPct(opexGrowth) + 'と低いため、オペレーティングレバレッジが効く構造です。' +
-    (isDetailed ? '具体的には、固定費比率が高い一方で限界利益率' + fmtPct(grossMargin) + 'が高いため、損益分岐点を超えると利益が加速度的に拡大します。' : ''),
-    6, ['スケーラビリティ', 'レバレッジ'])
-
-  // === Risk Questions ===
-  addQA('risk', 'ダウンサイドリスクのシナリオは？',
-    'ワーストケースでは売上-20%、コスト+15%を想定しています。' +
-    (pl ? 'この場合のFY5売上は' + fmtYen(revFy5 * 0.8) + '、営業利益率は大幅に低下しますが、' : '') +
-    '事業継続に必要なキャッシュは確保できるよう、コスト構造の柔軟性を維持しています。' +
-    (isInvestor ? '定期的にバーンレートをモニタリングし、必要に応じてコスト削減を実行します。' : ''),
-    8, ['リスク', 'ダウンサイド'])
-
-  addQA('risk', '競合他社との差別化ポイントは？',
-    industry + '市場における当社の差別化要因は、' +
-    (industry === 'SaaS' ? 'プロダクトの使いやすさ・導入の容易さ・カスタマーサクセスの質にあります。' :
-     industry === '人材' ? '専門領域に特化したマッチング精度と、候補者データベースの質にあります。' :
-     '事業ドメインに対する深い理解と、独自のバリュープロポジションにあります。') +
-    (isDetailed ? 'この競争優位性が維持される前提で、市場シェアの拡大を計画しています。' : ''),
-    7, ['競合', '差別化'])
-
-  addQA('risk', '主要なリスク要因と対策は？',
-    '主要リスクは①市場環境の変化、②人材獲得競争、③テクノロジー変化です。' +
-    (isDetailed ? '①に対しては複数の収益チャネル構築、②に対してはストックオプション・リモートワーク制度、③に対してはR&D投資の継続で対応します。' :
-    'それぞれに対する具体的な緩和策を策定しています。'),
-    6, ['リスク', '対策'])
-
-  // === Market Questions ===
-  addQA('market', 'ターゲット市場の規模と成長性は？',
-    industry + '市場のTAMは大きく、' +
-    (industry === 'SaaS' ? '日本のSaaS市場は年率20%以上で成長を続けており、2025年には1兆円を超える見通しです。' :
-     '当社がターゲットとするセグメントは継続的な成長が見込まれています。') +
-    (isDetailed ? '当社のSAMは市場全体の5-10%程度と見込んでおり、初年度の市場シェア目標は1%未満です。' : ''),
-    7, ['TAM', '市場規模'])
-
-  addQA('market', '顧客獲得チャネルと戦略は？',
-    '主要な顧客獲得チャネルは、' +
-    (industry === 'SaaS' ? 'インバウンドマーケティング（コンテンツ・SEO）、アウトバウンド営業、パートナー紹介の3本柱です。' :
-     industry === 'EC' ? 'デジタル広告（SNS・リスティング）、SEO、リファラルの組み合わせで新規顧客を獲得します。' :
-     '業界特性に合ったマーケティングチャネルを活用し、効率的な顧客獲得を進めます。') +
-    (isDetailed ? 'CAC（顧客獲得コスト）をLTVの1/3以下に抑えることを目標としています。' : ''),
-    6, ['顧客獲得', 'チャネル'])
-
-  // === Operations Questions ===
-  addQA('operations', 'チーム体制と採用計画は？',
-    '初年度は' + Math.round(opexBase * 0.6 / 6_000_000) + '名体制でスタートし、売上拡大に合わせて年率' + fmtPct(opexGrowth) + 'のペースで組織を拡大します。' +
-    (isDetailed ? '特に' + (industry === 'SaaS' ? 'エンジニアとカスタマーサクセス' : industry === '人材' ? 'コンサルタントとデータ分析' : '事業推進と管理部門') + 'の採用を優先します。' : ''),
-    5, ['体制', '採用'])
-
-  addQA('operations', 'KPIのモニタリング体制は？',
-    '月次で主要KPIをレビューし、経営判断に反映しています。' +
-    (isDetailed ? '主要KPIは売上成長率、粗利率' + fmtPct(grossMargin) + '、営業利益率、バーンレート、' + (industry === 'SaaS' ? 'MRR、チャーン率、NRR' : 'CAC、LTV、顧客満足度') + 'です。' : ''),
-    5, ['KPI', 'モニタリング'])
-
-  // === Funding Questions ===
-  if (isInvestor || isBanker) {
-    addQA('funding', '資金調達の目的と使途は？',
-      '調達資金は①プロダクト開発（40%）、②マーケティング投資（30%）、③組織構築（20%）、④運転資金（10%）に配分します。' +
-      (isDetailed ? 'この投資により' + fmtPct(growthRate) + 'の成長を実現し、' + (breakEven || 'FY4-5') + 'での黒字化を目指します。' : ''),
-      9, ['資金調達', '使途'])
-
-    addQA('funding', '想定バリュエーションとリターンは？',
-      'FY5の売上' + fmtYen(revFy5) + 'をベースに、' +
-      (industry === 'SaaS' ? 'ARRマルチプル8-12xで評価すると' : '売上マルチプル3-5xで評価すると') +
-      '相応のリターンが見込めます。' +
-      (isDetailed ? '投資家にとってのIRR 30%以上を目標としています。' : ''),
-      8, ['バリュエーション', 'リターン'])
-
-    addQA('funding', '資金のランウェイは？',
-      '現在の' + fmtYen(opexBase) + '/年のコスト構造において、' +
-      (cumFcf > 0 ? '事業キャッシュフローでの自走が可能です。' :
-      '十分なランウェイを確保した上で成長投資を行います。追加資金が必要な場合は、マイルストーン達成後の次ラウンド調達を計画しています。'),
-      7, ['ランウェイ', '資金繰り'])
+  if (pl) {
+    add('revenue', '5年間の売上推移は？',
+      '**' + fmtYen(pl.revenue[0]) + ' → ' + fmtYen(pl.revenue[4]) + '**（CAGR ' + fmtPct(cagr) + '）\n\n' +
+      pl.revenue.map(function(r, i) {
+        var yoy = i > 0 ? '（+' + fmtPct((r - pl!.revenue[i - 1]) / pl!.revenue[i - 1]) + '）' : ''
+        return '- ' + years[i] + '：' + fmtYen(r) + ' ' + yoy
+      }).join('\n'),
+      9, ['売上', '5年推移'])
   }
 
-  // Filter and sort based on settings
-  // Adjust priority based on target audience
+  var gbNote = gDev === 'aggressive' ? '業界上限 ' + fmtPct(bench.drivers.growth_rate.high) + ' を**大幅超過**。達成には積極施策が必須。' : gDev === 'above' ? '業界上限に近い**挑戦的目標**。' : '業界標準（' + bench.drivers.growth_rate.label + '）の範囲内で**現実的**。'
+  add('revenue', '年率' + fmtPct(gr) + '成長は実現可能か？',
+    gbNote +
+    (isDet ? '\n\n**根拠となる業界トレンド：**\n- **' + bench.trends[0].title + '**：' + bench.trends[0].plImpact.split('。')[0] + (bench.trends[1] ? '\n- **' + bench.trends[1].title + '**：' + bench.trends[1].plImpact.split('。')[0] : '') : ''),
+    8, ['成長率', 'ベンチマーク'])
+
+  // ===== COST =====
+  var cbNote = cDev === 'below' ? '業界水準より**低い**（コスト優位）。' : cDev === 'above' || cDev === 'aggressive' ? '業界水準（' + bench.drivers.cogs_rate.label + '）より**高い**。改善余地あり。' : '業界標準内（' + bench.drivers.cogs_rate.label + '）。'
+  add('cost', '原価率' + fmtPct(cr) + 'の妥当性は？',
+    '原価率 **' + fmtPct(cr) + '**（粗利率 ' + fmtPct(gm) + '）。' + cbNote +
+    (isDet && segs && segs.length > 1 ? '\n\n**セグメント別：**\n' + segs.map(function(s) { return '- ' + s.name + '：' + fmtPct(s.cogs_rate) }).join('\n') : ''),
+    8, ['原価率', '粗利'])
+
+  if (sga) {
+    var pp = sgaT0 > 0 ? sga.payroll[0] / sgaT0 : 0
+    var mp = sgaT0 > 0 ? sga.marketing[0] / sgaT0 : 0
+    add('cost', '販管費' + fmtYen(sgaT0) + 'の内訳は？',
+      '**内訳（初年度）：**\n' +
+      '- 人件費：' + fmtYen(sga.payroll[0]) + '（' + fmtPct(pp) + '）\n' +
+      '- マーケ：' + fmtYen(sga.marketing[0]) + '（' + fmtPct(mp) + '）\n' +
+      '- オフィス：' + fmtYen(sga.office[0]) + '\n' +
+      '- システム：' + fmtYen(sga.system[0]) + '\n' +
+      '- その他：' + fmtYen(sga.other[0]) +
+      (isDet ? '\n\nFY5合計 **' + fmtYen(sgaT4) + '**。売上成長率' + fmtPct(gr) + 'に対しOPEX増加率' + fmtPct(opGr) + 'でレバレッジが効く構造。' : ''),
+      7, ['販管費', 'SGA'])
+  } else {
+    add('cost', '販管費の構成は？',
+      '初年度 **' + fmtYen(opBase) + '**、年率' + fmtPct(opGr) + '増加。売上成長率との差が利益改善をドライブ。',
+      7, ['販管費'])
+  }
+
+  if (sgaDet?.payroll?.roles) {
+    var roles = sgaDet.payroll.roles
+    var rk = Object.keys(roles)
+    var hc0 = 0; var hc4 = 0
+    rk.forEach(function(k) { var r = roles[k]; if (r.headcount) { hc0 += r.headcount[0] || 0; hc4 += r.headcount[4] || r.headcount[r.headcount.length - 1] || 0 } })
+    add('cost', '人員計画は？',
+      '**' + hc0 + '名 → ' + hc4 + '名**（5年間）\n\n' +
+      rk.slice(0, 6).map(function(k) { var r = roles[k]; var h0 = r.headcount ? r.headcount[0] : 0; var h4 = r.headcount ? (r.headcount[4] || 0) : 0; return '- ' + k + '：' + h0 + ' → ' + h4 + '名' }).join('\n') +
+      (isDet && hc0 > 0 ? '\n\n1人あたり売上：' + fmtYen(revFy1 / hc0) + ' → ' + fmtYen(revFy5 / hc4) + '（生産性向上）' : ''),
+      6, ['人員', '採用'])
+  } else {
+    add('cost', '人件費と採用計画は？',
+      '人件費は販管費の約60%（' + fmtYen(opBase * 0.6) + '）。約' + Math.round(opBase * 0.6 / 6_000_000) + '名体制でスタート。',
+      6, ['人件費'])
+  }
+
+  // ===== PROFITABILITY =====
+  var bea = brkEven ? '営業黒字化は **' + brkEven + '**。' : opCross !== null ? '営業利益は **' + fmtYear(opCross) + '** にプラス転換。' : '5年以内の黒字化は困難。成長投資フェーズ。'
+  add('profitability', '黒字化の時期と条件は？',
+    bea + (kpis?.breakeven_gap ? '追加必要売上 **' + fmtYen(kpis.breakeven_gap.amount || 0) + '**。' : '') +
+    (isDet && pl ? '\n\n**営業利益推移：**\n' + pl.operating_profit.map(function(op, i) { return '- ' + years[i] + '：' + fmtYen(op) + (op >= 0 ? ' ✓' : '') }).join('\n') + '\n\n損益分岐売上：**' + fmtYen(opBase / gm) + '**' : ''),
+    10, ['黒字化'])
+
+  if (pl) {
+    add('profitability', '営業利益率の改善見通しは？',
+      'FY5営業利益率 **' + fmtPct(opMarg) + '**（' + fmtYen(opFy5) + '）\n\n' +
+      pl.operating_profit.map(function(op, i) { var m = pl!.revenue[i] > 0 ? op / pl!.revenue[i] : 0; return '- ' + years[i] + '：' + fmtPct(m) }).join('\n') +
+      (isDet && bench.competitors.length > 0 ? '\n\n**業界比較：**\n' + bench.competitors.slice(0, 3).map(function(c) { return '- ' + c.name + '：' + c.operatingProfit }).join('\n') : ''),
+      9, ['営業利益率'])
+
+    add('profitability', '累積FCFと投資回収は？',
+      '5年累積FCF **' + fmtYen(cumFcf) + '**。' + (fcfCross !== null ? '累積黒字化は **' + fmtYear(fcfCross) + '**。' : cumFcf > 0 ? '投資回収済み。' : '回収に追加期間必要。') +
+      (isDet ? '\n\n' + pl.fcf.map(function(f, i) { return '- ' + years[i] + '：' + fmtYen(f) + '（累積 ' + fmtYen(pl!.cumulative_fcf[i]) + '）' }).join('\n') : ''),
+      8, ['FCF', '投資回収'])
+  }
+
+  // ===== GROWTH =====
+  add('growth', ik + '業界における成長戦略は？',
+    '**活用する業界トレンド：**\n' +
+    bench.trends.slice(0, 3).map(function(t) { return '- **' + t.title + '**：' + t.plImpact.split('。')[0] }).join('\n') +
+    (isDet && bench.competitionDetail ? '\n\n**KSF：** ' + bench.competitionDetail.ksf : ''),
+    7, ['成長戦略', 'トレンド'])
+
+  add('growth', 'スケーラビリティはあるか？',
+    '売上成長 ' + fmtPct(gr) + ' vs コスト増加 ' + fmtPct(opGr) + '。**' + fmtPct(gr - opGr) + 'のスプレッド**でレバレッジが効く構造。' +
+    (isDet && pl ? '\n\n**販管費率推移：**\n' + pl.revenue.map(function(r, i) { return '- ' + years[i] + '：' + fmtPct(pl!.opex[i] / r) }).join('\n') : ''),
+    6, ['スケーラビリティ'])
+
+  // ===== RISK =====
+  add('risk', 'ダウンサイドシナリオは？',
+    '**ワーストケース（売上-30%、コスト+15%）：**\n' +
+    '- FY5売上：' + fmtYen(revFy5 * 0.7) + '\n' +
+    '- FY5営業利益：' + fmtYen(opFy5 * 0.4) + '\n' +
+    (isDet && bench.competitionDetail ? '\n**業界リスク：** ' + bench.competitionDetail.risks : '') +
+    '\n\n売上20%減時点でコスト削減を発動する基準を設定。',
+    8, ['ダウンサイド'])
+
+  if (bench.competitors.length > 0 && ik !== 'その他') {
+    add('risk', '競合との比較は？',
+      bench.competitionDetail.marketStructure.split('。')[0] + '。\n\n**主要競合：**\n' +
+      bench.competitors.slice(0, 4).map(function(c) { return '- **' + c.name + '**（' + c.revenue + '）：' + c.strengths }).join('\n') +
+      (isDet ? '\n\n**参入障壁：** ' + bench.competitionDetail.entryBarriers.split('。')[0] : ''),
+      7, ['競合', '差別化'])
+  }
+
+  add('risk', '主要リスクと緩和策は？',
+    (bench.competitionDetail ? '**業界リスク：** ' + bench.competitionDetail.risks + '\n\n' : '') +
+    '**緩和策：**\n- 収益多角化\n- バーンレート月次モニタリング\n- ' + bench.trends[0].title + 'への先行投資',
+    6, ['リスク', '緩和策'])
+
+  // ===== MARKET =====
+  add('market', ik + '市場の構造は？',
+    (bench.competitionDetail ? bench.competitionDetail.marketStructure : bench.competitiveEnvironment) +
+    '\n\n**当社：** ' + bench.businessModel + '。初年度' + fmtYen(revFy1) + 'は市場の一部であり成長余地は十分。' +
+    (isDet ? '\n\n**参入障壁：** ' + bench.competitionDetail.entryBarriers : ''),
+    7, ['市場構造'])
+
+  if (bench.kpis.length > 0) {
+    add('market', '業界標準KPIとの比較は？',
+      '**' + ik + '業界KPI：**\n\n' + bench.kpis.slice(0, 5).map(function(k) { return '- **' + k.label + '**：' + k.value + '　' + k.description }).join('\n'),
+      5, ['KPI', '業界標準'])
+  }
+
+  if (bench.trends.length >= 3) {
+    add('market', '業界トレンドのPLインパクトは？',
+      bench.trends.slice(0, 4).map(function(t) { return '- **' + t.title + '**\n  ' + t.summary.split('。')[0] + '\n  → ' + t.plImpact.split('。')[0] }).join('\n\n'),
+      6, ['トレンド', 'PLインパクト'])
+  }
+
+  // ===== OPERATIONS =====
+  if (sga?.marketing) {
+    add('operations', 'マーケティング投資計画は？',
+      '初年度 **' + fmtYen(sga.marketing[0]) + '**（売上比' + fmtPct(sga.marketing[0] / revFy1) + '）\n\n' +
+      sga.marketing.map(function(m, i) { var rev = pl ? pl.revenue[i] : revFy1 * Math.pow(1 + gr, i); return '- ' + years[i] + '：' + fmtYen(m) + '（売上比' + fmtPct(m / rev) + '）' }).join('\n'),
+      5, ['マーケティング'])
+  }
+
+  add('operations', 'KPIモニタリング体制は？',
+    '**財務KPI：** 売上成長率' + fmtPct(gr) + '、粗利率' + fmtPct(gm) + '、営業利益率（FY5: ' + fmtPct(opMarg) + '）\n\n' +
+    '**事業KPI（' + ik + '）：**\n' + bench.kpis.slice(0, 3).map(function(k) { return '- ' + k.label + '（目標：' + k.value + '）' }).join('\n'),
+    5, ['KPI', 'モニタリング'])
+
+  // ===== FUNDING =====
+  if (tgt === 'investor' || tgt === 'banker') {
+    add('funding', '資金の使途とROIは？',
+      '**配分計画：**\n' +
+      (sga ? '- 人材：' + fmtYen(sga.payroll[0]) + '\n- マーケ：' + fmtYen(sga.marketing[0]) + '\n- システム：' + fmtYen(sga.system[0]) + '\n- その他：' + fmtYen(sga.office[0] + sga.other[0]) : '- プロダクト開発 40%\n- マーケティング 30%\n- 組織構築 20%\n- 運転資金 10%') +
+      '\n\n→ ' + fmtPct(gr) + '成長を実現し' + (brkEven || 'FY4-5') + 'で黒字化。',
+      9, ['資金調達', 'ROI'])
+
+    add('funding', 'バリュエーションは？',
+      'FY5売上 **' + fmtYen(revFy5) + '**・利益率 **' + fmtPct(opMarg) + '** ベースで、' +
+      (ik === 'SaaS' ? 'ARR 8-12x → **' + fmtYen(revFy5 * 10) + '**' : 'EV/売上 3-5x → **' + fmtYen(revFy5 * 4) + '**') + ' の企業価値。' +
+      (isDet && bench.competitors.length > 0 ? '\n\n**参考：**\n' + bench.competitors.slice(0, 3).map(function(c) { return '- ' + c.name + '：' + c.revenue }).join('\n') : ''),
+      8, ['バリュエーション'])
+
+    add('funding', 'ランウェイは？',
+      '月次バーンレート約 **' + fmtYen(opBase / 12) + '**。' +
+      (cumFcf > 0 ? '自走可能。' : '十分なランウェイ確保の上で成長投資、マイルストーン達成後に次ラウンド。') +
+      (isDet && pl ? '\n\n' + pl.fcf.map(function(f, i) { return '- ' + years[i] + '：' + fmtYen(f) }).join('\n') : ''),
+      7, ['ランウェイ'])
+  }
+
+  // ===== DYNAMIC: data anomalies =====
+  if (gDev === 'aggressive') {
+    add('risk', '業界水準超の成長率をどう正当化するか？',
+      '計画 ' + fmtPct(gr) + ' は業界上限 ' + fmtPct(bench.drivers.growth_rate.high) + ' 超。\n\n**根拠：**\n- 未開拓セグメント先行参入\n- ' + bench.trends[0].title + 'による市場拡大\n- ダウンサイド（業界平均' + fmtPct(bench.drivers.growth_rate.mid) + '）でも継続可能',
+      9, ['成長率', '正当化'])
+  }
+  if (cDev === 'below') {
+    add('cost', '低原価率' + fmtPct(cr) + 'の実現方法は？',
+      '業界平均' + fmtPct(bench.drivers.cogs_rate.mid) + '対し **' + fmtPct(cr) + '**。\n\n**要因：**\n- テクノロジー活用による自動化\n- スケールメリット\n- 高付加価値セグメント集中',
+      7, ['原価率', 'コスト優位'])
+  }
+  if (pl?.capex) {
+    var totalCx = pl.capex.reduce(function(s, v) { return s + v }, 0)
+    if (totalCx > 0) {
+      add('cost', '設備投資と減価償却は？',
+        '5年累計CAPEX **' + fmtYen(totalCx) + '**\n\n' + pl.capex.map(function(c, i) { return '- ' + years[i] + '：' + fmtYen(c) + ' / 償却' + fmtYen(pl!.depreciation ? pl!.depreciation[i] : 0) }).join('\n'),
+        5, ['CAPEX'])
+    }
+  }
+
+  // ===== PRIORITY ADJUSTMENT =====
   allQA.forEach(function(qa) {
-    if (settings.target === 'investor' && (qa.category === 'funding' || qa.category === 'growth')) {
-      qa.priority += 2
-    }
-    if (settings.target === 'banker' && (qa.category === 'risk' || qa.category === 'funding')) {
-      qa.priority += 2
-    }
-    if (settings.target === 'board' && (qa.category === 'profitability' || qa.category === 'operations')) {
-      qa.priority += 2
-    }
-    if (settings.target === 'team' && (qa.category === 'operations' || qa.category === 'growth')) {
-      qa.priority += 2
-    }
+    if (tgt === 'investor' && (qa.category === 'funding' || qa.category === 'growth' || qa.category === 'market')) qa.priority += 2
+    if (tgt === 'banker' && (qa.category === 'risk' || qa.category === 'funding' || qa.category === 'profitability')) qa.priority += 2
+    if (tgt === 'board' && (qa.category === 'profitability' || qa.category === 'operations')) qa.priority += 2
+    if (tgt === 'team' && (qa.category === 'operations' || qa.category === 'growth')) qa.priority += 2
+    if (tgt === 'partner' && (qa.category === 'market' || qa.category === 'growth')) qa.priority += 2
   })
 
-  // Sort by priority descending
   allQA.sort(function(a, b) { return b.priority - a.priority })
 
-  // Trim answers based on length setting
+  // ===== LENGTH TRIM =====
   if (settings.answerLength === 'short') {
     allQA.forEach(function(qa) {
-      // Take first sentence
-      var firstSentence = qa.answer.split('。')[0]
-      qa.answer = firstSentence + '。'
+      var first = qa.answer.split('\n\n')[0]
+      qa.answer = first.replace(/\*\*/g, '').replace(/^- /gm, '').split('\n')[0]
     })
   } else if (settings.answerLength === 'medium') {
     allQA.forEach(function(qa) {
-      // Take first 2-3 sentences
-      var sentences = qa.answer.split('。').filter(function(s) { return s.trim() })
-      qa.answer = sentences.slice(0, 3).join('。') + '。'
+      qa.answer = qa.answer.split('\n\n').slice(0, 2).join('\n\n')
     })
   }
 
