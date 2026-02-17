@@ -16,6 +16,8 @@ var PHASE_LABELS: Record<number, string> = {
   8: 'Q&A',
 }
 
+var MAX_PIPELINE_PHASE = 8
+
 var STATUS_CONFIG: Record<string, { label: string; bg: string; text: string }> = {
   created: { label: '作成済み', bg: 'bg-gray-100', text: 'text-gray-600' },
   active: { label: '進行中', bg: 'bg-blue-100', text: 'text-blue-700' },
@@ -200,8 +202,9 @@ export default function DashboardPage() {
         <div className="space-y-4">
           {sortedProjects.map(function(project: any) {
             var statusConfig = STATUS_CONFIG[project.status] || STATUS_CONFIG.created
-            var phaseLabel = PHASE_LABELS[project.current_phase] || ('Phase ' + project.current_phase)
-            var phaseProgress = Math.round((project.current_phase / 8) * 100)
+            var displayPhase = Math.min(project.current_phase, MAX_PIPELINE_PHASE)
+            var phaseLabel = PHASE_LABELS[displayPhase] || ('Phase ' + displayPhase)
+            var phaseProgress = Math.round((displayPhase / MAX_PIPELINE_PHASE) * 100)
             var isEditingThisMemo = editingMemo === project.id
             var isDeleting = deletingId === project.id
 
@@ -289,14 +292,14 @@ export default function DashboardPage() {
                   <div className="mt-4">
                     <div className="flex items-center gap-3 mb-2">
                       <span className="text-xs font-medium text-gray-600">
-                        Phase {project.current_phase}: {phaseLabel}
+                        Phase {displayPhase}: {phaseLabel}
                       </span>
                       <span className="text-xs text-gray-400">{phaseProgress}%</span>
                     </div>
                     <div className="flex gap-1">
                       {[1, 2, 3, 4, 5, 6, 7, 8].map(function(phase) {
-                        var isDone = phase < project.current_phase
-                        var isCurrent = phase === project.current_phase
+                        var isDone = phase < displayPhase
+                        var isCurrent = phase === displayPhase
                         return (
                           <div
                             key={phase}
@@ -315,7 +318,7 @@ export default function DashboardPage() {
                     {/* Phase Labels Row - hidden on mobile, visible on sm+ */}
                     <div className="hidden sm:flex gap-1 mt-1">
                       {[1, 2, 3, 4, 5, 6, 7, 8].map(function(phase) {
-                        var isCurrent = phase === project.current_phase
+                        var isCurrent = phase === displayPhase
                         return (
                           <div key={phase} className="flex-1 text-center">
                             <span className={'text-[10px] ' + (isCurrent ? 'text-blue-600 font-medium' : 'text-gray-300')}>

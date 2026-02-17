@@ -183,6 +183,12 @@ def _generate_local_excel(job_id: str, run_id: str, body: dict):
                     "type": "excel_export_plwriter",
                     "output_path": output_path,
                 })
+
+                # Update project phase progress for project list display
+                export_project_id = body.get("project_id")
+                if export_project_id:
+                    db.update_project(export_project_id, current_phase=7)
+
                 db.update_job(
                     job_id, status="completed", progress=100,
                     log_msg="Excel generated", result_ref=pr["id"],
@@ -523,6 +529,12 @@ def _generate_local_excel(job_id: str, run_id: str, body: dict):
             "num_segments": num_segments,
             "sga_rd_mode": sga_rd_mode,
         })
+
+        # Update project phase progress for project list display
+        export_project_id = body.get("project_id")
+        if export_project_id:
+            db.update_project(export_project_id, current_phase=7)
+
         db.update_job(
             job_id, status="completed", progress=100,
             log_msg="Excel generated (v2 workbook)",

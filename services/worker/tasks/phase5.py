@@ -90,6 +90,10 @@ def run_parameter_extraction(self, job_id: str):
         result_dict = result.model_dump()
         pr = db.save_phase_result(run_id=run_id, phase=5, raw_json=result_dict)
 
+        # Update project phase progress for project list display
+        if project_id:
+            db.update_project(project_id, current_phase=6)
+
         db.update_job(
             job_id, status="completed", progress=100,
             log_msg="Parameter extraction complete",
