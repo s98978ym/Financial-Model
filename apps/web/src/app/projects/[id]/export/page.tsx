@@ -14,6 +14,12 @@ var DEFAULT_PARAMS: Record<string, number> = {
   opex_growth: 0.10,
 }
 
+interface RDThemeItem {
+  name: string
+  items: string[]
+  amounts?: number[]
+}
+
 function formatYen(v: number): string {
   if (v >= 100_000_000) return (v / 100_000_000).toFixed(1) + ' 億円'
   if (v >= 10_000) return (v / 10_000).toFixed(0) + ' 万円'
@@ -34,6 +40,7 @@ export default function ExportPage() {
   var [sgaRdMode, setSgaRdMode] = useState<'inline' | 'separate'>('inline')
   var [currentParams, setCurrentParams] = useState<Record<string, number>>(DEFAULT_PARAMS)
   var [paramsLoaded, setParamsLoaded] = useState(false)
+  var [rdThemes, setRdThemes] = useState<RDThemeItem[] | null>(null)
 
   // Load current model parameters from recalc (Phase 5 + Phase 6 edits merged)
   var recalcQuery = useQuery({
@@ -47,6 +54,25 @@ export default function ExportPage() {
     },
     enabled: !!projectId,
   })
+
+  // Load rd_themes from Phase 6 edits
+  var editsQuery = useQuery({
+    queryKey: ['edits-export', projectId],
+    queryFn: function() { return api.getEdits(projectId, 6) },
+    enabled: !!projectId,
+  })
+
+  useEffect(function() {
+    if (editsQuery.data && Array.isArray(editsQuery.data)) {
+      for (var i = editsQuery.data.length - 1; i >= 0; i--) {
+        var pj = editsQuery.data[i].patch_json || {}
+        if (pj.rd_themes) {
+          setRdThemes(pj.rd_themes)
+          break
+        }
+      }
+    }
+  }, [editsQuery.data])
 
   // When recalc returns, extract the actual parameters
   useEffect(function() {
@@ -67,13 +93,13 @@ export default function ExportPage() {
         project_id: projectId,
         parameters: currentParams,
         scenarios: scenarios,
-        options: {
+        options: Object.assign({
           include_needs_review: includeNeedsReview,
           include_case_diff: includeCaseDiff,
           sga_rd_mode: sgaRdMode,
           best_multipliers: { revenue: 1.2, cost: 0.9 },
           worst_multipliers: { revenue: 0.8, cost: 1.15 },
-        },
+        }, rdThemes ? { rd_themes: rdThemes } : {}),
       })
     },
     onSuccess: function(data: any) {

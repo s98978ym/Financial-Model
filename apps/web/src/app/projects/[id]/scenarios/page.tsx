@@ -16,6 +16,8 @@ import type { ParameterProposalData } from '@/components/scenario/ParameterPropo
 import { PhaseLayout } from '@/components/ui/PhaseLayout'
 import type { IndustryKey } from '@/data/industryBenchmarks'
 import { detectIndustry } from '@/data/industryBenchmarks'
+import { DEFAULT_RD_THEMES } from '@/components/scenario/RDThemeDetailPanel'
+import type { RDThemeItem } from '@/components/scenario/RDThemeDetailPanel'
 
 var DEFAULT_PARAMS: Record<string, number> = {
   revenue_fy1: 100_000_000,
@@ -40,6 +42,7 @@ export default function ScenarioPlaygroundPage() {
   var [plResult, setPLResult] = useState<any>(null)
   var [initialized, setInitialized] = useState(false)
   var [industry, setIndustry] = useState<IndustryKey>('その他')
+  var [rdThemes, setRdThemes] = useState<RDThemeItem[] | null>(null)
   var [pendingProposal, setPendingProposal] = useState<ParameterProposalData | null>(null)
   var [completionStatus, setCompletionStatus] = useState<Record<string, boolean>>({ base: false, best: false, worst: false })
   var saveTimerRef = useRef<any>(null)
@@ -49,6 +52,8 @@ export default function ScenarioPlaygroundPage() {
   paramsRef.current = parameters
   var scenarioRef = useRef(scenario)
   scenarioRef.current = scenario
+  var rdThemesRef = useRef<RDThemeItem[] | null>(null)
+  rdThemesRef.current = rdThemes
 
   // Load project state to get Phase 5 parameters
   var projectState = useQuery({
@@ -76,13 +81,44 @@ export default function ScenarioPlaygroundPage() {
     }
   }, [projectState.data])
 
+  // Load rd_themes from project state: Phase 6 edits → Phase 2 result → defaults
+  useEffect(function() {
+    if (projectState.data) {
+      // Check Phase 6 edits first (user-modified)
+      var edits = projectState.data.pending_edits || []
+      var userRdThemes: RDThemeItem[] | null = null
+      for (var i = edits.length - 1; i >= 0; i--) {
+        var ed = edits[i]
+        if (ed.phase === 6 && ed.patch_json?.rd_themes) {
+          userRdThemes = ed.patch_json.rd_themes
+          break
+        }
+      }
+      if (userRdThemes) {
+        setRdThemes(userRdThemes)
+        return
+      }
+      // Then Phase 2 result
+      var p2 = projectState.data.phase_results?.[2]
+      var phase2RdThemes = p2?.raw_json?.rd_themes
+      if (phase2RdThemes && phase2RdThemes.length > 0) {
+        setRdThemes(phase2RdThemes)
+        return
+      }
+      // Fallback to defaults
+      setRdThemes(DEFAULT_RD_THEMES)
+    }
+  }, [projectState.data])
+
   // Persist parameter edits to DB (debounced)
   var saveParams = useMutation({
-    mutationFn: function(p: Record<string, number>) {
+    mutationFn: function(payload: { parameters: Record<string, number>; rd_themes?: RDThemeItem[] }) {
+      var patchJson: any = { parameters: payload.parameters }
+      if (payload.rd_themes) patchJson.rd_themes = payload.rd_themes
       return api.saveEdit({
         project_id: projectId,
         phase: 6,
-        patch_json: { parameters: p },
+        patch_json: patchJson,
       })
     },
     onError: function(err: Error) {
@@ -93,7 +129,7 @@ export default function ScenarioPlaygroundPage() {
   function debouncedSave(newParams: Record<string, number>) {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
     saveTimerRef.current = setTimeout(function() {
-      saveParams.mutate(newParams)
+      saveParams.mutate({ parameters: newParams, rd_themes: rdThemesRef.current || undefined })
     }, 2000) // Save 2s after last change
   }
 
@@ -227,6 +263,19 @@ export default function ScenarioPlaygroundPage() {
     []
   )
 
+  var handleRdThemesChange = useCallback(
+    function(themes: RDThemeItem[]) {
+      setRdThemes(themes)
+      rdThemesRef.current = themes
+      // Debounced save with current params + updated rd_themes
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+      saveTimerRef.current = setTimeout(function() {
+        saveParams.mutate({ parameters: paramsRef.current, rd_themes: themes })
+      }, 2000)
+    },
+    [] // eslint-disable-line react-hooks/exhaustive-deps
+  )
+
   return (
     <PhaseLayout
       phase={6}
@@ -281,6 +330,8 @@ export default function ScenarioPlaygroundPage() {
             onBatchChange={handleBatchChange}
             industry={industry}
             sgaDetail={plResult?.pl_summary?.sga_detail}
+            rdThemes={rdThemes || undefined}
+            onRdThemesChange={handleRdThemesChange}
           />
         </div>
 

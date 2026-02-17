@@ -286,10 +286,13 @@ def _generate_local_excel(job_id: str, run_id: str, body: dict):
             logger.debug("Could not load Phase 5 parameters: %s", e)
 
         # Load user's scenario parameter edits from DB (phase 6 edits)
+        user_rd_themes = None
         try:
             scenario_edits = db.get_edits(run_id, phase=6)
             for ed in reversed(scenario_edits):
                 pj = ed.get("patch_json", {})
+                if pj.get("rd_themes") and not user_rd_themes:
+                    user_rd_themes = pj["rd_themes"]
                 user_params = pj.get("parameters", {})
                 if user_params:
                     parameters = {**parameters, **user_params}
@@ -315,8 +318,11 @@ def _generate_local_excel(job_id: str, run_id: str, body: dict):
             sga_rd_mode = "inline"
 
         # R&D themes: 開発テーマの大カテゴリ/小カテゴリ構造 (optional)
-        # Fallback chain: API body → Phase 2 result → DEFAULT_RD_THEMES
+        # Fallback chain: API body → Phase 6 user edits → Phase 2 result → DEFAULT_RD_THEMES
         rd_themes = options.get("rd_themes")
+        if not rd_themes and user_rd_themes:
+            rd_themes = user_rd_themes
+            logger.info("Using rd_themes from Phase 6 user edits (%d categories)", len(rd_themes))
         if not rd_themes:
             try:
                 phase2 = db.get_phase_result(run_id, 2)
@@ -416,21 +422,38 @@ def _generate_local_excel(job_id: str, run_id: str, body: dict):
                 )
                 ws_sga.cell(row=SGA_ROWS["total"], column=col).value = sga_grand
 
-                # --- R&D / System (動的テーマ構造に均等配分) ---
+                # --- R&D / System (動的テーマ構造) ---
                 system_list = sga_detail.get("system", [])
                 rd_total = system_list[i] if system_list and i < len(system_list) else round(opex_list[i] * 0.12)
 
-                # 全小カテゴリの行を収集して均等配分
-                num_cats = RD_ROWS.get("_num_cats", 0)
-                all_sub_rows = []
-                for ci in range(1, num_cats + 1):
-                    cat_count = RD_ROWS.get(f"cat{ci}_count", 0)
-                    for si in range(1, cat_count + 1):
-                        all_sub_rows.append(RD_ROWS[f"cat{ci}_sub{si}"])
-                if all_sub_rows:
-                    share = rd_total / len(all_sub_rows)
-                    for sub_row in all_sub_rows:
-                        ws_rd.cell(row=sub_row, column=col).value = round(share)
+                # Check for user-provided per-item amounts in rd_themes
+                _has_rd_amounts = rd_themes and any(
+                    t.get("amounts") for t in rd_themes if isinstance(t, dict)
+                )
+
+                if _has_rd_amounts:
+                    # Use user-specified amounts per sub-item
+                    opex_gr = float(parameters.get("opex_growth", 0.10))
+                    for ci, theme in enumerate(rd_themes):
+                        amounts = theme.get("amounts", [])
+                        for si, fy1_amount in enumerate(amounts):
+                            row_key = f"cat{ci + 1}_sub{si + 1}"
+                            if row_key in RD_ROWS:
+                                # FY1 amount; FY2+ projected with opex_growth
+                                val = round(fy1_amount * ((1 + opex_gr) ** i))
+                                ws_rd.cell(row=RD_ROWS[row_key], column=col).value = val
+                else:
+                    # Fallback: 全小カテゴリの行を収集して均等配分
+                    num_cats = RD_ROWS.get("_num_cats", 0)
+                    all_sub_rows = []
+                    for ci in range(1, num_cats + 1):
+                        cat_count = RD_ROWS.get(f"cat{ci}_count", 0)
+                        for si in range(1, cat_count + 1):
+                            all_sub_rows.append(RD_ROWS[f"cat{ci}_sub{si}"])
+                    if all_sub_rows:
+                        share = rd_total / len(all_sub_rows)
+                        for sub_row in all_sub_rows:
+                            ws_rd.cell(row=sub_row, column=col).value = round(share)
             # PL rows 12-13 are formulas referencing detail sheets (already set by template)
         else:
             # Inline mode: write OPEX directly to PL sheet using computed breakdown
