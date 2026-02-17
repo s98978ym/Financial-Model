@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react'
 import type { IndustryKey, DriverBenchmark } from '@/data/industryBenchmarks'
 import { INDUSTRY_BENCHMARKS } from '@/data/industryBenchmarks'
+import { RDThemeDetailPanel } from './RDThemeDetailPanel'
+import type { RDThemeItem } from './RDThemeDetailPanel'
 
 interface PayrollRoleDetail {
   label: string
@@ -31,6 +33,8 @@ interface DriverSlidersProps {
   onBatchChange?: (changes: Record<string, number>) => void
   industry?: IndustryKey
   sgaDetail?: SGADetail
+  rdThemes?: RDThemeItem[]
+  onRdThemesChange?: (themes: RDThemeItem[]) => void
 }
 
 var REVENUE_DRIVERS = [
@@ -541,11 +545,12 @@ function computeMktgTotal(parameters: Record<string, number>, categories?: Recor
   return total
 }
 
-export function DriverSliders({ parameters, onChange, onBatchChange, industry, sgaDetail }: DriverSlidersProps) {
+export function DriverSliders({ parameters, onChange, onBatchChange, industry, sgaDetail, rdThemes, onRdThemesChange }: DriverSlidersProps) {
   var [hoveredDriver, setHoveredDriver] = useState<string | null>(null)
   var [sgaExpanded, setSgaExpanded] = useState(false)
   var [payrollExpanded, setPayrollExpanded] = useState(false)
   var [mktgExpanded, setMktgExpanded] = useState(false)
+  var [rdExpanded, setRdExpanded] = useState(false)
   var [sgaMaterialized, setSgaMaterialized] = useState(false)
   var [deprMode, setDeprMode] = useState<'manual' | 'auto'>(
     parameters.depreciation_mode === 1 ? 'auto' : 'manual'
@@ -911,6 +916,14 @@ export function DriverSliders({ parameters, onChange, onBatchChange, industry, s
                           {mktgExpanded ? '▲閉じる' : '▼詳細'}
                         </button>
                       )}
+                      {cat.key === 'sga_system' && (
+                        <button
+                          onClick={function() { setRdExpanded(!rdExpanded) }}
+                          className="text-[10px] text-cyan-500 hover:text-cyan-700 ml-1"
+                        >
+                          {rdExpanded ? '▲閉じる' : '▼詳細'}
+                        </button>
+                      )}
                     </div>
                     <span className="text-sm font-mono font-medium text-gray-900">
                       {cat.format(value)}
@@ -944,6 +957,25 @@ export function DriverSliders({ parameters, onChange, onBatchChange, industry, s
                       total={sgaDetail.marketing.total}
                       parameters={parameters}
                       onSubChange={handleMktgSubChange}
+                    />
+                  )}
+
+                  {/* R&D theme detail → editable categories, items, and amounts */}
+                  {cat.key === 'sga_system' && rdExpanded && (
+                    <RDThemeDetailPanel
+                      themes={rdThemes || []}
+                      onThemesChange={function(themes) {
+                        // Sync sga_system total from R&D amounts
+                        var total = 0
+                        themes.forEach(function(t) {
+                          if (t.amounts) t.amounts.forEach(function(a) { total += (a || 0) })
+                        })
+                        if (total > 0 && total !== value) {
+                          handleCategoryChange(cat.key, total)
+                        }
+                        if (onRdThemesChange) onRdThemesChange(themes)
+                      }}
+                      systemTotal={value}
                     />
                   )}
                 </div>
