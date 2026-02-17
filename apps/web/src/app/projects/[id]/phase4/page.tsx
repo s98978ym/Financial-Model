@@ -67,18 +67,17 @@ export default function Phase4Page() {
     >
       {/* Phase 3 not completed — block trigger */}
       {!isProcessing && !isComplete && !isFailed && !phase3Exists && projectState && (
-        <div className="text-center py-16 bg-gradient-to-b from-red-50 to-white rounded-2xl border border-red-200">
-          <div className="text-4xl mb-4">⛔</div>
-          <h3 className="text-lg font-semibold text-red-800 mb-2">
+        <div className="text-center py-16 bg-white rounded-3xl shadow-warm">
+          <div className="w-14 h-14 rounded-2xl bg-red-50 flex items-center justify-center mx-auto mb-4 text-2xl">⛔</div>
+          <h3 className="text-lg font-semibold text-dark-900 mb-2">
             Phase 3を先に完了してください
           </h3>
-          <p className="text-red-600 text-sm mb-6 max-w-md mx-auto">
+          <p className="text-sand-500 text-sm mb-6 max-w-md mx-auto">
             モデル設計にはPhase 3（テンプレートマッピング）の結果が必要です。
-            Phase 3が完了していないため、設計を開始できません。
           </p>
           <button
             onClick={() => router.push(`/projects/${projectId}/phase3`)}
-            className="bg-red-600 text-white px-8 py-3 rounded-xl hover:bg-red-700 font-medium shadow-lg shadow-red-200 transition-all"
+            className="bg-dark-900 text-white px-6 py-3 rounded-2xl hover:bg-dark-800 font-medium shadow-warm-md transition-all"
           >
             Phase 3へ移動する
           </button>
@@ -87,18 +86,18 @@ export default function Phase4Page() {
 
       {/* Estimation confirmation dialog */}
       {showEstimationConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-md mx-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-3xl shadow-warm-lg p-6 max-w-md mx-4">
             <div className="text-center mb-4">
-              <div className="text-3xl mb-2">⚠️</div>
-              <h3 className="text-lg font-semibold text-amber-800">推定モードで続行しますか？</h3>
+              <div className="w-12 h-12 rounded-2xl bg-amber-50 flex items-center justify-center mx-auto mb-3 text-2xl">⚠️</div>
+              <h3 className="text-lg font-semibold text-dark-900">推定モードで続行しますか？</h3>
             </div>
-            <p className="text-sm text-gray-600 mb-4">
+            <p className="text-sm text-sand-500 mb-4">
               Phase 3は完了しましたが、テンプレートのシートマッピングが空です。
               推定モードではLLMを使って事業分析結果からPL概念マッピングを自動生成します。
             </p>
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-5">
-              <ul className="text-xs text-amber-700 space-y-1">
+            <div className="bg-cream-100 rounded-2xl p-3 mb-5">
+              <ul className="text-xs text-sand-600 space-y-1">
                 <li>・セル位置は仮配置になります</li>
                 <li>・テンプレートの実際の構造と異なる場合があります</li>
                 <li>・生成後に手動で調整が必要な場合があります</li>
@@ -107,13 +106,13 @@ export default function Phase4Page() {
             <div className="flex gap-3">
               <button
                 onClick={() => setShowEstimationConfirm(false)}
-                className="flex-1 px-4 py-2.5 rounded-xl border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm font-medium"
+                className="flex-1 px-4 py-2.5 rounded-2xl bg-cream-200 text-dark-900 hover:bg-cream-300 text-sm font-medium transition-all"
               >
                 キャンセル
               </button>
               <button
                 onClick={handleEstimationConfirm}
-                className="flex-1 px-4 py-2.5 rounded-xl bg-amber-500 text-white hover:bg-amber-600 text-sm font-medium shadow-lg shadow-amber-200"
+                className="flex-1 px-4 py-2.5 rounded-2xl bg-dark-900 text-white hover:bg-dark-800 text-sm font-medium shadow-warm-md transition-all"
               >
                 推定モードで続行
               </button>
@@ -124,25 +123,25 @@ export default function Phase4Page() {
 
       {/* Trigger — Phase 3 exists */}
       {!isProcessing && !isComplete && !isFailed && phase3Exists && (
-        <div className="text-center py-16 bg-gradient-to-b from-indigo-50 to-white rounded-2xl border border-indigo-100">
-          <div className="text-4xl mb-4">🏗️</div>
-          <h3 className="text-lg font-semibold text-gray-800 mb-2">
+        <div className="text-center py-16 bg-white rounded-3xl shadow-warm">
+          <div className="w-14 h-14 rounded-2xl bg-cream-200 flex items-center justify-center mx-auto mb-4 text-2xl">🏗️</div>
+          <h3 className="text-lg font-semibold text-dark-900 mb-2">
             モデル設計を実行
           </h3>
-          <p className="text-gray-500 text-sm mb-6 max-w-md mx-auto">
+          <p className="text-sand-500 text-sm mb-6 max-w-md mx-auto">
             テンプレートの各入力セルが「何を表すか」を自動判定します。
             売上・コスト・前提条件の概念マッピングを構築します。
           </p>
           {phase3Empty && (
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4 max-w-md mx-auto">
-              <p className="text-xs text-amber-700">
+            <div className="bg-cream-100 rounded-2xl p-3 mb-4 max-w-md mx-auto">
+              <p className="text-xs text-sand-500">
                 Phase 3のシートマッピングが空です。推定モードで実行されます。
               </p>
             </div>
           )}
           <button
             onClick={handleTrigger}
-            className="bg-blue-600 text-white px-8 py-3 rounded-xl hover:bg-blue-700 font-medium shadow-lg shadow-blue-200 transition-all hover:shadow-xl hover:shadow-blue-300"
+            className="bg-dark-900 text-white px-8 py-3 rounded-2xl hover:bg-dark-800 font-medium shadow-warm-md transition-all"
           >
             設計を開始する
           </button>
@@ -152,38 +151,38 @@ export default function Phase4Page() {
       {/* Processing */}
       {isProcessing && (
         <div className="text-center py-16">
-          <div className="relative w-16 h-16 mx-auto mb-6">
-            <div className="absolute inset-0 border-4 border-indigo-100 rounded-full" />
-            <div className="absolute inset-0 border-4 border-indigo-600 rounded-full animate-spin border-t-transparent" />
-            <span className="absolute inset-0 flex items-center justify-center text-sm font-bold text-indigo-600">
+          <div className="relative w-14 h-14 mx-auto mb-6">
+            <div className="absolute inset-0 border-3 border-cream-300 rounded-full" />
+            <div className="absolute inset-0 border-3 border-gold-500 rounded-full animate-spin border-t-transparent" />
+            <span className="absolute inset-0 flex items-center justify-center text-sm font-bold text-gold-600">
               {progress}%
             </span>
           </div>
-          <p className="text-gray-600 font-medium">モデルを設計中...</p>
-          <p className="text-gray-400 text-sm mt-1">セルとビジネスコンセプトを照合しています</p>
+          <p className="text-dark-900 font-medium">モデルを設計中...</p>
+          <p className="text-sand-400 text-sm mt-1">セルとビジネスコンセプトを照合しています</p>
         </div>
       )}
 
       {/* Error */}
       {isFailed && (
-        <div className="bg-red-50 border border-red-200 rounded-xl p-6 mb-6">
+        <div className="bg-red-50 rounded-2xl p-5 mb-6">
           <div className="flex items-start gap-3">
             <span className="text-red-500 text-xl mt-0.5">!</span>
             <div>
-              <p className="text-sm font-medium text-red-800">設計に失敗しました</p>
-              <p className="text-sm text-red-600 mt-1">{error}</p>
+              <p className="text-sm font-medium text-red-600">設計に失敗しました</p>
+              <p className="text-sm text-red-500 mt-1">{error}</p>
               <div className="flex gap-2 mt-3">
                 {error && error.indexOf('Phase 3') >= 0 ? (
                   <button
                     onClick={() => router.push(`/projects/${projectId}/phase3`)}
-                    className="text-sm bg-red-100 text-red-700 px-4 py-1.5 rounded-lg hover:bg-red-200 transition-colors"
+                    className="text-sm bg-red-100 text-red-600 px-4 py-1.5 rounded-xl hover:bg-red-200 transition-colors"
                   >
                     Phase 3へ移動する
                   </button>
                 ) : (
                   <button
                     onClick={() => trigger()}
-                    className="text-sm bg-red-100 text-red-700 px-4 py-1.5 rounded-lg hover:bg-red-200 transition-colors"
+                    className="text-sm bg-red-100 text-red-600 px-4 py-1.5 rounded-xl hover:bg-red-200 transition-colors"
                   >
                     再試行
                   </button>
@@ -196,18 +195,18 @@ export default function Phase4Page() {
 
       {/* Warnings banner */}
       {isComplete && warnings.length > 0 && (
-        <div className={`rounded-xl border p-4 mb-6 ${hasEstimated ? 'bg-amber-50 border-amber-200' : 'bg-blue-50 border-blue-200'}`}>
-          <div className="flex items-start gap-2">
-            <span className={hasEstimated ? 'text-amber-500' : 'text-blue-500'}>
-              {hasEstimated ? '⚠' : 'ℹ'}
-            </span>
+        <div className="bg-white rounded-3xl shadow-warm p-5 mb-5">
+          <div className="flex items-start gap-3">
+            <div className="w-8 h-8 rounded-xl bg-cream-200 flex items-center justify-center flex-shrink-0">
+              <span className="text-gold-500">{hasEstimated ? '⚠' : 'ℹ'}</span>
+            </div>
             <div>
-              <p className={`text-sm font-medium mb-1 ${hasEstimated ? 'text-amber-800' : 'text-blue-800'}`}>
+              <p className="text-sm font-semibold text-dark-900 mb-1">
                 {hasEstimated ? '推定モード — 事業分析から自動生成' : '注意事項'}
               </p>
               <ul className="text-sm space-y-0.5">
                 {warnings.map((w: string, idx: number) => (
-                  <li key={idx} className={hasEstimated ? 'text-amber-700' : 'text-blue-700'}>{w}</li>
+                  <li key={idx} className="text-sand-500">{w}</li>
                 ))}
               </ul>
             </div>
@@ -220,30 +219,34 @@ export default function Phase4Page() {
         <>
           {/* Stats Row */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-            <StatCard
-              label="マッピング済み"
-              value={`${stats.mapped}`}
-              sub={`/ ${stats.total} 項目`}
-              color="blue"
-            />
-            <StatCard
-              label="カテゴリ数"
-              value={`${stats.categories}`}
-              sub="PL区分"
-              color="indigo"
-            />
-            <StatCard
-              label="高確信度"
-              value={`${stats.highConf}`}
-              sub="80%以上"
-              color="green"
-            />
-            <StatCard
-              label="要確認"
-              value={`${stats.lowConf + unmapped.length}`}
-              sub="低確信度 + 未割当"
-              color={stats.lowConf + unmapped.length > 0 ? 'amber' : 'green'}
-            />
+            <div className="bg-white rounded-3xl shadow-warm p-4">
+              <div className="text-xs font-medium text-sand-400 mb-1">マッピング済み</div>
+              <div className="flex items-baseline gap-1">
+                <span className="text-xl font-bold text-dark-900">{stats.mapped}</span>
+                <span className="text-xs text-sand-400">/ {stats.total} 項目</span>
+              </div>
+            </div>
+            <div className="bg-white rounded-3xl shadow-warm p-4">
+              <div className="text-xs font-medium text-sand-400 mb-1">カテゴリ数</div>
+              <div className="flex items-baseline gap-1">
+                <span className="text-xl font-bold text-dark-900">{stats.categories}</span>
+                <span className="text-xs text-sand-400">PL区分</span>
+              </div>
+            </div>
+            <div className="bg-white rounded-3xl shadow-warm p-4">
+              <div className="text-xs font-medium text-sand-400 mb-1">高確信度</div>
+              <div className="flex items-baseline gap-1">
+                <span className="text-xl font-bold text-dark-900">{stats.highConf}</span>
+                <span className="text-xs text-sand-400">80%以上</span>
+              </div>
+            </div>
+            <div className="bg-white rounded-3xl shadow-warm p-4">
+              <div className="text-xs font-medium text-sand-400 mb-1">要確認</div>
+              <div className="flex items-baseline gap-1">
+                <span className={'text-xl font-bold ' + ((stats.lowConf + unmapped.length) > 0 ? 'text-amber-600' : 'text-dark-900')}>{stats.lowConf + unmapped.length}</span>
+                <span className="text-xs text-sand-400">低確信度 + 未割当</span>
+              </div>
+            </div>
           </div>
 
           {/* PL Structure View */}
@@ -274,18 +277,18 @@ export default function Phase4Page() {
 
           {/* Unmapped Items */}
           {unmapped.length > 0 && (
-            <div className="mt-6 bg-yellow-50 border border-yellow-200 rounded-xl p-4">
-              <h4 className="text-sm font-medium text-yellow-800 mb-2">
+            <div className="mt-6 bg-white rounded-3xl shadow-warm p-5">
+              <h4 className="text-sm font-semibold text-dark-900 mb-3">
                 未マッピング {unmapped.length} セル
               </h4>
               <div className="flex flex-wrap gap-2">
                 {unmapped.map((u: any, i: number) => (
                   <span
                     key={i}
-                    className="inline-flex items-center px-2.5 py-1 bg-yellow-100 text-yellow-700 rounded-lg text-xs"
+                    className="inline-flex items-center px-2.5 py-1 bg-cream-200 text-sand-600 rounded-full text-xs"
                   >
                     {u.sheet}/{u.cell}
-                    {u.label && <span className="ml-1 text-yellow-600">({u.label})</span>}
+                    {u.label && <span className="ml-1 text-sand-400">({u.label})</span>}
                   </span>
                 ))}
               </div>
@@ -296,7 +299,7 @@ export default function Phase4Page() {
           <div className="mt-6 flex justify-end">
             <button
               onClick={() => router.push(`/projects/${projectId}/phase5`)}
-              className="bg-blue-600 text-white px-6 py-2.5 rounded-xl hover:bg-blue-700 text-sm font-medium shadow-lg shadow-blue-200 transition-all hover:shadow-xl"
+              className="bg-dark-900 text-white px-6 py-3 rounded-2xl hover:bg-dark-800 text-sm font-medium shadow-warm-md transition-all"
             >
               Phase 5 パラメータ抽出へ進む
             </button>
@@ -306,51 +309,23 @@ export default function Phase4Page() {
 
       {/* Empty results */}
       {isComplete && assignments.length === 0 && result && (
-        <div className="text-center py-12 bg-gray-50 rounded-xl border border-gray-200">
-          <div className="text-3xl mb-3">📭</div>
-          <p className="text-gray-600 font-medium mb-2">
+        <div className="text-center py-12 bg-white rounded-3xl shadow-warm">
+          <div className="w-12 h-12 rounded-2xl bg-cream-200 flex items-center justify-center mx-auto mb-3 text-xl">📭</div>
+          <p className="text-dark-900 font-medium mb-2">
             マッピング対象のセルが見つかりませんでした
           </p>
-          <p className="text-gray-400 text-sm mb-4 max-w-md mx-auto">
+          <p className="text-sand-400 text-sm mb-4 max-w-md mx-auto">
             テンプレートExcelの入力セルが正しくハイライトされているか、
             Phase 1/2 が正しく完了しているかご確認ください。
           </p>
           <button
             onClick={() => trigger()}
-            className="text-sm bg-blue-50 text-blue-600 px-4 py-2 rounded-lg hover:bg-blue-100"
+            className="text-sm bg-cream-200 text-gold-600 px-4 py-2.5 rounded-xl hover:bg-cream-300 font-medium transition-colors"
           >
             再試行
           </button>
         </div>
       )}
     </PhaseLayout>
-  )
-}
-
-function StatCard({
-  label,
-  value,
-  sub,
-  color,
-}: {
-  label: string
-  value: string
-  sub: string
-  color: 'blue' | 'indigo' | 'green' | 'amber'
-}) {
-  const colors = {
-    blue: 'bg-blue-50 border-blue-200 text-blue-700',
-    indigo: 'bg-indigo-50 border-indigo-200 text-indigo-700',
-    green: 'bg-green-50 border-green-200 text-green-700',
-    amber: 'bg-amber-50 border-amber-200 text-amber-700',
-  }
-  return (
-    <div className={`rounded-xl border p-3 ${colors[color]}`}>
-      <div className="text-xs font-medium text-gray-500 mb-1">{label}</div>
-      <div className="flex items-baseline gap-1">
-        <span className="text-xl font-bold">{value}</span>
-        <span className="text-xs text-gray-400">{sub}</span>
-      </div>
-    </div>
   )
 }

@@ -79,12 +79,12 @@ export function AdvertisingPanel({ config, onChange }: Props) {
     <div className="space-y-5">
       {/* MAU + pageviews */}
       <div>
-        <h4 className="text-xs font-semibold text-gray-700 mb-2">トラフィック</h4>
-        <div className="bg-rose-50 rounded-lg border border-rose-100 overflow-x-auto">
+        <h4 className="text-xs font-semibold text-sand-600 mb-2">トラフィック</h4>
+        <div className="bg-rose-50 rounded-2xl border border-rose-100 overflow-x-auto">
           <table className="w-full text-[11px]">
             <thead>
               <tr className="border-b border-rose-200">
-                <th className="text-left px-3 py-2 text-gray-500 font-medium">指標</th>
+                <th className="text-left px-3 py-2 text-sand-500 font-medium">指標</th>
                 {FY_LABELS.map(function(fy) {
                   return <th key={fy} className="text-right px-3 py-2 text-rose-600 font-medium">{fy}</th>
                 })}
@@ -92,7 +92,7 @@ export function AdvertisingPanel({ config, onChange }: Props) {
             </thead>
             <tbody>
               <tr className="border-b border-rose-100 hover:bg-white/50">
-                <td className="px-3 py-2 font-medium text-gray-700">MAU</td>
+                <td className="px-3 py-2 font-medium text-sand-600">MAU</td>
                 {FY_LABELS.map(function(_, fi) {
                   return (
                     <td key={fi} className="px-3 py-2 text-right">
@@ -102,16 +102,16 @@ export function AdvertisingPanel({ config, onChange }: Props) {
                 })}
               </tr>
               <tr className="border-b border-rose-100 hover:bg-white/50">
-                <td className="px-3 py-2 text-gray-500">月間PV</td>
+                <td className="px-3 py-2 text-sand-500">月間PV</td>
                 {fyImpressions.map(function(imp, fi) {
-                  return <td key={fi} className="px-3 py-2 text-right font-mono text-gray-600">{formatNum(imp)}</td>
+                  return <td key={fi} className="px-3 py-2 text-right font-mono text-sand-600">{formatNum(imp)}</td>
                 })}
               </tr>
             </tbody>
           </table>
         </div>
         <div className="flex items-center gap-3 text-[11px] px-1 mt-2">
-          <span className="text-gray-500">平均PV/ユーザー:</span>
+          <span className="text-sand-500">平均PV/ユーザー:</span>
           <CellInput value={config.avg_pageviews_per_user}
             onChange={function(v) { onChange({ ...config, avg_pageviews_per_user: v }) }} />
         </div>
@@ -120,17 +120,17 @@ export function AdvertisingPanel({ config, onChange }: Props) {
       {/* Ad format definitions */}
       <div>
         <div className="flex items-center justify-between mb-2">
-          <h4 className="text-xs font-semibold text-gray-700">広告フォーマット</h4>
+          <h4 className="text-xs font-semibold text-sand-600">広告フォーマット</h4>
           <button onClick={addFormat} className="text-[10px] text-rose-600 hover:text-rose-800">+ フォーマット追加</button>
         </div>
-        <div className="bg-gray-50 rounded-lg border border-gray-200 overflow-x-auto">
+        <div className="bg-cream-50 rounded-2xl border border-cream-200 overflow-x-auto">
           <table className="w-full text-[11px]">
             <thead>
-              <tr className="border-b border-gray-200">
-                <th className="text-left px-3 py-2 text-gray-500 font-medium">フォーマット</th>
-                <th className="text-left px-3 py-2 text-gray-500 font-medium">課金方式</th>
-                <th className="text-right px-3 py-2 text-gray-500 font-medium">単価</th>
-                <th className="text-right px-3 py-2 text-gray-500 font-medium">充填率</th>
+              <tr className="border-b border-cream-200">
+                <th className="text-left px-3 py-2 text-sand-500 font-medium">フォーマット</th>
+                <th className="text-left px-3 py-2 text-sand-500 font-medium">課金方式</th>
+                <th className="text-right px-3 py-2 text-sand-500 font-medium">単価</th>
+                <th className="text-right px-3 py-2 text-sand-500 font-medium">充填率</th>
                 <th className="text-right px-3 py-2 text-rose-600 font-semibold">月次売上(FY5)</th>
                 <th className="w-8"></th>
               </tr>
@@ -138,16 +138,16 @@ export function AdvertisingPanel({ config, onChange }: Props) {
             <tbody>
               {config.formats.map(function(f) {
                 return (
-                  <tr key={f.id} className="border-b border-gray-100 last:border-0 hover:bg-white">
+                  <tr key={f.id} className="border-b border-cream-200 last:border-0 hover:bg-white">
                     <td className="px-3 py-2">
                       <input type="text" value={f.name}
                         onChange={function(e) { updateFormat(f.id, { name: e.target.value }) }}
-                        className="w-full bg-transparent font-medium text-gray-900 outline-none focus:bg-rose-50 focus:rounded px-1 -mx-1" />
+                        className="w-full bg-transparent font-medium text-dark-900 outline-none focus:bg-cream-100 focus:rounded px-1 -mx-1" />
                     </td>
                     <td className="px-3 py-2">
                       <select value={f.pricing_model}
                         onChange={function(e) { updateFormat(f.id, { pricing_model: e.target.value as any }) }}
-                        className="bg-transparent text-gray-700 outline-none text-[11px]">
+                        className="bg-transparent text-sand-600 outline-none text-[11px]">
                         <option value="cpm">CPM</option>
                         <option value="cpc">CPC</option>
                         <option value="cpa">CPA</option>
@@ -155,18 +155,18 @@ export function AdvertisingPanel({ config, onChange }: Props) {
                     </td>
                     <td className="px-3 py-2 text-right">
                       <CellInput value={f.rate} onChange={function(v) { updateFormat(f.id, { rate: v }) }} />
-                      <span className="text-[10px] text-gray-400">円</span>
+                      <span className="text-[10px] text-sand-400">円</span>
                     </td>
                     <td className="px-3 py-2 text-right">
                       <CellInput value={f.fill_rate * 100} onChange={function(v) { updateFormat(f.id, { fill_rate: v / 100 }) }} />
-                      <span className="text-[10px] text-gray-400">%</span>
+                      <span className="text-[10px] text-sand-400">%</span>
                     </td>
                     <td className="px-3 py-2 text-right font-mono text-rose-700">
                       {formatYen(formatRevenue(f, 4))}円
                     </td>
                     <td className="px-1 py-2">
                       {config.formats.length > 1 && (
-                        <button onClick={function() { removeFormat(f.id) }} className="text-gray-300 hover:text-red-500 transition-colors">
+                        <button onClick={function() { removeFormat(f.id) }} className="text-sand-300 hover:text-red-500 transition-colors">
                           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                           </svg>
@@ -183,12 +183,12 @@ export function AdvertisingPanel({ config, onChange }: Props) {
 
       {/* Annual revenue summary */}
       <div>
-        <h4 className="text-xs font-semibold text-gray-700 mb-2">年間広告売上</h4>
-        <div className="bg-rose-50 rounded-lg border border-rose-100 overflow-x-auto">
+        <h4 className="text-xs font-semibold text-sand-600 mb-2">年間広告売上</h4>
+        <div className="bg-rose-50 rounded-2xl border border-rose-100 overflow-x-auto">
           <table className="w-full text-[11px]">
             <thead>
               <tr className="border-b border-rose-200">
-                <th className="text-left px-3 py-2 text-gray-500 font-medium">フォーマット</th>
+                <th className="text-left px-3 py-2 text-sand-500 font-medium">フォーマット</th>
                 {FY_LABELS.map(function(fy) {
                   return <th key={fy} className="text-right px-3 py-2 text-rose-600 font-medium">{fy}</th>
                 })}
@@ -198,15 +198,15 @@ export function AdvertisingPanel({ config, onChange }: Props) {
               {config.formats.map(function(f) {
                 return (
                   <tr key={f.id} className="border-b border-rose-100 last:border-0 hover:bg-white/50">
-                    <td className="px-3 py-2 font-medium text-gray-700">{f.name} ({PRICING_LABELS[f.pricing_model]})</td>
+                    <td className="px-3 py-2 font-medium text-sand-600">{f.name} ({PRICING_LABELS[f.pricing_model]})</td>
                     {FY_LABELS.map(function(_, fi) {
-                      return <td key={fi} className="px-3 py-2 text-right font-mono text-gray-600">{formatYen(formatRevenue(f, fi) * 12)}円</td>
+                      return <td key={fi} className="px-3 py-2 text-right font-mono text-sand-600">{formatYen(formatRevenue(f, fi) * 12)}円</td>
                     })}
                   </tr>
                 )
               })}
               <tr className="border-t-2 border-rose-200 bg-rose-100/50">
-                <td className="px-3 py-2 font-semibold text-gray-700">合計</td>
+                <td className="px-3 py-2 font-semibold text-sand-600">合計</td>
                 {fyRevenue.map(function(rev, fi) {
                   return <td key={fi} className="px-3 py-2 text-right font-mono font-bold text-rose-700">{formatYen(rev)}円</td>
                 })}
@@ -231,10 +231,10 @@ function CellInput({ value, onChange, integer }: { value: number; onChange: (v: 
   if (editing) return (
     <input type="text" value={draft} onChange={function(e) { setDraft(e.target.value) }}
       onBlur={commit} onKeyDown={function(e) { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); if (e.key === 'Escape') setEditing(false) }}
-      autoFocus className="w-16 text-right bg-white border border-rose-300 rounded px-1 py-0.5 text-[11px] font-mono outline-none focus:ring-1 focus:ring-rose-400" />
+      autoFocus className="w-16 text-right bg-white border border-gold-300 rounded px-1 py-0.5 text-[11px] font-mono outline-none focus:ring-1 focus:ring-gold-400" />
   )
   return (
-    <button onClick={startEdit} className="font-mono text-[11px] text-gray-900 px-1 py-0.5 rounded border border-transparent hover:border-rose-300 hover:bg-rose-50 cursor-pointer transition-colors">
+    <button onClick={startEdit} className="font-mono text-[11px] text-dark-900 px-1 py-0.5 rounded border border-transparent hover:border-gold-300 hover:bg-cream-100 cursor-pointer transition-colors">
       {(integer ? Math.round(value) : value).toLocaleString()}
     </button>
   )

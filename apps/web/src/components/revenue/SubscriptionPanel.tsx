@@ -64,16 +64,16 @@ export function SubscriptionPanel({ config, onChange }: Props) {
       {/* Plan definitions */}
       <div>
         <div className="flex items-center justify-between mb-2">
-          <h4 className="text-xs font-semibold text-gray-700">プラン定義</h4>
-          <button onClick={addPlan} className="text-[10px] text-blue-600 hover:text-blue-800">+ プラン追加</button>
+          <h4 className="text-xs font-semibold text-sand-600">プラン定義</h4>
+          <button onClick={addPlan} className="text-[10px] text-gold-600 hover:text-gold-500">+ プラン追加</button>
         </div>
-        <div className="bg-gray-50 rounded-lg border border-gray-200 overflow-x-auto">
+        <div className="bg-cream-50 rounded-2xl border border-cream-200 overflow-x-auto">
           <table className="w-full text-[11px]">
             <thead>
-              <tr className="border-b border-gray-200">
-                <th className="text-left px-3 py-2 text-gray-500 font-medium">プラン名</th>
-                <th className="text-right px-3 py-2 text-gray-500 font-medium">月額</th>
-                <th className="text-right px-3 py-2 text-gray-500 font-medium">月次解約率</th>
+              <tr className="border-b border-cream-200">
+                <th className="text-left px-3 py-2 text-sand-500 font-medium">プラン名</th>
+                <th className="text-right px-3 py-2 text-sand-500 font-medium">月額</th>
+                <th className="text-right px-3 py-2 text-sand-500 font-medium">月次解約率</th>
                 <th className="text-right px-3 py-2 text-orange-600 font-semibold">年間ARPU</th>
                 <th className="w-8"></th>
               </tr>
@@ -81,26 +81,26 @@ export function SubscriptionPanel({ config, onChange }: Props) {
             <tbody>
               {config.plans.map(function(plan) {
                 return (
-                  <tr key={plan.id} className="border-b border-gray-100 last:border-0 hover:bg-white">
+                  <tr key={plan.id} className="border-b border-cream-200 last:border-0 hover:bg-white">
                     <td className="px-3 py-2">
                       <input type="text" value={plan.name}
                         onChange={function(e) { updatePlan(plan.id, { name: e.target.value }) }}
-                        className="w-full bg-transparent font-medium text-gray-900 outline-none focus:bg-blue-50 focus:rounded px-1 -mx-1" />
+                        className="w-full bg-transparent font-medium text-dark-900 outline-none focus:bg-cream-100 focus:rounded px-1 -mx-1" />
                     </td>
                     <td className="px-3 py-2 text-right">
                       <CellInput value={plan.monthly_price} onChange={function(v) { updatePlan(plan.id, { monthly_price: v }) }} />
-                      <span className="text-[10px] text-gray-400">円</span>
+                      <span className="text-[10px] text-sand-400">円</span>
                     </td>
                     <td className="px-3 py-2 text-right">
                       <CellInput value={plan.churn_rate * 100} onChange={function(v) { updatePlan(plan.id, { churn_rate: v / 100 }) }} />
-                      <span className="text-[10px] text-gray-400">%</span>
+                      <span className="text-[10px] text-sand-400">%</span>
                     </td>
                     <td className="px-3 py-2 text-right font-mono font-semibold text-orange-700">
                       {formatYen(plan.monthly_price * 12)}円
                     </td>
                     <td className="px-1 py-2">
                       {config.plans.length > 1 && (
-                        <button onClick={function() { removePlan(plan.id) }} className="text-gray-300 hover:text-red-500 transition-colors">
+                        <button onClick={function() { removePlan(plan.id) }} className="text-sand-300 hover:text-red-500 transition-colors">
                           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                           </svg>
@@ -117,12 +117,12 @@ export function SubscriptionPanel({ config, onChange }: Props) {
 
       {/* Subscriber count per FY */}
       <div>
-        <h4 className="text-xs font-semibold text-gray-700 mb-2">契約者数推移</h4>
-        <div className="bg-orange-50 rounded-lg border border-orange-100 overflow-x-auto">
+        <h4 className="text-xs font-semibold text-sand-600 mb-2">契約者数推移</h4>
+        <div className="bg-orange-50 rounded-2xl border border-orange-100 overflow-x-auto">
           <table className="w-full text-[11px]">
             <thead>
               <tr className="border-b border-orange-200">
-                <th className="text-left px-3 py-2 text-gray-500 font-medium">プラン</th>
+                <th className="text-left px-3 py-2 text-sand-500 font-medium">プラン</th>
                 {FY_LABELS.map(function(fy) {
                   return <th key={fy} className="text-right px-3 py-2 text-orange-600 font-medium">{fy}</th>
                 })}
@@ -132,7 +132,7 @@ export function SubscriptionPanel({ config, onChange }: Props) {
               {config.plans.map(function(plan) {
                 return (
                   <tr key={plan.id} className="border-b border-orange-100 last:border-0 hover:bg-white/50">
-                    <td className="px-3 py-2 font-medium text-gray-700">{plan.name}</td>
+                    <td className="px-3 py-2 font-medium text-sand-600">{plan.name}</td>
                     {FY_LABELS.map(function(_, fi) {
                       return (
                         <td key={fi} className="px-3 py-2 text-right">
@@ -144,7 +144,7 @@ export function SubscriptionPanel({ config, onChange }: Props) {
                 )
               })}
               <tr className="border-t-2 border-orange-200 bg-orange-100/50">
-                <td className="px-3 py-2 font-semibold text-gray-700">ARR</td>
+                <td className="px-3 py-2 font-semibold text-sand-600">ARR</td>
                 {fyARR.map(function(arr, fi) {
                   return <td key={fi} className="px-3 py-2 text-right font-mono font-bold text-orange-700">{formatYen(arr)}円</td>
                 })}
@@ -156,10 +156,10 @@ export function SubscriptionPanel({ config, onChange }: Props) {
 
       {/* Trial conversion */}
       <div className="flex items-center gap-3 text-[11px]">
-        <span className="text-gray-500">トライアル→有料転換率:</span>
+        <span className="text-sand-500">トライアル→有料転換率:</span>
         <CellInput value={config.trial_conversion_rate * 100}
           onChange={function(v) { onChange({ ...config, trial_conversion_rate: v / 100 }) }} />
-        <span className="text-gray-400">%</span>
+        <span className="text-sand-400">%</span>
       </div>
     </div>
   )
@@ -177,10 +177,10 @@ function CellInput({ value, onChange, integer }: { value: number; onChange: (v: 
   if (editing) return (
     <input type="text" value={draft} onChange={function(e) { setDraft(e.target.value) }}
       onBlur={commit} onKeyDown={function(e) { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); if (e.key === 'Escape') setEditing(false) }}
-      autoFocus className="w-16 text-right bg-white border border-blue-300 rounded px-1 py-0.5 text-[11px] font-mono outline-none focus:ring-1 focus:ring-blue-400" />
+      autoFocus className="w-16 text-right bg-white border border-gold-300 rounded px-1 py-0.5 text-[11px] font-mono outline-none focus:ring-1 focus:ring-gold-400" />
   )
   return (
-    <button onClick={startEdit} className="font-mono text-[11px] text-gray-900 px-1 py-0.5 rounded border border-transparent hover:border-blue-300 hover:bg-blue-50 cursor-pointer transition-colors">
+    <button onClick={startEdit} className="font-mono text-[11px] text-dark-900 px-1 py-0.5 rounded border border-transparent hover:border-gold-300 hover:bg-cream-100 cursor-pointer transition-colors">
       {(integer ? Math.round(value) : value).toLocaleString()}
     </button>
   )

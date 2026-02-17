@@ -26,16 +26,16 @@ function OptionCard({
   return (
     <button
       onClick={onClick}
-      className={'flex-1 min-w-0 text-left p-3 rounded-lg border-2 transition-all ' + (
+      className={'flex-1 min-w-0 text-left p-3 rounded-2xl border-2 transition-all ' + (
         selected
-          ? 'border-blue-500 bg-blue-50 shadow-sm'
-          : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50'
+          ? 'border-gold-500 bg-cream-100 shadow-warm'
+          : 'border-cream-200 bg-white hover:border-cream-300 hover:bg-cream-50'
       )}
     >
-      <div className={'text-sm font-medium ' + (selected ? 'text-blue-700' : 'text-gray-700')}>
+      <div className={'text-sm font-medium ' + (selected ? 'text-gold-600' : 'text-dark-900')}>
         {label}
       </div>
-      <div className="text-xs text-gray-500 mt-0.5">{desc}</div>
+      <div className="text-xs text-sand-500 mt-0.5">{desc}</div>
     </button>
   )
 }
@@ -55,16 +55,16 @@ export function QASettingsPanel({ settings, onChange, onGenerate, isGenerating }
   }
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-      <div className="px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-purple-50 to-indigo-50">
-        <h3 className="font-semibold text-gray-900">Q&A 設定</h3>
-        <p className="text-xs text-gray-500 mt-0.5">ターゲットと形式を設定してQ&Aを生成</p>
+    <div className="bg-white rounded-3xl shadow-warm overflow-hidden">
+      <div className="px-6 py-4 border-b border-cream-200 bg-cream-100">
+        <h3 className="font-semibold text-dark-900">Q&A 設定</h3>
+        <p className="text-xs text-sand-500 mt-0.5">ターゲットと形式を設定してQ&Aを生成</p>
       </div>
 
       <div className="p-6 space-y-6">
         {/* Target Audience */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label className="block text-sm font-medium text-sand-600 mb-2">
             誰に対するQ&A？
           </label>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
@@ -84,7 +84,7 @@ export function QASettingsPanel({ settings, onChange, onGenerate, isGenerating }
 
         {/* Detail Level */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label className="block text-sm font-medium text-sand-600 mb-2">
             詳しさ（どのような場面か？）
           </label>
           <div className="grid grid-cols-3 gap-2">
@@ -104,7 +104,7 @@ export function QASettingsPanel({ settings, onChange, onGenerate, isGenerating }
 
         {/* Answer Length */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label className="block text-sm font-medium text-sand-600 mb-2">
             回答の長さ
           </label>
           <div className="grid grid-cols-3 gap-2">
@@ -124,7 +124,7 @@ export function QASettingsPanel({ settings, onChange, onGenerate, isGenerating }
 
         {/* Count */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label className="block text-sm font-medium text-sand-600 mb-2">
             Q&A数
           </label>
           <div className="flex gap-2">
@@ -135,8 +135,8 @@ export function QASettingsPanel({ settings, onChange, onGenerate, isGenerating }
                   onClick={function() { updateCount(count) }}
                   className={'px-4 py-2 rounded-lg border-2 text-sm font-medium transition-all ' + (
                     settings.count === count
-                      ? 'border-blue-500 bg-blue-50 text-blue-700'
-                      : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                      ? 'border-gold-500 bg-cream-100 text-gold-600'
+                      : 'border-cream-200 bg-white text-sand-600 hover:border-cream-300'
                   )}
                 >
                   {count}問
@@ -150,7 +150,7 @@ export function QASettingsPanel({ settings, onChange, onGenerate, isGenerating }
         <button
           onClick={onGenerate}
           disabled={isGenerating}
-          className="w-full py-3 rounded-xl font-medium text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm hover:shadow-md"
+          className="w-full py-3 rounded-2xl font-medium text-white bg-dark-900 hover:bg-dark-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-warm hover:shadow-warm-md"
         >
           {isGenerating ? 'Q&A を生成中...' : 'Q&A を生成'}
         </button>

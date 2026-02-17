@@ -83,8 +83,8 @@ export function PLChart({ data, kpis }: PLChartProps) {
 
   if (!data) {
     return (
-      <div className="bg-white rounded-lg border border-gray-200 p-8 flex items-center justify-center h-80">
-        <p className="text-gray-400">パラメータを調整するとグラフが表示されます</p>
+      <div className="bg-white rounded-3xl shadow-warm p-8 flex items-center justify-center h-80">
+        <p className="text-sand-400">パラメータを調整するとグラフが表示されます</p>
       </div>
     )
   }
@@ -95,31 +95,31 @@ export function PLChart({ data, kpis }: PLChartProps) {
   })
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-5">
+    <div className="bg-white rounded-3xl shadow-warm p-5">
       {/* KPI Summary */}
       {kpis && (
         <div className="flex gap-6 mb-4 text-sm">
           {kpis.break_even_year && (
             <div>
-              <span className="text-gray-500">黒字化: </span>
+              <span className="text-sand-500">黒字化: </span>
               <span className="font-bold text-green-700">{kpis.break_even_year}</span>
             </div>
           )}
           {kpis.revenue_cagr != null && (
             <div>
-              <span className="text-gray-500">売上CAGR: </span>
+              <span className="text-sand-500">売上CAGR: </span>
               <span className="font-bold">{(kpis.revenue_cagr * 100).toFixed(0)}%</span>
             </div>
           )}
           {kpis.gp_margin != null && (
             <div>
-              <span className="text-gray-500">粗利率: </span>
+              <span className="text-sand-500">粗利率: </span>
               <span className="font-bold">{(kpis.gp_margin * 100).toFixed(0)}%</span>
             </div>
           )}
           {kpis.fy5_op_margin != null && (
             <div>
-              <span className="text-gray-500">FY5営業利益率: </span>
+              <span className="text-sand-500">FY5営業利益率: </span>
               <span className="font-bold">{(kpis.fy5_op_margin * 100).toFixed(0)}%</span>
             </div>
           )}
@@ -127,13 +127,13 @@ export function PLChart({ data, kpis }: PLChartProps) {
       )}
 
       {/* View Toggle */}
-      <div className="flex bg-gray-100 rounded-lg p-0.5 mb-4">
+      <div className="flex bg-cream-200 rounded-2xl p-0.5 mb-4">
         <button
           onClick={function() { setView('pl') }}
           className={'px-3 py-1.5 text-xs rounded-md transition-colors ' + (
             view === 'pl'
-              ? 'bg-white text-gray-800 shadow-sm font-medium'
-              : 'text-gray-500 hover:text-gray-700'
+              ? 'bg-white text-dark-900 shadow-warm font-medium'
+              : 'text-sand-500 hover:text-dark-900'
           )}
         >
           PL全体
@@ -143,8 +143,8 @@ export function PLChart({ data, kpis }: PLChartProps) {
             onClick={function() { setView('segments') }}
             className={'px-3 py-1.5 text-xs rounded-md transition-colors ' + (
               view === 'segments'
-                ? 'bg-white text-gray-800 shadow-sm font-medium'
-                : 'text-gray-500 hover:text-gray-700'
+                ? 'bg-white text-dark-900 shadow-warm font-medium'
+                : 'text-sand-500 hover:text-dark-900'
             )}
           >
             セグメント別売上
@@ -155,8 +155,8 @@ export function PLChart({ data, kpis }: PLChartProps) {
             onClick={function() { setView('sga') }}
             className={'px-3 py-1.5 text-xs rounded-md transition-colors ' + (
               view === 'sga'
-                ? 'bg-white text-gray-800 shadow-sm font-medium'
-                : 'text-gray-500 hover:text-gray-700'
+                ? 'bg-white text-dark-900 shadow-warm font-medium'
+                : 'text-sand-500 hover:text-dark-900'
             )}
           >
             販管費内訳
@@ -202,7 +202,7 @@ function PLBarChart({ data }: { data: PLChartProps['data'] }) {
   return (
     <ResponsiveContainer width="100%" height={300}>
       <BarChart data={chartData} stackOffset="sign">
-        <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+        <CartesianGrid strokeDasharray="3 3" stroke="#E8E0D4" />
         <XAxis dataKey="name" />
         <YAxis tickFormatter={formatYen} width={70} />
         <Tooltip
@@ -250,7 +250,7 @@ function SegmentChart({ segments }: { segments: SegmentData[] }) {
     <div>
       <ResponsiveContainer width="100%" height={300}>
         <BarChart data={chartData}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+          <CartesianGrid strokeDasharray="3 3" stroke="#E8E0D4" />
           <XAxis dataKey="name" />
           <YAxis tickFormatter={formatYen} width={70} />
           <Tooltip
@@ -301,7 +301,7 @@ function SGAChart({ breakdown }: { breakdown: SGABreakdown }) {
   return (
     <ResponsiveContainer width="100%" height={300}>
       <BarChart data={chartData}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+        <CartesianGrid strokeDasharray="3 3" stroke="#E8E0D4" />
         <XAxis dataKey="name" />
         <YAxis tickFormatter={formatYen} width={70} />
         <Tooltip
@@ -334,42 +334,42 @@ function SegmentSummaryTable({ segments, totalRevenue, totalGP }: {
   totalGP: number[]
 }) {
   return (
-    <div className="mt-4 pt-3 border-t border-gray-100">
-      <div className="text-xs font-medium text-gray-500 mb-2">セグメント別 売上・粗利</div>
+    <div className="mt-4 pt-3 border-t border-cream-200">
+      <div className="text-xs font-medium text-sand-500 mb-2">セグメント別 売上・粗利</div>
       <div className="overflow-x-auto">
         <table className="w-full text-xs">
           <thead>
-            <tr className="border-b border-gray-200">
-              <th className="text-left py-1.5 px-2 text-gray-500 font-medium">セグメント</th>
+            <tr className="border-b border-cream-200">
+              <th className="text-left py-1.5 px-2 text-sand-500 font-medium">セグメント</th>
               {YEARS.map(function(fy) {
-                return <th key={fy} className="text-right py-1.5 px-2 text-gray-500 font-medium">{fy}</th>
+                return <th key={fy} className="text-right py-1.5 px-2 text-sand-500 font-medium">{fy}</th>
               })}
-              <th className="text-right py-1.5 px-2 text-gray-500 font-medium">成長率</th>
-              <th className="text-right py-1.5 px-2 text-gray-500 font-medium">粗利率</th>
+              <th className="text-right py-1.5 px-2 text-sand-500 font-medium">成長率</th>
+              <th className="text-right py-1.5 px-2 text-sand-500 font-medium">粗利率</th>
             </tr>
           </thead>
           <tbody>
             {segments.map(function(seg, si) {
               return (
-                <tr key={si} className="border-b border-gray-50">
+                <tr key={si} className="border-b border-cream-100">
                   <td className="py-1.5 px-2">
                     <div className="flex items-center gap-1.5">
                       <div
                         className="w-2 h-2 rounded-full flex-shrink-0"
                         style={{ backgroundColor: SEGMENT_COLORS[si % SEGMENT_COLORS.length] }}
                       />
-                      <span className="font-medium text-gray-700">{seg.name}</span>
+                      <span className="font-medium text-dark-900">{seg.name}</span>
                     </div>
                   </td>
                   {seg.revenue.map(function(rev, yi) {
                     return (
-                      <td key={yi} className="text-right py-1.5 px-2 font-mono text-gray-700">
+                      <td key={yi} className="text-right py-1.5 px-2 font-mono text-dark-900">
                         <div>{formatYen(rev)}</div>
                         <div className="text-[10px] text-green-600">{formatYen(seg.gross_profit[yi])}</div>
                       </td>
                     )
                   })}
-                  <td className="text-right py-1.5 px-2 font-mono text-blue-600">
+                  <td className="text-right py-1.5 px-2 font-mono text-gold-600">
                     {(seg.growth_rate * 100).toFixed(0)}%
                   </td>
                   <td className="text-right py-1.5 px-2 font-mono text-green-600">
@@ -379,17 +379,17 @@ function SegmentSummaryTable({ segments, totalRevenue, totalGP }: {
               )
             })}
             {/* Total row */}
-            <tr className="border-t-2 border-gray-300 font-bold">
-              <td className="py-1.5 px-2 text-gray-900">合計</td>
+            <tr className="border-t-2 border-cream-300 font-bold">
+              <td className="py-1.5 px-2 text-dark-900">合計</td>
               {totalRevenue.map(function(rev, yi) {
                 return (
-                  <td key={yi} className="text-right py-1.5 px-2 font-mono text-gray-900">
+                  <td key={yi} className="text-right py-1.5 px-2 font-mono text-dark-900">
                     <div>{formatYen(rev)}</div>
                     <div className="text-[10px] text-green-700">{formatYen(totalGP[yi])}</div>
                   </td>
                 )
               })}
-              <td className="text-right py-1.5 px-2 font-mono text-blue-700">
+              <td className="text-right py-1.5 px-2 font-mono text-gold-600">
                 {totalRevenue[0] > 0
                   ? ((Math.pow(totalRevenue[4] / totalRevenue[0], 0.25) - 1) * 100).toFixed(0) + '%'
                   : '-'

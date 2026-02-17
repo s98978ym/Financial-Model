@@ -32,11 +32,11 @@ function isScenarioComplete(data: any, error: any, isFetching: boolean): boolean
 
 function CompletionBadge({ complete, loading }: { complete: boolean; loading: boolean }) {
   if (loading) {
-    return <span className="inline-flex items-center gap-1 text-[11px] text-blue-500 animate-pulse">...</span>
+    return <span className="inline-flex items-center gap-1 text-[11px] text-gold-500 animate-pulse">...</span>
   }
   if (complete) {
     return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-[11px] font-medium">
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[11px] font-medium">
         <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
         </svg>
@@ -45,7 +45,7 @@ function CompletionBadge({ complete, loading }: { complete: boolean; loading: bo
     )
   }
   return (
-    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 text-[11px] font-medium">
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-cream-200 text-sand-500 text-[11px] font-medium">
       <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
         <circle cx="12" cy="12" r="9" />
       </svg>
@@ -107,32 +107,32 @@ export function ScenarioComparison({ projectId, parameters, onCompletionChange }
   ]
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-      <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
-        <h3 className="font-medium text-gray-900">シナリオ比較</h3>
+    <div className="bg-white rounded-3xl shadow-warm overflow-hidden">
+      <div className="px-5 py-3 border-b border-cream-200 flex items-center justify-between">
+        <h3 className="font-medium text-dark-900">シナリオ比較</h3>
         {isLoading && (
-          <span className="text-xs text-blue-500 animate-pulse">計算中...</span>
+          <span className="text-xs text-gold-500 animate-pulse">計算中...</span>
         )}
       </div>
       {scenarioError && (
-        <div className="px-4 py-2 bg-red-50 border-b border-red-100 text-xs text-red-600">
+        <div className="px-4 py-2 bg-red-50/50 border-b border-red-100 text-xs text-red-600">
           シナリオ計算エラー: {(scenarioError as Error).message}
         </div>
       )}
       <table className="w-full text-sm">
-        <thead className="bg-gray-50">
+        <thead className="bg-cream-100">
           <tr>
-            <th className="text-left px-4 py-2 text-gray-500 font-medium">KPI</th>
-            <th className="text-right px-4 py-2 text-blue-600 font-medium">Base</th>
+            <th className="text-left px-4 py-2 text-sand-500 font-medium">KPI</th>
+            <th className="text-right px-4 py-2 text-dark-900 font-medium">Base</th>
             <th className="text-right px-4 py-2 text-green-600 font-medium">Best</th>
             <th className="text-right px-4 py-2 text-red-600 font-medium">Worst</th>
-            <th className="text-right px-4 py-2 text-gray-500 font-medium">Delta (B-W)</th>
+            <th className="text-right px-4 py-2 text-sand-500 font-medium">Delta (B-W)</th>
           </tr>
         </thead>
         <tbody className={isLoading ? 'opacity-50 transition-opacity' : 'transition-opacity'}>
           {/* Completion status row */}
-          <tr className="border-t border-gray-200 bg-blue-50/50">
-            <td className="px-4 py-2 text-gray-600 font-medium">設定状況</td>
+          <tr className="border-t border-cream-200 bg-cream-100">
+            <td className="px-4 py-2 text-sand-600 font-medium">設定状況</td>
             <td className="px-4 py-2 text-right">
               <CompletionBadge complete={baseComplete} loading={baseFetching} />
             </td>
@@ -146,7 +146,7 @@ export function ScenarioComparison({ projectId, parameters, onCompletionChange }
               {baseComplete && bestComplete && worstComplete ? (
                 <span className="text-[11px] text-green-600 font-medium">全シナリオ完了</span>
               ) : (
-                <span className="text-[11px] text-gray-400">
+                <span className="text-[11px] text-sand-400">
                   {[baseComplete, bestComplete, worstComplete].filter(Boolean).length}/3 完了
                 </span>
               )}
@@ -159,31 +159,31 @@ export function ScenarioComparison({ projectId, parameters, onCompletionChange }
             const delta = bestVal != null && worstVal != null ? bestVal - worstVal : undefined
 
             return (
-              <tr key={row.key} className="border-t border-gray-100">
-                <td className="px-4 py-2 text-gray-700">{row.label}</td>
+              <tr key={row.key} className="border-t border-cream-200">
+                <td className="px-4 py-2 text-dark-900">{row.label}</td>
                 <td className="px-4 py-2 text-right font-mono">{formatYen(baseVal)}</td>
                 <td className="px-4 py-2 text-right font-mono text-green-700">{formatYen(bestVal)}</td>
                 <td className="px-4 py-2 text-right font-mono text-red-700">{formatYen(worstVal)}</td>
-                <td className="px-4 py-2 text-right font-mono text-gray-500">
+                <td className="px-4 py-2 text-right font-mono text-sand-500">
                   {delta != null ? `+${formatYen(delta)}` : '-'}
                 </td>
               </tr>
             )
           })}
           {/* KPI rows */}
-          <tr className="border-t border-gray-200 bg-gray-50">
-            <td className="px-4 py-2 text-gray-700">黒字化年度</td>
+          <tr className="border-t border-cream-200 bg-cream-100">
+            <td className="px-4 py-2 text-dark-900">黒字化年度</td>
             <td className="px-4 py-2 text-right font-mono">{baseData?.kpis?.break_even_year || '-'}</td>
             <td className="px-4 py-2 text-right font-mono text-green-700">{bestData?.kpis?.break_even_year || '-'}</td>
             <td className="px-4 py-2 text-right font-mono text-red-700">{worstData?.kpis?.break_even_year || '-'}</td>
-            <td className="px-4 py-2 text-right text-gray-400">-</td>
+            <td className="px-4 py-2 text-right text-sand-400">-</td>
           </tr>
-          <tr className="border-t border-gray-100 bg-gray-50">
-            <td className="px-4 py-2 text-gray-700">売上 CAGR</td>
+          <tr className="border-t border-cream-200 bg-cream-100">
+            <td className="px-4 py-2 text-dark-900">売上 CAGR</td>
             <td className="px-4 py-2 text-right font-mono">{baseData?.kpis?.revenue_cagr != null ? `${(baseData.kpis.revenue_cagr * 100).toFixed(0)}%` : '-'}</td>
             <td className="px-4 py-2 text-right font-mono text-green-700">{bestData?.kpis?.revenue_cagr != null ? `${(bestData.kpis.revenue_cagr * 100).toFixed(0)}%` : '-'}</td>
             <td className="px-4 py-2 text-right font-mono text-red-700">{worstData?.kpis?.revenue_cagr != null ? `${(worstData.kpis.revenue_cagr * 100).toFixed(0)}%` : '-'}</td>
-            <td className="px-4 py-2 text-right text-gray-400">-</td>
+            <td className="px-4 py-2 text-right text-sand-400">-</td>
           </tr>
         </tbody>
       </table>

@@ -62,14 +62,15 @@ export default function Phase2Page() {
     >
       {/* Trigger button (if not started) */}
       {!isProcessing && !isComplete && !isFailed && (
-        <div className="text-center py-12 bg-gray-50 rounded-lg border border-dashed border-gray-300">
-          <p className="text-gray-500 mb-4">Phase 2 分析を開始してください</p>
+        <div className="text-center py-16 bg-white rounded-3xl shadow-warm">
+          <div className="w-14 h-14 rounded-2xl bg-cream-200 flex items-center justify-center mx-auto mb-4 text-2xl">📊</div>
+          <p className="text-sand-500 mb-5">Phase 2 分析を開始してください</p>
           {!projectState ? (
-            <p className="text-sm text-gray-400">プロジェクト情報を読み込み中...</p>
+            <p className="text-sm text-sand-400">プロジェクト情報を読み込み中...</p>
           ) : (
             <button
               onClick={function() { trigger({ document_id: documentId }) }}
-              className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700"
+              className="bg-dark-900 text-white px-6 py-3 rounded-2xl hover:bg-dark-800 font-medium shadow-warm-md transition-all"
             >
               ビジネスモデル分析を実行
             </button>
@@ -84,16 +85,22 @@ export default function Phase2Page() {
 
       {/* Processing state */}
       {isProcessing && (
-        <div className="text-center py-12">
-          <div className="inline-block w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mb-4" />
-          <p className="text-gray-600">ビジネスモデルを分析中... ({progress}%)</p>
-          <div className="w-64 mx-auto mt-2 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+        <div className="text-center py-16">
+          <div className="relative w-14 h-14 mx-auto mb-6">
+            <div className="absolute inset-0 border-3 border-cream-300 rounded-full" />
+            <div className="absolute inset-0 border-3 border-gold-500 rounded-full animate-spin border-t-transparent" />
+            <span className="absolute inset-0 flex items-center justify-center text-sm font-bold text-gold-600">
+              {progress}%
+            </span>
+          </div>
+          <p className="text-dark-900 font-medium">ビジネスモデルを分析中...</p>
+          <div className="w-64 mx-auto mt-3 h-1.5 bg-cream-300 rounded-full overflow-hidden">
             <div
-              className="h-full bg-blue-500 rounded-full transition-all duration-500"
+              className="h-full bg-gold-500 rounded-full transition-all duration-500"
               style={{ width: progress + '%' }}
             />
           </div>
-          <p className="text-xs text-gray-400 mt-2">
+          <p className="text-xs text-sand-400 mt-2">
             {logMsg || (progress < 20
               ? 'ドキュメントを準備中...'
               : progress < 80
@@ -105,11 +112,11 @@ export default function Phase2Page() {
 
       {/* Error state */}
       {isFailed && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
-          <p className="text-sm text-red-700">分析に失敗しました: {error}</p>
+        <div className="bg-red-50 rounded-2xl p-5 mb-6">
+          <p className="text-sm text-red-600">分析に失敗しました: {error}</p>
           <button
             onClick={function() { trigger({ document_id: documentId }) }}
-            className="mt-2 text-sm text-red-600 hover:underline"
+            className="mt-3 text-sm text-red-500 hover:text-red-600 font-medium transition-colors"
           >
             再試行
           </button>
@@ -124,29 +131,29 @@ export default function Phase2Page() {
               <button
                 key={proposal.label || idx}
                 onClick={function() { setSelectedIndex(idx) }}
-                className={'text-left p-5 rounded-lg border-2 transition-all ' + (
+                className={'text-left p-6 rounded-3xl transition-all ' + (
                   selectedIndex === idx
-                    ? 'border-blue-500 bg-blue-50 shadow-md'
-                    : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm'
+                    ? 'bg-white ring-2 ring-gold-400 shadow-warm-md'
+                    : 'bg-white shadow-warm hover:shadow-warm-md'
                 )}
               >
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="font-semibold text-gray-900">{proposal.label}</h3>
-                  <span className={'text-xs font-medium px-2 py-0.5 rounded ' + (
-                    (proposal.confidence || 0) >= 0.8 ? 'bg-green-100 text-green-700' :
-                    (proposal.confidence || 0) >= 0.5 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-semibold text-dark-900">{proposal.label}</h3>
+                  <span className={'text-xs font-medium px-2.5 py-1 rounded-full ' + (
+                    (proposal.confidence || 0) >= 0.8 ? 'bg-emerald-50 text-emerald-700' :
+                    (proposal.confidence || 0) >= 0.5 ? 'bg-amber-50 text-amber-700' : 'bg-red-50 text-red-600'
                   )}>
                     {Math.round((proposal.confidence || 0) * 100)}%
                   </span>
                 </div>
-                <p className="text-sm text-gray-600 mb-3">{proposal.executive_summary || proposal.description || ''}</p>
-                <div className="flex flex-wrap gap-1">
+                <p className="text-sm text-sand-500 mb-3">{proposal.executive_summary || proposal.description || ''}</p>
+                <div className="flex flex-wrap gap-1.5">
                   {(proposal.segments || []).map(function(seg: any) {
                     var segName = typeof seg === 'string' ? seg : seg.name
                     return (
                       <span
                         key={segName}
-                        className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded"
+                        className="text-xs bg-cream-200 text-sand-600 px-2 py-0.5 rounded-full"
                       >
                         {segName}
                       </span>
@@ -161,9 +168,9 @@ export default function Phase2Page() {
 
       {/* Completed but raw JSON view */}
       {isComplete && proposals.length === 0 && result && (
-        <div className="bg-gray-50 rounded-lg border border-gray-200 p-4">
-          <p className="text-sm text-gray-500 mb-2">分析結果（生データ）</p>
-          <pre className="text-xs bg-white p-4 rounded max-h-64 overflow-auto">
+        <div className="bg-white rounded-3xl shadow-warm p-5">
+          <p className="text-sm text-sand-500 mb-2">分析結果（生データ）</p>
+          <pre className="text-xs bg-cream-100 p-4 rounded-2xl max-h-64 overflow-auto">
             {JSON.stringify(result, null, 2)}
           </pre>
         </div>
@@ -171,26 +178,26 @@ export default function Phase2Page() {
 
       {/* Selected proposal → confirmation + next phase */}
       {selectedIndex != null && proposals[selectedIndex] && (
-        <div className="mt-6 p-4 bg-green-50 border border-green-200 rounded-lg">
+        <div className="mt-6 p-5 bg-white rounded-3xl shadow-warm">
           <div className="flex items-center justify-between mb-3">
-            <p className="text-sm text-green-700 font-medium">
+            <p className="text-sm text-dark-900 font-semibold">
               シナリオ確定: <strong>{proposals[selectedIndex].label}</strong>
             </p>
             {(proposals[selectedIndex].confidence || 0) < 0.5 && (
-              <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded">
+              <span className="text-xs bg-amber-50 text-amber-600 px-2.5 py-1 rounded-full">
                 信頼度が低いため、結果の確認を推奨します
               </span>
             )}
           </div>
           {proposals[selectedIndex].executive_summary && (
-            <p className="text-xs text-gray-600 mb-3">{proposals[selectedIndex].executive_summary}</p>
+            <p className="text-xs text-sand-500 mb-3">{proposals[selectedIndex].executive_summary}</p>
           )}
           {(proposals[selectedIndex].segments || []).length > 0 && (
-            <div className="flex flex-wrap gap-1 mb-3">
+            <div className="flex flex-wrap gap-1.5 mb-4">
               {proposals[selectedIndex].segments.map(function(seg: any) {
                 var segName = typeof seg === 'string' ? seg : seg.name
                 return (
-                  <span key={segName} className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">
+                  <span key={segName} className="text-xs bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full">
                     {segName}
                   </span>
                 )
@@ -200,24 +207,24 @@ export default function Phase2Page() {
           <div className="flex items-center justify-end gap-3">
             <button
               onClick={function() { setSelectedIndex(null) }}
-              className="text-sm text-gray-500 hover:text-gray-700"
+              className="text-sm text-sand-500 hover:text-dark-900 transition-colors"
             >
               選択を変更
             </button>
             <button
               onClick={handleSelectAndProceed}
               disabled={saveSelection.isPending}
-              className="bg-blue-600 text-white px-5 py-2 rounded-lg hover:bg-blue-700 text-sm disabled:opacity-50"
+              className="bg-dark-900 text-white px-5 py-2.5 rounded-2xl hover:bg-dark-800 text-sm font-medium disabled:opacity-50 shadow-warm-sm transition-all"
             >
               {saveSelection.isPending ? '保存中...' : 'このシナリオで確定 → Phase 3'}
             </button>
           </div>
           {saveError && (
-            <div className="mt-3 flex items-center justify-between bg-red-50 border border-red-200 rounded p-3">
-              <p className="text-xs text-red-600">保存に失敗しました: {saveError}</p>
+            <div className="mt-3 flex items-center justify-between bg-red-50 rounded-2xl p-3">
+              <p className="text-xs text-red-500">保存に失敗しました: {saveError}</p>
               <button
                 onClick={handleSkipAndProceed}
-                className="text-xs text-blue-600 hover:underline ml-3 whitespace-nowrap"
+                className="text-xs text-gold-600 hover:text-gold-500 ml-3 whitespace-nowrap font-medium"
               >
                 保存をスキップして進む
               </button>

@@ -55,34 +55,34 @@ export function FranchisePanel({ config, onChange }: Props) {
     <div className="space-y-5">
       {/* FC parameters */}
       <div>
-        <h4 className="text-xs font-semibold text-gray-700 mb-2">フランチャイズ条件</h4>
+        <h4 className="text-xs font-semibold text-sand-600 mb-2">フランチャイズ条件</h4>
         <div className="bg-lime-50 rounded-lg border border-lime-200 p-3 space-y-2 text-[11px]">
           <div className="flex items-center justify-between">
-            <span className="text-gray-500">加盟金</span>
+            <span className="text-sand-500">加盟金</span>
             <span>
               <CellInput value={config.initial_fee} onChange={function(v) { onChange({ ...config, initial_fee: v }) }} integer />
-              <span className="text-[10px] text-gray-400">円</span>
+              <span className="text-[10px] text-sand-400">円</span>
             </span>
           </div>
           <div className="flex items-center justify-between">
-            <span className="text-gray-500">ロイヤリティ率</span>
+            <span className="text-sand-500">ロイヤリティ率</span>
             <span>
               <CellInput value={config.royalty_rate * 100} onChange={function(v) { onChange({ ...config, royalty_rate: v / 100 }) }} />
-              <span className="text-[10px] text-gray-400">%</span>
+              <span className="text-[10px] text-sand-400">%</span>
             </span>
           </div>
           <div className="flex items-center justify-between">
-            <span className="text-gray-500">平均店舗月商</span>
+            <span className="text-sand-500">平均店舗月商</span>
             <span>
               <CellInput value={config.avg_store_monthly_revenue} onChange={function(v) { onChange({ ...config, avg_store_monthly_revenue: v }) }} integer />
-              <span className="text-[10px] text-gray-400">円</span>
+              <span className="text-[10px] text-sand-400">円</span>
             </span>
           </div>
           <div className="flex items-center justify-between">
-            <span className="text-gray-500">店舗サポートコスト/月</span>
+            <span className="text-sand-500">店舗サポートコスト/月</span>
             <span>
               <CellInput value={config.support_cost_per_store} onChange={function(v) { onChange({ ...config, support_cost_per_store: v }) }} integer />
-              <span className="text-[10px] text-gray-400">円</span>
+              <span className="text-[10px] text-sand-400">円</span>
             </span>
           </div>
         </div>
@@ -90,12 +90,12 @@ export function FranchisePanel({ config, onChange }: Props) {
 
       {/* Store count + revenue projections */}
       <div>
-        <h4 className="text-xs font-semibold text-gray-700 mb-2">店舗展開計画</h4>
+        <h4 className="text-xs font-semibold text-sand-600 mb-2">店舗展開計画</h4>
         <div className="bg-lime-50 rounded-lg border border-lime-200 overflow-x-auto">
           <table className="w-full text-[11px]">
             <thead>
               <tr className="border-b border-lime-300">
-                <th className="text-left px-3 py-2 text-gray-500 font-medium">指標</th>
+                <th className="text-left px-3 py-2 text-sand-500 font-medium">指標</th>
                 {FY_LABELS.map(function(fy) {
                   return <th key={fy} className="text-right px-3 py-2 text-lime-700 font-medium">{fy}</th>
                 })}
@@ -103,7 +103,7 @@ export function FranchisePanel({ config, onChange }: Props) {
             </thead>
             <tbody>
               <tr className="border-b border-lime-100 hover:bg-white/50">
-                <td className="px-3 py-2 font-medium text-gray-700">累計店舗数</td>
+                <td className="px-3 py-2 font-medium text-sand-600">累計店舗数</td>
                 {FY_LABELS.map(function(_, fi) {
                   return (
                     <td key={fi} className="px-3 py-2 text-right">
@@ -113,31 +113,31 @@ export function FranchisePanel({ config, onChange }: Props) {
                 })}
               </tr>
               <tr className="border-b border-lime-100 hover:bg-white/50">
-                <td className="px-3 py-2 text-gray-500">新規出店数</td>
+                <td className="px-3 py-2 text-sand-500">新規出店数</td>
                 {fyNewStores.map(function(n, fi) {
-                  return <td key={fi} className="px-3 py-2 text-right font-mono text-gray-600">{n}</td>
+                  return <td key={fi} className="px-3 py-2 text-right font-mono text-sand-600">{n}</td>
                 })}
               </tr>
               <tr className="border-b border-lime-100 bg-lime-100/30">
-                <td className="px-3 py-2 text-gray-500">加盟金収入</td>
+                <td className="px-3 py-2 text-sand-500">加盟金収入</td>
                 {fyInitialFeeRev.map(function(rev, fi) {
-                  return <td key={fi} className="px-3 py-2 text-right font-mono text-gray-600">{formatYen(rev)}円</td>
+                  return <td key={fi} className="px-3 py-2 text-right font-mono text-sand-600">{formatYen(rev)}円</td>
                 })}
               </tr>
               <tr className="border-b border-lime-100 bg-lime-100/30">
-                <td className="px-3 py-2 text-gray-500">ロイヤリティ収入</td>
+                <td className="px-3 py-2 text-sand-500">ロイヤリティ収入</td>
                 {fyRoyaltyRev.map(function(rev, fi) {
-                  return <td key={fi} className="px-3 py-2 text-right font-mono text-gray-600">{formatYen(rev)}円</td>
+                  return <td key={fi} className="px-3 py-2 text-right font-mono text-sand-600">{formatYen(rev)}円</td>
                 })}
               </tr>
               <tr className="border-b border-lime-200 bg-lime-100/30">
-                <td className="px-3 py-2 text-gray-500">サポートコスト</td>
+                <td className="px-3 py-2 text-sand-500">サポートコスト</td>
                 {fySupportCost.map(function(cost, fi) {
                   return <td key={fi} className="px-3 py-2 text-right font-mono text-red-500">-{formatYen(cost)}円</td>
                 })}
               </tr>
               <tr className="border-t-2 border-lime-300 bg-lime-100/50">
-                <td className="px-3 py-2 font-semibold text-gray-700">粗利</td>
+                <td className="px-3 py-2 font-semibold text-sand-600">粗利</td>
                 {fyGrossProfit.map(function(gp, fi) {
                   return <td key={fi} className="px-3 py-2 text-right font-mono font-bold text-lime-700">{formatYen(gp)}円</td>
                 })}
@@ -165,7 +165,7 @@ function CellInput({ value, onChange, integer }: { value: number; onChange: (v: 
       autoFocus className="w-16 text-right bg-white border border-lime-400 rounded px-1 py-0.5 text-[11px] font-mono outline-none focus:ring-1 focus:ring-lime-500" />
   )
   return (
-    <button onClick={startEdit} className="font-mono text-[11px] text-gray-900 px-1 py-0.5 rounded border border-transparent hover:border-lime-400 hover:bg-lime-50 cursor-pointer transition-colors">
+    <button onClick={startEdit} className="font-mono text-[11px] text-dark-900 px-1 py-0.5 rounded border border-transparent hover:border-lime-400 hover:bg-lime-50 cursor-pointer transition-colors">
       {(integer ? Math.round(value) : value).toLocaleString()}
     </button>
   )

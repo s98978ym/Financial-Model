@@ -101,7 +101,7 @@ function parsePctInput(raw: string): number | null {
 function Trend({ from, to }: { from: number; to: number }) {
   if (to > from * 1.01) return <span className="text-green-500 text-[10px] ml-0.5">▲</span>
   if (to < from * 0.99) return <span className="text-red-500 text-[10px] ml-0.5">▼</span>
-  return <span className="text-gray-400 text-[10px] ml-0.5">─</span>
+  return <span className="text-sand-400 text-[10px] ml-0.5">─</span>
 }
 
 /** Mini 5-year sparkline */
@@ -134,12 +134,12 @@ function EV({ value, display, paramKey, parse, onCommit, className }: {
       onChange={function(e) { setDraft(e.target.value) }}
       onBlur={function() { var p = parse(draft); if (p !== null && !isNaN(p)) onCommit(paramKey, p); setEditing(false) }}
       onKeyDown={function(e) { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); else if (e.key === 'Escape') setEditing(false) }}
-      className="inline-block w-20 px-1 py-0 text-xs font-bold text-blue-700 bg-blue-50 border border-blue-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-400"
+      className="inline-block w-20 px-1 py-0 text-xs font-bold text-gold-600 bg-cream-100 border border-gold-300 rounded focus:outline-none focus:ring-1 focus:ring-gold-400"
     />
   )
   return (
     <button onClick={function() { setDraft(display); setEditing(true) }}
-      className={'inline-block px-1 py-0 text-xs font-bold text-blue-700 bg-blue-50/80 rounded border border-transparent hover:border-blue-300 cursor-pointer transition-colors ' + (className || '')}
+      className={'inline-block px-1 py-0 text-xs font-bold text-gold-600 bg-cream-100 rounded border border-transparent hover:border-gold-300 cursor-pointer transition-colors ' + (className || '')}
       title="クリックして編集">
       {display}
     </button>
@@ -156,14 +156,14 @@ function Section({ color, label, summary, badge, expanded, onToggle, children }:
       <button onClick={onToggle} className="w-full text-left group">
         <div className="flex items-center gap-2 mb-1">
           <div className={'w-2 h-2 rounded-full ' + color} />
-          <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">{label}</span>
+          <span className="text-[11px] font-semibold text-sand-500 uppercase tracking-wide">{label}</span>
           {badge}
-          <svg className={'w-3.5 h-3.5 text-gray-400 ml-auto transition-transform ' + (expanded ? 'rotate-180' : '')}
+          <svg className={'w-3.5 h-3.5 text-sand-400 ml-auto transition-transform ' + (expanded ? 'rotate-180' : '')}
             fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
           </svg>
         </div>
-        <div className="ml-4 text-xs text-gray-600">{summary}</div>
+        <div className="ml-4 text-xs text-sand-600">{summary}</div>
       </button>
       {expanded && <div className="ml-4 mt-2">{children}</div>}
     </div>
@@ -175,13 +175,13 @@ function DetailRow({ label, value, sub, spark, sparkColor, children }: {
   label: string; value: string; sub?: string; spark?: number[]; sparkColor?: string; children?: React.ReactNode
 }) {
   return (
-    <div className="flex items-center gap-2 py-1.5 border-b border-gray-50 last:border-0">
+    <div className="flex items-center gap-2 py-1.5 border-b border-cream-100 last:border-0">
       <div className="flex-1 min-w-0">
-        <div className="text-[11px] text-gray-600 truncate">{label}</div>
-        {sub && <div className="text-[9px] text-gray-400">{sub}</div>}
+        <div className="text-[11px] text-sand-600 truncate">{label}</div>
+        {sub && <div className="text-[9px] text-sand-400">{sub}</div>}
       </div>
-      {spark && <Spark values={spark} color={sparkColor || 'bg-blue-400'} />}
-      <div className="text-xs font-mono font-medium text-gray-900 text-right whitespace-nowrap">{value}</div>
+      {spark && <Spark values={spark} color={sparkColor || 'bg-gold-400'} />}
+      <div className="text-xs font-mono font-medium text-dark-900 text-right whitespace-nowrap">{value}</div>
       {children}
     </div>
   )
@@ -191,9 +191,9 @@ function DetailRow({ label, value, sub, spark, sparkColor, children }: {
 var SGA_META: Record<string, { label: string; color: string; textColor: string }> = {
   payroll:   { label: '人件費',     color: 'bg-orange-400', textColor: 'text-orange-700' },
   marketing: { label: 'マーケ費',   color: 'bg-purple-400', textColor: 'text-purple-700' },
-  office:    { label: 'オフィス',   color: 'bg-gray-400',   textColor: 'text-gray-600' },
+  office:    { label: 'オフィス',   color: 'bg-sand-400',   textColor: 'text-sand-600' },
   system:    { label: 'システム',   color: 'bg-cyan-400',   textColor: 'text-cyan-700' },
-  other:     { label: 'その他',     color: 'bg-gray-300',   textColor: 'text-gray-500' },
+  other:     { label: 'その他',     color: 'bg-sand-300',   textColor: 'text-sand-500' },
 }
 var SGA_KEYS = ['payroll', 'marketing', 'office', 'system', 'other'] as const
 
@@ -220,23 +220,23 @@ export function ModelOverview({ parameters, kpis, plSummary, industry, onParamet
   var sgaTotal = sgaBreakdown ? SGA_KEYS.reduce(function(s, k) { return s + (sgaBreakdown![k][0] || 0) }, 0) : opexBase
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+    <div className="bg-white rounded-3xl shadow-warm overflow-hidden">
       {/* Header */}
-      <div className="px-4 py-2.5 border-b border-gray-100 bg-gradient-to-r from-indigo-50 to-blue-50 flex items-center justify-between">
+      <div className="px-4 py-2.5 border-b border-cream-200 bg-cream-100 flex items-center justify-between">
         <div>
-          <h3 className="font-semibold text-gray-900 text-sm">モデル全体像</h3>
-          <p className="text-[10px] text-gray-500 mt-0.5">各セクションをクリックで詳細展開 / 青字は直接編集可</p>
+          <h3 className="font-semibold text-dark-900 text-sm">モデル全体像</h3>
+          <p className="text-[10px] text-sand-500 mt-0.5">各セクションをクリックで詳細展開 / 青字は直接編集可</p>
         </div>
         {kpis && (
           <div className="flex gap-3">
             <div className="text-center">
-              <div className="text-[9px] text-gray-400">黒字化</div>
+              <div className="text-[9px] text-sand-400">黒字化</div>
               <div className={'text-xs font-bold ' + (kpis.break_even_year ? 'text-green-700' : 'text-red-500')}>
                 {kpis.break_even_year || '未達'}
               </div>
             </div>
             <div className="text-center">
-              <div className="text-[9px] text-gray-400">FY5営業利益率</div>
+              <div className="text-[9px] text-sand-400">FY5営業利益率</div>
               <div className={'text-xs font-bold ' + ((kpis.fy5_op_margin || 0) >= 0 ? 'text-green-700' : 'text-red-500')}>
                 {kpis.fy5_op_margin != null ? formatPct(kpis.fy5_op_margin) : '-'}
               </div>
@@ -252,20 +252,20 @@ export function ModelOverview({ parameters, kpis, plSummary, industry, onParamet
           summary={
             <span>
               FY1 <EV value={revFy1} display={formatYen(revFy1)} paramKey="revenue_fy1" parse={parseYenInput} onCommit={onParameterChange} />
-              <span className="text-gray-400 mx-1">→</span>
-              FY5 <span className="font-bold text-blue-700">{formatYen(revFy5)}</span>
-              <span className="text-gray-400 ml-1.5">年率</span>
+              <span className="text-sand-400 mx-1">→</span>
+              FY5 <span className="font-bold text-gold-600">{formatYen(revFy5)}</span>
+              <span className="text-sand-400 ml-1.5">年率</span>
               <EV value={growthRate} display={formatPct(growthRate)} paramKey="growth_rate" parse={parsePctInput} onCommit={onParameterChange} />
             </span>
           }
-          badge={plSummary ? <Spark values={plSummary.revenue} color="bg-blue-400" /> : undefined}
+          badge={plSummary ? <Spark values={plSummary.revenue} color="bg-gold-400" /> : undefined}
           expanded={revExpanded} onToggle={function() { setRevExpanded(!revExpanded) }}
         >
-          <div className="bg-blue-50 rounded-lg p-3 border border-blue-100 space-y-3">
+          <div className="bg-blue-50/50 rounded-2xl p-3 border border-blue-100 space-y-3">
             {/* Segment cards */}
             {segments && segments.length > 0 && (
               <div>
-                <div className="text-[10px] font-semibold text-blue-600 mb-2">
+                <div className="text-[10px] font-semibold text-gold-600 mb-2">
                   セグメント別 ({segments.length}事業)
                 </div>
                 {/* Composition bar */}
@@ -283,24 +283,24 @@ export function ModelOverview({ parameters, kpis, plSummary, industry, onParamet
                     return (
                       <div key={i} className="bg-white rounded p-2 border border-blue-100">
                         <div className="flex items-center justify-between mb-1">
-                          <span className="text-[11px] font-medium text-gray-800">{seg.name}</span>
-                          <span className="text-[10px] text-gray-400">{(share * 100).toFixed(0)}%</span>
+                          <span className="text-[11px] font-medium text-dark-900">{seg.name}</span>
+                          <span className="text-[10px] text-sand-400">{(share * 100).toFixed(0)}%</span>
                         </div>
                         <div className="grid grid-cols-4 gap-1 text-[10px]">
                           <div>
-                            <div className="text-gray-400">FY1売上</div>
-                            <div className="font-mono font-medium text-gray-800">{formatYen(seg.revenue[0])}</div>
+                            <div className="text-sand-400">FY1売上</div>
+                            <div className="font-mono font-medium text-dark-900">{formatYen(seg.revenue[0])}</div>
                           </div>
                           <div>
-                            <div className="text-gray-400">FY5売上</div>
-                            <div className="font-mono font-medium text-blue-700">{formatYen(seg.revenue[4])}</div>
+                            <div className="text-sand-400">FY5売上</div>
+                            <div className="font-mono font-medium text-gold-600">{formatYen(seg.revenue[4])}</div>
                           </div>
                           <div>
-                            <div className="text-gray-400">成長率</div>
+                            <div className="text-sand-400">成長率</div>
                             <div className="font-mono font-medium text-green-700">{formatPct(seg.growth_rate)}</div>
                           </div>
                           <div>
-                            <div className="text-gray-400">粗利率</div>
+                            <div className="text-sand-400">粗利率</div>
                             <div className="font-mono font-medium text-emerald-700">{formatPct(1 - seg.cogs_rate)}</div>
                           </div>
                         </div>
@@ -313,7 +313,7 @@ export function ModelOverview({ parameters, kpis, plSummary, industry, onParamet
             )}
             {/* Single segment fallback */}
             {(!segments || segments.length <= 1) && (
-              <div className="text-[11px] text-gray-500">
+              <div className="text-[11px] text-sand-500">
                 単一セグメント: 売上 {formatYen(revFy1)} x (1+{formatPct(growthRate)})^n
               </div>
             )}
@@ -321,7 +321,7 @@ export function ModelOverview({ parameters, kpis, plSummary, industry, onParamet
         </Section>
 
         {/* Arrow */}
-        <div className="flex justify-center"><div className="w-px h-3 bg-gray-200" /></div>
+        <div className="flex justify-center"><div className="w-px h-3 bg-cream-200" /></div>
 
         {/* ═══════ 2. COGS & GROSS PROFIT ═══════ */}
         <Section
@@ -329,15 +329,15 @@ export function ModelOverview({ parameters, kpis, plSummary, industry, onParamet
           summary={
             <span>
               原価率 <EV value={cogsRate} display={formatPct(cogsRate)} paramKey="cogs_rate" parse={parsePctInput} onCommit={onParameterChange} />
-              <span className="text-gray-400 mx-1">→</span>
+              <span className="text-sand-400 mx-1">→</span>
               粗利率 <span className="font-bold text-emerald-700">{formatPct(grossMargin)}</span>
-              {plSummary && <span className="text-gray-400 ml-1">(FY1粗利 {formatYen(plSummary.gross_profit[0])})</span>}
+              {plSummary && <span className="text-sand-400 ml-1">(FY1粗利 {formatYen(plSummary.gross_profit[0])})</span>}
             </span>
           }
           badge={plSummary ? <Spark values={plSummary.gross_profit} color="bg-emerald-400" /> : undefined}
           expanded={costExpanded} onToggle={function() { setCostExpanded(!costExpanded) }}
         >
-          <div className="bg-amber-50 rounded-lg p-3 border border-amber-100">
+          <div className="bg-amber-50/50 rounded-2xl p-3 border border-amber-100">
             {/* Per-segment COGS comparison */}
             {segments && segments.length > 1 && (
               <div className="space-y-1.5 mb-3">
@@ -345,11 +345,11 @@ export function ModelOverview({ parameters, kpis, plSummary, industry, onParamet
                 {segments.map(function(seg, i) {
                   return (
                     <div key={i} className="flex items-center gap-2">
-                      <div className="w-20 text-[10px] text-gray-600 truncate">{seg.name}</div>
-                      <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                      <div className="w-20 text-[10px] text-sand-600 truncate">{seg.name}</div>
+                      <div className="flex-1 h-2 bg-cream-100 rounded-full overflow-hidden">
                         <div className="h-full bg-amber-400 rounded-full" style={{ width: (seg.cogs_rate * 100) + '%' }} />
                       </div>
-                      <div className="text-[10px] font-mono text-gray-700 w-8 text-right">{formatPct(seg.cogs_rate)}</div>
+                      <div className="text-[10px] font-mono text-sand-600 w-8 text-right">{formatPct(seg.cogs_rate)}</div>
                       <div className="text-[10px] text-emerald-600 w-12 text-right">粗利{formatPct(1 - seg.cogs_rate)}</div>
                     </div>
                   )
@@ -366,8 +366,8 @@ export function ModelOverview({ parameters, kpis, plSummary, industry, onParamet
                     var rev = plSummary!.revenue[i] || 1
                     return (
                       <div key={fy} className="flex-1 text-center">
-                        <div className="text-[9px] text-gray-400">{fy}</div>
-                        <div className="text-[10px] font-mono font-medium text-gray-800">{formatYen(gp)}</div>
+                        <div className="text-[9px] text-sand-400">{fy}</div>
+                        <div className="text-[10px] font-mono font-medium text-dark-900">{formatYen(gp)}</div>
                         <div className="text-[9px] text-emerald-600">{formatPct(gp / rev)}</div>
                       </div>
                     )
@@ -379,7 +379,7 @@ export function ModelOverview({ parameters, kpis, plSummary, industry, onParamet
         </Section>
 
         {/* Arrow */}
-        <div className="flex justify-center"><div className="w-px h-3 bg-gray-200" /></div>
+        <div className="flex justify-center"><div className="w-px h-3 bg-cream-200" /></div>
 
         {/* ═══════ 3. SGA / OPEX ═══════ */}
         <Section
@@ -387,16 +387,16 @@ export function ModelOverview({ parameters, kpis, plSummary, industry, onParamet
           summary={
             <span>
               FY1 <EV value={opexBase} display={formatYen(opexBase)} paramKey="opex_base" parse={parseYenInput} onCommit={onParameterChange} />
-              <span className="text-gray-400 mx-1">→</span>
+              <span className="text-sand-400 mx-1">→</span>
               FY5 <span className="font-bold text-red-600">{formatYen(opexFy5)}</span>
-              <span className="text-gray-400 ml-1.5">年率+</span>
+              <span className="text-sand-400 ml-1.5">年率+</span>
               <EV value={opexGrowth} display={formatPct(opexGrowth)} paramKey="opex_growth" parse={parsePctInput} onCommit={onParameterChange} />
             </span>
           }
           badge={plSummary ? <Spark values={plSummary.opex} color="bg-red-400" /> : undefined}
           expanded={sgaExpanded} onToggle={function() { setSgaExpanded(!sgaExpanded) }}
         >
-          <div className="bg-red-50 rounded-lg p-3 border border-red-100 space-y-3">
+          <div className="bg-red-50/50 rounded-2xl p-3 border border-red-100 space-y-3">
             {/* Composition bar */}
             {sgaBreakdown && (
               <div>
@@ -428,8 +428,8 @@ export function ModelOverview({ parameters, kpis, plSummary, industry, onParamet
                           <div className={'w-2 h-2 rounded-full ' + meta.color} />
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-1">
-                              <span className="text-[11px] font-medium text-gray-700">{meta.label}</span>
-                              <span className="text-[9px] text-gray-400">{pct.toFixed(0)}%</span>
+                              <span className="text-[11px] font-medium text-sand-600">{meta.label}</span>
+                              <span className="text-[9px] text-sand-400">{pct.toFixed(0)}%</span>
                               {isPayroll && sgaDetail && (
                                 <button onClick={function(e) { e.stopPropagation(); setPayrollOpen(!payrollOpen) }}
                                   className="text-[9px] text-orange-500 hover:text-orange-700 ml-0.5">
@@ -440,8 +440,8 @@ export function ModelOverview({ parameters, kpis, plSummary, industry, onParamet
                           </div>
                           <Spark values={vals} color={meta.color} />
                           <div className="text-right">
-                            <div className="text-[11px] font-mono font-medium text-gray-800">{formatYen(fy1)}</div>
-                            {fy5 !== fy1 && <div className="text-[9px] text-gray-400">→ {formatYen(fy5)}</div>}
+                            <div className="text-[11px] font-mono font-medium text-dark-900">{formatYen(fy1)}</div>
+                            {fy5 !== fy1 && <div className="text-[9px] text-sand-400">→ {formatYen(fy5)}</div>}
                           </div>
                         </div>
 
@@ -455,10 +455,10 @@ export function ModelOverview({ parameters, kpis, plSummary, industry, onParamet
                               var cost = sal * hc
                               return (
                                 <div key={rk} className="flex items-center gap-1 py-0.5 border-b border-orange-100 last:border-0">
-                                  <div className="w-16 text-[10px] text-gray-600 truncate">{role.label}</div>
-                                  <div className="flex-1 text-[10px] font-mono text-gray-500">
+                                  <div className="w-16 text-[10px] text-sand-600 truncate">{role.label}</div>
+                                  <div className="flex-1 text-[10px] font-mono text-sand-500">
                                     <EV value={sal} display={(sal / 1e4).toFixed(0) + '万'} paramKey={'pr_' + rk + '_salary'} parse={parseYenInput} onCommit={onParameterChange} />
-                                    <span className="text-gray-400"> x </span>
+                                    <span className="text-sand-400"> x </span>
                                     <EV value={hc} display={hc + '人'} paramKey={'pr_' + rk + '_hc'}
                                       parse={function(r) { var n = parseInt(r); return isNaN(n) ? null : n }}
                                       onCommit={onParameterChange} />
@@ -467,7 +467,7 @@ export function ModelOverview({ parameters, kpis, plSummary, industry, onParamet
                                     {formatYen(cost)}
                                   </div>
                                   <Spark values={role.cost} color="bg-orange-300" />
-                                  <div className="text-[9px] text-gray-400 w-12 text-right">
+                                  <div className="text-[9px] text-sand-400 w-12 text-right">
                                     →{role.headcount[4] || Math.round(hc * 1.2 ** 4)}人
                                   </div>
                                 </div>
@@ -485,7 +485,7 @@ export function ModelOverview({ parameters, kpis, plSummary, industry, onParamet
         </Section>
 
         {/* Arrow */}
-        <div className="flex justify-center"><div className="w-px h-3 bg-gray-200" /></div>
+        <div className="flex justify-center"><div className="w-px h-3 bg-cream-200" /></div>
 
         {/* ═══════ 4. INVESTMENT / DEPRECIATION ═══════ */}
         <Section
@@ -494,17 +494,17 @@ export function ModelOverview({ parameters, kpis, plSummary, industry, onParamet
             plSummary && plSummary.depreciation && plSummary.capex ? (
               <span>
                 CAPEX {formatYen(plSummary.capex[0])}/年
-                <span className="text-gray-400 mx-1">|</span>
+                <span className="text-sand-400 mx-1">|</span>
                 償却 {formatYen(plSummary.depreciation[0])}/年
                 {plSummary.depreciation[4] !== plSummary.depreciation[0] && (
-                  <span className="text-gray-400"> → {formatYen(plSummary.depreciation[4])}</span>
+                  <span className="text-sand-400"> → {formatYen(plSummary.depreciation[4])}</span>
                 )}
               </span>
-            ) : <span className="text-gray-400">CAPEX・減価償却なし</span>
+            ) : <span className="text-sand-400">CAPEX・減価償却なし</span>
           }
           expanded={investExpanded} onToggle={function() { setInvestExpanded(!investExpanded) }}
         >
-          <div className="bg-slate-50 rounded-lg p-3 border border-slate-200 space-y-2">
+          <div className="bg-slate-50/50 rounded-2xl p-3 border border-slate-200 space-y-2">
             <DetailRow label="年間CAPEX" value={formatYen(parameters.capex || 0)}
               spark={plSummary?.capex} sparkColor="bg-slate-400" />
             <DetailRow label="減価償却費" value={formatYen(parameters.depreciation || 0)}
@@ -521,13 +521,13 @@ export function ModelOverview({ parameters, kpis, plSummary, industry, onParamet
         </Section>
 
         {/* Arrow */}
-        <div className="flex justify-center"><div className="w-px h-3 bg-gray-200" /></div>
+        <div className="flex justify-center"><div className="w-px h-3 bg-cream-200" /></div>
 
         {/* ═══════ 5. PROFITABILITY & TARGETS ═══════ */}
         <div>
           <div className="flex items-center gap-2 mb-1">
             <div className="w-2 h-2 rounded-full bg-green-500" />
-            <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">収益性・目標</span>
+            <span className="text-[11px] font-semibold text-sand-500 uppercase tracking-wide">収益性・目標</span>
           </div>
 
           {/* 5-year waterfall */}
@@ -546,7 +546,7 @@ export function ModelOverview({ parameters, kpis, plSummary, industry, onParamet
                         <div className={'w-full rounded-t ' + (pos ? 'bg-green-400' : 'bg-red-400')}
                           style={{ height: Math.max(barH, 6) + '%' }} />
                       </div>
-                      <div className="text-[9px] text-gray-400">{fy}</div>
+                      <div className="text-[9px] text-sand-400">{fy}</div>
                       <div className={'text-[9px] font-mono font-medium ' + (pos ? 'text-green-600' : 'text-red-500')}>
                         {formatYen(op)}
                       </div>
@@ -558,7 +558,7 @@ export function ModelOverview({ parameters, kpis, plSummary, industry, onParamet
           )}
 
           {/* KPI + Breakeven targets */}
-          <div className="ml-4 bg-green-50 rounded-lg p-3 border border-green-100">
+          <div className="ml-4 bg-emerald-50/50 rounded-2xl p-3 border border-emerald-100">
             {kpis ? (
               <div className="space-y-3">
                 {/* Breakeven targets */}
@@ -573,17 +573,17 @@ export function ModelOverview({ parameters, kpis, plSummary, industry, onParamet
                     gap={kpis.cum_breakeven_gap} onParameterChange={onParameterChange} />
                 </div>
                 {/* Compact KPIs */}
-                <div className="grid grid-cols-3 gap-2 pt-2 border-t border-green-200">
+                <div className="grid grid-cols-3 gap-2 pt-2 border-t border-emerald-200">
                   <div className="text-center">
-                    <div className="text-[9px] text-gray-400">売上CAGR</div>
-                    <div className="text-xs font-bold text-gray-900">{kpis.revenue_cagr != null ? formatPct(kpis.revenue_cagr) : '-'}</div>
+                    <div className="text-[9px] text-sand-400">売上CAGR</div>
+                    <div className="text-xs font-bold text-dark-900">{kpis.revenue_cagr != null ? formatPct(kpis.revenue_cagr) : '-'}</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-[9px] text-gray-400">粗利率</div>
-                    <div className="text-xs font-bold text-gray-900">{kpis.gp_margin != null ? formatPct(kpis.gp_margin) : '-'}</div>
+                    <div className="text-[9px] text-sand-400">粗利率</div>
+                    <div className="text-xs font-bold text-dark-900">{kpis.gp_margin != null ? formatPct(kpis.gp_margin) : '-'}</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-[9px] text-gray-400">FY5営業利益率</div>
+                    <div className="text-[9px] text-sand-400">FY5営業利益率</div>
                     <div className={'text-xs font-bold ' + ((kpis.fy5_op_margin || 0) >= 0 ? 'text-green-700' : 'text-red-500')}>
                       {kpis.fy5_op_margin != null ? formatPct(kpis.fy5_op_margin) : '-'}
                     </div>
@@ -591,7 +591,7 @@ export function ModelOverview({ parameters, kpis, plSummary, industry, onParamet
                 </div>
               </div>
             ) : (
-              <p className="text-[11px] text-gray-400">パラメータを調整するとKPIが表示されます</p>
+              <p className="text-[11px] text-sand-400">パラメータを調整するとKPIが表示されます</p>
             )}
           </div>
         </div>
@@ -614,9 +614,9 @@ function BreakevenTargetSelector({
   var opexChangePct = gap?.required_opex_change_pct
 
   return (
-    <div className="bg-white rounded-lg p-2 border border-green-200">
+    <div className="bg-white rounded-2xl p-2 border border-emerald-200">
       <div className="flex items-center justify-between mb-1">
-        <span className="text-[10px] font-medium text-gray-700">{label}</span>
+        <span className="text-[10px] font-medium text-sand-600">{label}</span>
         <span className={'text-[10px] font-bold ' + (actualFy ? 'text-green-700' : 'text-red-500')}>
           {actualFy ? 'FY' + actualFy : '未達'}
         </span>
@@ -629,7 +629,7 @@ function BreakevenTargetSelector({
           if (isTarget && achieved) cls += 'bg-green-500 text-white border-green-500 font-bold'
           else if (isTarget) cls += 'bg-amber-400 text-white border-amber-400 font-bold'
           else if (isActual) cls += 'bg-green-100 text-green-700 border-green-300 font-medium'
-          else cls += 'bg-gray-50 text-gray-500 border-gray-200 hover:border-gray-400'
+          else cls += 'bg-cream-50 text-sand-500 border-cream-200 hover:border-cream-300'
           return <button key={fy} onClick={function() { onParameterChange(paramKey, fy) }} className={cls}>{fy}</button>
         })}
       </div>
@@ -647,7 +647,7 @@ function BreakevenTargetSelector({
           )}
         </div>
       )}
-      {!hasTarget && <div className="text-[9px] text-gray-400">FYを選択して目標設定</div>}
+      {!hasTarget && <div className="text-[9px] text-sand-400">FYを選択して目標設定</div>}
     </div>
   )
 }

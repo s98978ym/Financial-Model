@@ -91,7 +91,7 @@ var SGA_CATEGORIES = [
   {
     key: 'sga_office',
     label: 'オフィス・管理費',
-    color: 'bg-gray-500',
+    color: 'bg-sand-500',
     ratio: 0.15,
     min: 0,
     max: 100_000_000,
@@ -111,7 +111,7 @@ var SGA_CATEGORIES = [
   {
     key: 'sga_other',
     label: 'その他販管費',
-    color: 'bg-gray-400',
+    color: 'bg-sand-400',
     ratio: 0.10,
     min: 0,
     max: 100_000_000,
@@ -139,7 +139,7 @@ var MKTG_COLORS: Record<string, string> = {
   branding: 'bg-violet-400',
   crm: 'bg-indigo-400',
   content: 'bg-purple-300',
-  other_mktg: 'bg-gray-300',
+  other_mktg: 'bg-sand-300',
 }
 
 /** Multi-angle marketing categorization tags */
@@ -161,7 +161,7 @@ var MKTG_ANGLES: {
     label: '目的別',
     groups: [
       { label: '獲得', keys: ['digital_ad', 'offline_ad', 'events'], color: 'bg-red-500' },
-      { label: 'ブランディング', keys: ['branding', 'pr', 'content'], color: 'bg-blue-500' },
+      { label: 'ブランディング', keys: ['branding', 'pr', 'content'], color: 'bg-gold-500' },
       { label: 'CRM・リテンション', keys: ['crm', 'other_mktg'], color: 'bg-green-500' },
     ],
   },
@@ -212,26 +212,26 @@ function BenchmarkTooltip({ benchmark, driverKey }: { benchmark: DriverBenchmark
   }
 
   return (
-    <div className="absolute z-20 bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 bg-gray-900 text-white text-xs rounded-lg p-3 shadow-lg pointer-events-none">
-      <div className="font-medium mb-1.5 text-blue-300">業界水準</div>
+    <div className="absolute z-20 bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 bg-dark-900 text-white text-xs rounded-2xl p-3 shadow-warm-lg pointer-events-none">
+      <div className="font-medium mb-1.5 text-gold-300">業界水準</div>
       <div className="space-y-1">
         <div className="flex justify-between">
-          <span className="text-gray-400">低位:</span>
+          <span className="text-sand-400">低位:</span>
           <span>{formatVal(benchmark.low)}</span>
         </div>
         <div className="flex justify-between">
-          <span className="text-gray-400">中央:</span>
-          <span className="text-blue-300 font-medium">{formatVal(benchmark.mid)}</span>
+          <span className="text-sand-400">中央:</span>
+          <span className="text-gold-300 font-medium">{formatVal(benchmark.mid)}</span>
         </div>
         <div className="flex justify-between">
-          <span className="text-gray-400">高位:</span>
+          <span className="text-sand-400">高位:</span>
           <span>{formatVal(benchmark.high)}</span>
         </div>
       </div>
-      <div className="mt-2 pt-1.5 border-t border-gray-700 text-gray-400 leading-tight">
+      <div className="mt-2 pt-1.5 border-t border-dark-800 text-sand-400 leading-tight">
         {benchmark.label}
       </div>
-      <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900" />
+      <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-dark-900" />
     </div>
   )
 }
@@ -253,12 +253,12 @@ function BenchmarkBar({ benchmark, driver, value }: { benchmark: DriverBenchmark
     <div className="relative h-1.5 mt-0.5 mb-1">
       {/* Benchmark range bar */}
       <div
-        className="absolute h-full bg-blue-200 rounded-full opacity-60"
+        className="absolute h-full bg-gold-200 rounded-full opacity-60"
         style={{ left: lowPct + '%', width: (highPct - lowPct) + '%' }}
       />
       {/* Mid marker */}
       <div
-        className="absolute w-1.5 h-1.5 bg-blue-500 rounded-full -translate-x-1/2"
+        className="absolute w-1.5 h-1.5 bg-gold-500 rounded-full -translate-x-1/2"
         style={{ left: midPct + '%' }}
       />
     </div>
@@ -290,8 +290,8 @@ function FYRow({ values }: { values: number[] }) {
       {values.map(function(v, i) {
         return (
           <div key={i} className="flex-1 text-center">
-            <div className="text-[8px] text-gray-400">{'FY' + (i + 1)}</div>
-            <div className="text-[9px] font-mono text-gray-600">{formatYen(v)}</div>
+            <div className="text-[8px] text-sand-400">{'FY' + (i + 1)}</div>
+            <div className="text-[9px] font-mono text-sand-600">{formatYen(v)}</div>
           </div>
         )
       })}
@@ -313,7 +313,7 @@ function PayrollDetailPanel({
   if (roleEntries.length === 0) return null
 
   return (
-    <div className="mt-2 bg-orange-50 rounded-lg p-3 border border-orange-100">
+    <div className="mt-2 bg-orange-50/50 rounded-2xl p-3 border border-orange-100">
       <div className="text-[11px] text-orange-700 font-medium mb-2">人件費内訳（平均年収 x 人数 = コスト）</div>
       <div className="space-y-2.5">
         {roleEntries.map(function([roleKey, role]) {
@@ -326,14 +326,14 @@ function PayrollDetailPanel({
           return (
             <div key={roleKey} className="bg-white rounded p-2 border border-orange-100">
               <div className="flex items-center justify-between mb-1">
-                <span className="text-xs font-medium text-gray-700">{role.label}</span>
+                <span className="text-xs font-medium text-sand-600">{role.label}</span>
                 <span className="text-xs font-mono text-orange-700">{formatYen(fy1Cost)}/年</span>
               </div>
               {/* FY1-FY5 cost row */}
               <FYRow values={role.cost} />
               <div className="grid grid-cols-2 gap-2 mt-1.5">
                 <div>
-                  <label className="text-[10px] text-gray-500 block mb-0.5">平均年収</label>
+                  <label className="text-[10px] text-sand-500 block mb-0.5">平均年収</label>
                   <input
                     type="range"
                     min={3_000_000}
@@ -341,14 +341,14 @@ function PayrollDetailPanel({
                     step={500_000}
                     value={localSalary}
                     onChange={function(e) { onRoleChange(salaryKey, parseFloat(e.target.value)) }}
-                    className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-orange-500"
+                    className="w-full h-1.5 bg-cream-300 rounded-lg appearance-none cursor-pointer accent-orange-500"
                   />
-                  <div className="text-[10px] font-mono text-gray-600 text-center mt-0.5">
+                  <div className="text-[10px] font-mono text-sand-600 text-center mt-0.5">
                     {(localSalary / 10_000).toFixed(0)}万円
                   </div>
                 </div>
                 <div>
-                  <label className="text-[10px] text-gray-500 block mb-0.5">FY1 人数</label>
+                  <label className="text-[10px] text-sand-500 block mb-0.5">FY1 人数</label>
                   <input
                     type="range"
                     min={0}
@@ -356,9 +356,9 @@ function PayrollDetailPanel({
                     step={1}
                     value={localHc}
                     onChange={function(e) { onRoleChange(hcKey, parseFloat(e.target.value)) }}
-                    className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-orange-500"
+                    className="w-full h-1.5 bg-cream-300 rounded-lg appearance-none cursor-pointer accent-orange-500"
                   />
-                  <div className="text-[10px] font-mono text-gray-600 text-center mt-0.5">
+                  <div className="text-[10px] font-mono text-sand-600 text-center mt-0.5">
                     {localHc}人 → {role.headcount[4] || Math.round(localHc * 1.2 ** 4)}人(FY5)
                   </div>
                 </div>
@@ -410,7 +410,7 @@ function MarketingDetailPanel({
   }
 
   return (
-    <div className="mt-2 bg-purple-50 rounded-lg p-3 border border-purple-100">
+    <div className="mt-2 bg-purple-50/50 rounded-2xl p-3 border border-purple-100">
       <div className="flex items-center justify-between mb-2">
         <div className="text-[11px] text-purple-700 font-medium">
           マーケティング費内訳（FY1）
@@ -428,8 +428,8 @@ function MarketingDetailPanel({
           var angleTotal = data.reduce(function(s, d) { return s + d.value }, 0) || 1
           return (
             <div key={angle.key}>
-              <div className="text-[10px] text-gray-500 mb-0.5">{angle.label}</div>
-              <div className="h-5 rounded-full overflow-hidden flex bg-gray-200">
+              <div className="text-[10px] text-sand-500 mb-0.5">{angle.label}</div>
+              <div className="h-5 rounded-full overflow-hidden flex bg-cream-300">
                 {data.map(function(d, di) {
                   var pct = (d.value / angleTotal) * 100
                   return (
@@ -444,7 +444,7 @@ function MarketingDetailPanel({
                         </span>
                       )}
                       <div className="absolute z-10 bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:block">
-                        <div className="bg-gray-900 text-white text-[10px] px-2 py-1 rounded whitespace-nowrap shadow-lg">
+                        <div className="bg-dark-900 text-white text-[10px] px-2 py-1 rounded whitespace-nowrap shadow-warm-lg">
                           {d.label}: {formatYen(d.value)} ({pct.toFixed(0)}%)
                         </div>
                       </div>
@@ -458,7 +458,7 @@ function MarketingDetailPanel({
                   return (
                     <div key={di} className="flex items-center gap-0.5">
                       <div className={'w-1.5 h-1.5 rounded-full ' + d.color} />
-                      <span className="text-[9px] text-gray-500">{d.label} {pct.toFixed(0)}%</span>
+                      <span className="text-[9px] text-sand-500">{d.label} {pct.toFixed(0)}%</span>
                     </div>
                   )
                 })}
@@ -479,7 +479,7 @@ function MarketingDetailPanel({
             return (
               <div
                 key={catKey}
-                className={(MKTG_COLORS[catKey] || 'bg-gray-300') + ' transition-all'}
+                className={(MKTG_COLORS[catKey] || 'bg-sand-300') + ' transition-all'}
                 style={{ width: Math.max(pct, 1) + '%' }}
                 title={(MKTG_LABELS[catKey] || catKey) + ': ' + formatYen(val)}
               />
@@ -494,10 +494,10 @@ function MarketingDetailPanel({
               <div key={catKey}>
                 <div className="flex items-center justify-between mb-0.5">
                   <div className="flex items-center gap-1">
-                    <div className={'w-1.5 h-1.5 rounded-full ' + (MKTG_COLORS[catKey] || 'bg-gray-300')} />
-                    <label className="text-[11px] text-gray-700">{MKTG_LABELS[catKey] || catKey}</label>
+                    <div className={'w-1.5 h-1.5 rounded-full ' + (MKTG_COLORS[catKey] || 'bg-sand-300')} />
+                    <label className="text-[11px] text-sand-600">{MKTG_LABELS[catKey] || catKey}</label>
                   </div>
-                  <span className="text-[11px] font-mono text-gray-600">{formatYen(val)}</span>
+                  <span className="text-[11px] font-mono text-sand-600">{formatYen(val)}</span>
                 </div>
                 <input
                   type="range"
@@ -506,7 +506,7 @@ function MarketingDetailPanel({
                   step={500_000}
                   value={val}
                   onChange={function(e) { onSubChange('mk_' + catKey, parseFloat(e.target.value)) }}
-                  className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                  className="w-full h-1 bg-cream-300 rounded-lg appearance-none cursor-pointer accent-purple-500"
                 />
               </div>
             )
@@ -719,18 +719,18 @@ export function DriverSliders({ parameters, onChange, onBatchChange, industry, s
   }
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-5 space-y-1">
-      <h3 className="font-medium text-gray-900">ドライバー調整</h3>
-      <p className="text-xs text-gray-500 pb-2">
+    <div className="bg-white rounded-3xl shadow-warm p-4 sm:p-5 space-y-1">
+      <h3 className="font-medium text-dark-900">ドライバー調整</h3>
+      <p className="text-xs text-sand-500 pb-2">
         スライダーを動かすとPLがリアルタイムで変化します
-        {benchmarks && <span className="text-blue-500 ml-1">(青帯=業界水準)</span>}
+        {benchmarks && <span className="text-gold-500 ml-1">(青帯=業界水準)</span>}
       </p>
 
       {/* Revenue Section */}
-      <div className="pb-3 border-b border-gray-100">
+      <div className="pb-3 border-b border-cream-200">
         <div className="flex items-center gap-1.5 mb-3">
-          <div className="w-2 h-2 rounded-full bg-blue-500" />
-          <span className="text-xs font-medium text-gray-600 uppercase tracking-wide">売上</span>
+          <div className="w-2 h-2 rounded-full bg-gold-500" />
+          <span className="text-xs font-medium text-sand-600 uppercase tracking-wide">売上</span>
         </div>
         {REVENUE_DRIVERS.map(function(driver) {
           var value = parameters[driver.key] != null ? parameters[driver.key] : driver.min
@@ -746,17 +746,17 @@ export function DriverSliders({ parameters, onChange, onBatchChange, industry, s
             >
               <div className="flex items-center justify-between mb-1">
                 <div className="flex items-center gap-1.5">
-                  <label className="text-sm text-gray-700">{driver.label}</label>
+                  <label className="text-sm text-sand-600">{driver.label}</label>
                   {benchmark && (
                     <span className="relative">
-                      <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-blue-100 text-blue-600 text-[10px] cursor-help">
+                      <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-cream-200 text-gold-600 text-[10px] cursor-help">
                         i
                       </span>
                       {isHovered && <BenchmarkTooltip benchmark={benchmark} driverKey={driver.key} />}
                     </span>
                   )}
                 </div>
-                <span className="text-sm font-mono font-medium text-gray-900">
+                <span className="text-sm font-mono font-medium text-dark-900">
                   {driver.format(value)}
                 </span>
               </div>
@@ -770,9 +770,9 @@ export function DriverSliders({ parameters, onChange, onBatchChange, industry, s
                 step={driver.step}
                 value={value}
                 onChange={function(e) { onChange(driver.key, parseFloat(e.target.value)) }}
-                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600 touch-pan-x"
+                className="w-full h-2 bg-cream-300 rounded-lg appearance-none cursor-pointer accent-gold-500 touch-pan-x"
               />
-              <div className="flex justify-between text-xs text-gray-400 mt-0.5">
+              <div className="flex justify-between text-xs text-sand-400 mt-0.5">
                 <span>{driver.format(driver.min)}</span>
                 <span>{driver.format(driver.max)}</span>
               </div>
@@ -782,7 +782,7 @@ export function DriverSliders({ parameters, onChange, onBatchChange, industry, s
       </div>
 
       {/* SGA Section */}
-      <div className="py-3 border-b border-gray-100">
+      <div className="py-3 border-b border-cream-200">
         <button
           onClick={function() {
             if (!sgaExpanded) materializeSgaCategories()
@@ -792,14 +792,14 @@ export function DriverSliders({ parameters, onChange, onBatchChange, industry, s
         >
           <div className="flex items-center gap-1.5">
             <div className="w-2 h-2 rounded-full bg-orange-500" />
-            <span className="text-xs font-medium text-gray-600 uppercase tracking-wide">販管費明細</span>
+            <span className="text-xs font-medium text-sand-600 uppercase tracking-wide">販管費明細</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-xs font-mono text-gray-500">
+            <span className="text-xs font-mono text-sand-500">
               {(opexBase / 10_000).toFixed(0)}万円/年
             </span>
             <svg
-              className={'w-4 h-4 text-gray-400 transition-transform ' + (sgaExpanded ? 'rotate-180' : '')}
+              className={'w-4 h-4 text-sand-400 transition-transform ' + (sgaExpanded ? 'rotate-180' : '')}
               fill="none" viewBox="0 0 24 24" stroke="currentColor"
             >
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -811,8 +811,8 @@ export function DriverSliders({ parameters, onChange, onBatchChange, industry, s
           /* Simple OPEX slider when collapsed — top-down distribution */
           <div className="mb-2">
             <div className="flex items-center justify-between mb-1">
-              <label className="text-sm text-gray-700">OPEX合計</label>
-              <span className="text-sm font-mono font-medium text-gray-900">
+              <label className="text-sm text-sand-600">OPEX合計</label>
+              <span className="text-sm font-mono font-medium text-dark-900">
                 {(opexBase / 100_000_000).toFixed(1)}億円
               </span>
             </div>
@@ -823,20 +823,20 @@ export function DriverSliders({ parameters, onChange, onBatchChange, industry, s
               step={5_000_000}
               value={opexBase}
               onChange={function(e) { handleOpexTotalChange(parseFloat(e.target.value)) }}
-              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-orange-500"
+              className="w-full h-2 bg-cream-300 rounded-lg appearance-none cursor-pointer accent-orange-500"
             />
-            <div className="flex justify-between text-xs text-gray-400 mt-0.5">
+            <div className="flex justify-between text-xs text-sand-400 mt-0.5">
               <span>0.1億円</span>
               <span>5億円</span>
             </div>
-            <p className="text-[10px] text-gray-400 mt-1">合計を変更すると各カテゴリに比例配分されます</p>
+            <p className="text-[10px] text-sand-400 mt-1">合計を変更すると各カテゴリに比例配分されます</p>
           </div>
         )}
 
         {sgaExpanded && (
           <div className="space-y-3">
             {/* Step 1: OPEX total (top-down entry point) */}
-            <div className="bg-orange-50 rounded-lg p-2.5 border border-orange-100">
+            <div className="bg-orange-50/50 rounded-2xl p-2.5 border border-orange-100">
               <div className="flex items-center justify-between mb-1">
                 <label className="text-sm font-medium text-orange-800">販管費合計（OPEX）</label>
                 <span className="text-sm font-mono font-bold text-orange-900">
@@ -892,8 +892,8 @@ export function DriverSliders({ parameters, onChange, onBatchChange, industry, s
                   <div className="flex items-center justify-between mb-0.5">
                     <div className="flex items-center gap-1.5">
                       <div className={'w-2 h-2 rounded-full ' + cat.color} />
-                      <label className="text-sm text-gray-700">{cat.label}</label>
-                      <span className="text-[10px] text-gray-400">{pct}%</span>
+                      <label className="text-sm text-sand-600">{cat.label}</label>
+                      <span className="text-[10px] text-sand-400">{pct}%</span>
                       {isPayroll && sgaDetail && (
                         <button
                           onClick={function() {
@@ -925,7 +925,7 @@ export function DriverSliders({ parameters, onChange, onBatchChange, industry, s
                         </button>
                       )}
                     </div>
-                    <span className="text-sm font-mono font-medium text-gray-900">
+                    <span className="text-sm font-mono font-medium text-dark-900">
                       {cat.format(value)}
                     </span>
                   </div>
@@ -938,7 +938,7 @@ export function DriverSliders({ parameters, onChange, onBatchChange, industry, s
                     step={cat.step}
                     value={value}
                     onChange={function(e) { handleCategoryChange(cat.key, parseFloat(e.target.value)) }}
-                    className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-orange-500"
+                    className="w-full h-1.5 bg-cream-300 rounded-lg appearance-none cursor-pointer accent-orange-500"
                   />
 
                   {/* Payroll role-level detail → updates payroll total + opex */}
@@ -983,10 +983,10 @@ export function DriverSliders({ parameters, onChange, onBatchChange, industry, s
             })}
 
             {/* OPEX growth rate (affects FY2-FY5) */}
-            <div className="bg-gray-50 rounded-lg p-2.5 border border-gray-100">
+            <div className="bg-cream-100 rounded-2xl p-2.5 border border-cream-200">
               <div className="flex items-center justify-between mb-1">
-                <label className="text-sm text-gray-700">OPEX 年間増加率</label>
-                <span className="text-sm font-mono font-medium text-gray-900">
+                <label className="text-sm text-sand-600">OPEX 年間増加率</label>
+                <span className="text-sm font-mono font-medium text-dark-900">
                   {((parameters.opex_growth || 0.1) * 100).toFixed(0)}%
                 </span>
               </div>
@@ -997,9 +997,9 @@ export function DriverSliders({ parameters, onChange, onBatchChange, industry, s
                 step={0.05}
                 value={parameters.opex_growth || 0.1}
                 onChange={function(e) { onChange('opex_growth', parseFloat(e.target.value)) }}
-                className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-orange-500"
+                className="w-full h-1.5 bg-cream-300 rounded-lg appearance-none cursor-pointer accent-orange-500"
               />
-              <p className="text-[10px] text-gray-400 mt-0.5">FY2〜FY5の各カテゴリに年率で適用されます</p>
+              <p className="text-[10px] text-sand-400 mt-0.5">FY2〜FY5の各カテゴリに年率で適用されます</p>
             </div>
           </div>
         )}
@@ -1009,7 +1009,7 @@ export function DriverSliders({ parameters, onChange, onBatchChange, industry, s
       <div className="pt-3">
         <div className="flex items-center gap-1.5 mb-3">
           <div className="w-2 h-2 rounded-full bg-slate-500" />
-          <span className="text-xs font-medium text-gray-600 uppercase tracking-wide">CAPEX・減価償却</span>
+          <span className="text-xs font-medium text-sand-600 uppercase tracking-wide">CAPEX・減価償却</span>
         </div>
 
         {/* CAPEX slider */}
@@ -1018,8 +1018,8 @@ export function DriverSliders({ parameters, onChange, onBatchChange, industry, s
           return (
             <div key={driver.key} className="mb-3">
               <div className="flex items-center justify-between mb-1">
-                <label className="text-sm text-gray-700">{driver.label}</label>
-                <span className="text-sm font-mono font-medium text-gray-900">
+                <label className="text-sm text-sand-600">{driver.label}</label>
+                <span className="text-sm font-mono font-medium text-dark-900">
                   {driver.format(value)}
                 </span>
               </div>
@@ -1030,9 +1030,9 @@ export function DriverSliders({ parameters, onChange, onBatchChange, industry, s
                 step={driver.step}
                 value={value}
                 onChange={function(e) { onChange(driver.key, parseFloat(e.target.value)) }}
-                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-slate-500"
+                className="w-full h-2 bg-cream-300 rounded-lg appearance-none cursor-pointer accent-slate-500"
               />
-              <div className="flex justify-between text-xs text-gray-400 mt-0.5">
+              <div className="flex justify-between text-xs text-sand-400 mt-0.5">
                 <span>{driver.format(driver.min)}</span>
                 <span>{driver.format(driver.max)}</span>
               </div>
@@ -1041,16 +1041,16 @@ export function DriverSliders({ parameters, onChange, onBatchChange, industry, s
         })}
 
         {/* Depreciation mode toggle */}
-        <div className="bg-gray-50 rounded-lg p-3 mt-2">
+        <div className="bg-cream-100 rounded-2xl p-3 mt-2">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium text-gray-700">減価償却費</span>
-            <div className="flex bg-gray-200 rounded-md p-0.5">
+            <span className="text-sm font-medium text-dark-900">減価償却費</span>
+            <div className="flex bg-cream-200 rounded-xl p-0.5">
               <button
                 onClick={function() { handleDeprModeChange('manual') }}
                 className={'px-2.5 py-1 text-[11px] rounded transition-colors ' + (
                   deprMode === 'manual'
-                    ? 'bg-white text-gray-800 shadow-sm font-medium'
-                    : 'text-gray-500 hover:text-gray-700'
+                    ? 'bg-white text-dark-900 shadow-warm font-medium'
+                    : 'text-sand-500 hover:text-dark-900'
                 )}
               >
                 手動入力
@@ -1059,8 +1059,8 @@ export function DriverSliders({ parameters, onChange, onBatchChange, industry, s
                 onClick={function() { handleDeprModeChange('auto') }}
                 className={'px-2.5 py-1 text-[11px] rounded transition-colors ' + (
                   deprMode === 'auto'
-                    ? 'bg-white text-gray-800 shadow-sm font-medium'
-                    : 'text-gray-500 hover:text-gray-700'
+                    ? 'bg-white text-dark-900 shadow-warm font-medium'
+                    : 'text-sand-500 hover:text-dark-900'
                 )}
               >
                 CAPEX連動
@@ -1071,8 +1071,8 @@ export function DriverSliders({ parameters, onChange, onBatchChange, industry, s
           {deprMode === 'manual' ? (
             <div>
               <div className="flex items-center justify-between mb-1">
-                <label className="text-xs text-gray-600">年間減価償却費</label>
-                <span className="text-sm font-mono font-medium text-gray-900">
+                <label className="text-xs text-sand-600">年間減価償却費</label>
+                <span className="text-sm font-mono font-medium text-dark-900">
                   {((parameters.depreciation || 0) / 10_000).toFixed(0)}万円
                 </span>
               </div>
@@ -1083,16 +1083,16 @@ export function DriverSliders({ parameters, onChange, onBatchChange, industry, s
                 step={1_000_000}
                 value={parameters.depreciation || 0}
                 onChange={function(e) { onChange('depreciation', parseFloat(e.target.value)) }}
-                className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-slate-500"
+                className="w-full h-1.5 bg-cream-300 rounded-lg appearance-none cursor-pointer accent-slate-500"
               />
             </div>
           ) : (
             <div className="space-y-2">
-              <p className="text-[11px] text-gray-500">
+              <p className="text-[11px] text-sand-500">
                 CAPEXを入力すると、耐用年数に応じて減価償却費が自動計算されます
               </p>
               <div>
-                <label className="text-xs text-gray-600 block mb-1">耐用年数</label>
+                <label className="text-xs text-sand-600 block mb-1">耐用年数</label>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-1">
                   {USEFUL_LIFE_OPTIONS.map(function(opt) {
                     var current = parameters.useful_life || 5
@@ -1103,8 +1103,8 @@ export function DriverSliders({ parameters, onChange, onBatchChange, industry, s
                         onClick={function() { onChange('useful_life', opt.value) }}
                         className={'px-2 py-1.5 text-[11px] rounded border transition-colors ' + (
                           isActive
-                            ? 'border-slate-400 bg-slate-100 text-slate-800 font-medium'
-                            : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'
+                            ? 'border-dark-900 bg-dark-900/10 text-dark-900 font-medium'
+                            : 'border-cream-200 bg-white text-sand-500 hover:border-cream-300'
                         )}
                       >
                         {opt.value}年
@@ -1114,14 +1114,14 @@ export function DriverSliders({ parameters, onChange, onBatchChange, industry, s
                 </div>
               </div>
               <div>
-                <label className="text-xs text-gray-600 block mb-1">償却方法</label>
+                <label className="text-xs text-sand-600 block mb-1">償却方法</label>
                 <div className="grid grid-cols-2 gap-1">
                   <button
                     onClick={function() { onChange('depreciation_method' as any, 0) }}
                     className={'px-2 py-1.5 text-[11px] rounded border transition-colors ' + (
                       (parameters.depreciation_method || 0) === 0
-                        ? 'border-slate-400 bg-slate-100 text-slate-800 font-medium'
-                        : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'
+                        ? 'border-dark-900 bg-dark-900/10 text-dark-900 font-medium'
+                        : 'border-cream-200 bg-white text-sand-500 hover:border-cream-300'
                     )}
                   >
                     定額法
@@ -1130,8 +1130,8 @@ export function DriverSliders({ parameters, onChange, onBatchChange, industry, s
                     onClick={function() { onChange('depreciation_method' as any, 1) }}
                     className={'px-2 py-1.5 text-[11px] rounded border transition-colors ' + (
                       (parameters.depreciation_method as any) === 1
-                        ? 'border-slate-400 bg-slate-100 text-slate-800 font-medium'
-                        : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'
+                        ? 'border-dark-900 bg-dark-900/10 text-dark-900 font-medium'
+                        : 'border-cream-200 bg-white text-sand-500 hover:border-cream-300'
                     )}
                   >
                     定率法
@@ -1140,8 +1140,8 @@ export function DriverSliders({ parameters, onChange, onBatchChange, industry, s
               </div>
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs text-gray-600">既存資産の償却費</label>
-                  <span className="text-xs font-mono text-gray-700">
+                  <label className="text-xs text-sand-600">既存資産の償却費</label>
+                  <span className="text-xs font-mono text-dark-900">
                     {((parameters.existing_depreciation || 0) / 10_000).toFixed(0)}万円
                   </span>
                 </div>
@@ -1152,7 +1152,7 @@ export function DriverSliders({ parameters, onChange, onBatchChange, industry, s
                   step={1_000_000}
                   value={parameters.existing_depreciation || 0}
                   onChange={function(e) { onChange('existing_depreciation', parseFloat(e.target.value)) }}
-                  className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-slate-500"
+                  className="w-full h-1.5 bg-cream-300 rounded-lg appearance-none cursor-pointer accent-slate-500"
                 />
               </div>
             </div>

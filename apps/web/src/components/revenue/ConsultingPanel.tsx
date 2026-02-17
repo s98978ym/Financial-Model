@@ -75,18 +75,18 @@ export function ConsultingPanel({ config, onChange }: Props) {
       {/* ═══ SKU DEFINITION ═══ */}
       <div>
         <div className="flex items-center justify-between mb-2">
-          <h4 className="text-xs font-semibold text-gray-700">SKU定義</h4>
-          <button onClick={addSKU} className="text-[10px] text-blue-600 hover:text-blue-800">+ サービス追加</button>
+          <h4 className="text-xs font-semibold text-sand-600">SKU定義</h4>
+          <button onClick={addSKU} className="text-[10px] text-gold-600 hover:text-gold-500">+ サービス追加</button>
         </div>
-        <div className="bg-gray-50 rounded-lg border border-gray-200 overflow-x-auto">
+        <div className="bg-cream-50 rounded-2xl border border-cream-200 overflow-x-auto">
           <table className="w-full text-[11px]">
             <thead>
-              <tr className="border-b border-gray-200">
-                <th className="text-left px-3 py-2 text-gray-500 font-medium">項目名</th>
-                <th className="text-right px-3 py-2 text-gray-500 font-medium">単価</th>
-                <th className="text-right px-3 py-2 text-gray-500 font-medium whitespace-nowrap">原価(時給x時間)</th>
+              <tr className="border-b border-cream-200">
+                <th className="text-left px-3 py-2 text-sand-500 font-medium">項目名</th>
+                <th className="text-right px-3 py-2 text-sand-500 font-medium">単価</th>
+                <th className="text-right px-3 py-2 text-sand-500 font-medium whitespace-nowrap">原価(時給x時間)</th>
                 <th className="text-right px-3 py-2 text-emerald-600 font-semibold">粗利率</th>
-                <th className="text-right px-3 py-2 text-gray-500 font-medium">CAC</th>
+                <th className="text-right px-3 py-2 text-sand-500 font-medium">CAC</th>
                 <th className="w-8"></th>
               </tr>
             </thead>
@@ -95,21 +95,21 @@ export function ConsultingPanel({ config, onChange }: Props) {
                 var cost = computeConsultingDeliveryCost(sku)
                 var margin = computeConsultingGrossMargin(sku)
                 return (
-                  <tr key={sku.id} className="border-b border-gray-100 last:border-0 hover:bg-white">
+                  <tr key={sku.id} className="border-b border-cream-200 last:border-0 hover:bg-white">
                     <td className="px-3 py-2">
                       <input type="text" value={sku.name}
                         onChange={function(e) { updateSKU(sku.id, { name: e.target.value }) }}
-                        className="w-full bg-transparent font-medium text-gray-900 outline-none focus:bg-blue-50 focus:rounded px-1 -mx-1" />
+                        className="w-full bg-transparent font-medium text-dark-900 outline-none focus:bg-cream-100 focus:rounded px-1 -mx-1" />
                     </td>
                     <td className="px-3 py-2 text-right">
                       <CellInput value={sku.unit_price} onChange={function(v) { updateSKU(sku.id, { unit_price: v }) }} />
                     </td>
                     <td className="px-3 py-2 text-right">
-                      <span className="text-gray-400 text-[10px]">
+                      <span className="text-sand-400 text-[10px]">
                         <CellInput value={sku.hourly_rate} onChange={function(v) { updateSKU(sku.id, { hourly_rate: v }) }} />
                         <span className="mx-0.5">x</span>
                         <CellInput value={sku.standard_hours} onChange={function(v) { updateSKU(sku.id, { standard_hours: v }) }} />
-                        <span className="ml-1 text-gray-500">= {formatYen(cost)}円</span>
+                        <span className="ml-1 text-sand-500">= {formatYen(cost)}円</span>
                       </span>
                     </td>
                     <td className="px-3 py-2 text-right">
@@ -124,7 +124,7 @@ export function ConsultingPanel({ config, onChange }: Props) {
                     <td className="px-1 py-2">
                       {config.skus.length > 1 && (
                         <button onClick={function() { removeSKU(sku.id) }}
-                          className="text-gray-300 hover:text-red-500 transition-colors">
+                          className="text-sand-300 hover:text-red-500 transition-colors">
                           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                           </svg>
@@ -141,12 +141,12 @@ export function ConsultingPanel({ config, onChange }: Props) {
 
       {/* ═══ QUANTITY (件数) TABLE ═══ */}
       <div>
-        <h4 className="text-xs font-semibold text-gray-700 mb-2">数量 (件数)</h4>
-        <div className="bg-emerald-50 rounded-lg border border-emerald-100 overflow-x-auto">
+        <h4 className="text-xs font-semibold text-sand-600 mb-2">数量 (件数)</h4>
+        <div className="bg-emerald-50 rounded-2xl border border-emerald-100 overflow-x-auto">
           <table className="w-full text-[11px]">
             <thead>
               <tr className="border-b border-emerald-200">
-                <th className="text-left px-3 py-2 text-gray-500 font-medium">サービス</th>
+                <th className="text-left px-3 py-2 text-sand-500 font-medium">サービス</th>
                 {FY_LABELS.map(function(fy) {
                   return <th key={fy} className="text-right px-3 py-2 text-emerald-600 font-medium">{fy}</th>
                 })}
@@ -156,7 +156,7 @@ export function ConsultingPanel({ config, onChange }: Props) {
               {config.skus.map(function(sku) {
                 return (
                   <tr key={sku.id} className="border-b border-emerald-100 last:border-0 hover:bg-white/50">
-                    <td className="px-3 py-2 font-medium text-gray-700">{sku.name}</td>
+                    <td className="px-3 py-2 font-medium text-sand-600">{sku.name}</td>
                     {FY_LABELS.map(function(_, fi) {
                       return (
                         <td key={fi} className="px-3 py-2 text-right">
@@ -173,7 +173,7 @@ export function ConsultingPanel({ config, onChange }: Props) {
               })}
               {/* Total row */}
               <tr className="border-t-2 border-emerald-200 bg-emerald-100/50">
-                <td className="px-3 py-2 font-semibold text-gray-700">売上合計</td>
+                <td className="px-3 py-2 font-semibold text-sand-600">売上合計</td>
                 {fyTotals.map(function(total, fi) {
                   return (
                     <td key={fi} className="px-3 py-2 text-right font-mono font-bold text-emerald-700">
@@ -194,7 +194,7 @@ export function ConsultingPanel({ config, onChange }: Props) {
             return (
               <div key={fi} className="flex-1 flex flex-col items-center gap-0.5">
                 <div className="w-full bg-emerald-400 rounded-t" style={{ height: h + '%' }} />
-                <span className="text-[8px] text-gray-400">{FY_LABELS[fi]}</span>
+                <span className="text-[8px] text-sand-400">{FY_LABELS[fi]}</span>
               </div>
             )
           })}
@@ -231,14 +231,14 @@ function CellInput({ value, onChange, integer }: {
         onBlur={commit}
         onKeyDown={function(e) { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); if (e.key === 'Escape') setEditing(false) }}
         autoFocus
-        className="w-16 text-right bg-white border border-blue-300 rounded px-1 py-0.5 text-[11px] font-mono outline-none focus:ring-1 focus:ring-blue-400"
+        className="w-16 text-right bg-white border border-gold-300 rounded px-1 py-0.5 text-[11px] font-mono outline-none focus:ring-1 focus:ring-gold-400"
       />
     )
   }
 
   return (
     <button onClick={startEdit}
-      className="font-mono text-[11px] text-gray-900 px-1 py-0.5 rounded border border-transparent hover:border-blue-300 hover:bg-blue-50 cursor-pointer transition-colors">
+      className="font-mono text-[11px] text-dark-900 px-1 py-0.5 rounded border border-transparent hover:border-gold-300 hover:bg-cream-100 cursor-pointer transition-colors">
       {value.toLocaleString()}
     </button>
   )

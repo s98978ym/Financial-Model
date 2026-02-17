@@ -193,22 +193,22 @@ export default function ProposalCards(props: ProposalCardsProps) {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-amber-100 flex items-center justify-center">
-            <svg className="w-4 h-4 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <div className="w-7 h-7 rounded-xl bg-cream-200 flex items-center justify-center">
+            <svg className="w-4 h-4 text-gold-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
             </svg>
           </div>
-          <h3 className="text-sm font-semibold text-gray-800">
+          <h3 className="text-sm font-semibold text-dark-900">
             提案・改善ポイント
           </h3>
-          <span className="text-xs text-gray-400">
+          <span className="text-xs text-sand-400">
             {decidedCount}/{suggestions.length} 決定済み
           </span>
         </div>
         {allDecided && onApplyAll && (
           <button
             onClick={handleApplyAll}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 transition-colors shadow-sm"
+            className="flex items-center gap-1.5 px-4 py-2 rounded-2xl text-sm font-medium text-white bg-dark-900 hover:bg-dark-800 transition-colors shadow-sm"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
@@ -232,12 +232,12 @@ export default function ProposalCards(props: ProposalCardsProps) {
         return (
           <div
             key={idx}
-            className={'rounded-xl border-2 overflow-hidden transition-all ' + (
+            className={'rounded-3xl overflow-hidden transition-all ' + (
               isDecided
-                ? 'border-emerald-200 bg-emerald-50/30'
+                ? 'bg-emerald-50/30 shadow-warm'
                 : isSkipped
-                  ? 'border-gray-200 bg-gray-50/50 opacity-60'
-                  : 'border-amber-200 bg-white'
+                  ? 'bg-cream-100 shadow-warm opacity-60'
+                  : 'bg-white shadow-warm ring-1 ring-cream-300'
             )}
           >
             {/* Card Header */}
@@ -247,8 +247,8 @@ export default function ProposalCards(props: ProposalCardsProps) {
                   isDecided
                     ? 'bg-emerald-500 text-white'
                     : isSkipped
-                      ? 'bg-gray-300 text-white'
-                      : 'bg-amber-500 text-white'
+                      ? 'bg-sand-300 text-white'
+                      : 'bg-gold-500 text-white'
                 )}>
                   {isDecided ? (
                     <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -257,11 +257,11 @@ export default function ProposalCards(props: ProposalCardsProps) {
                   ) : isSkipped ? '—' : String(idx + 1)}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className={'text-sm font-medium ' + (isSkipped ? 'text-gray-400 line-through' : 'text-gray-900')}>
+                  <p className={'text-sm font-medium ' + (isSkipped ? 'text-sand-400 line-through' : 'text-dark-900')}>
                     {proposal.title}
                   </p>
                   {proposal.description && (
-                    <p className="text-xs text-gray-500 mt-1">{proposal.description}</p>
+                    <p className="text-xs text-sand-500 mt-1">{proposal.description}</p>
                   )}
                 </div>
                 {/* Reset button for decided items */}
@@ -271,7 +271,7 @@ export default function ProposalCards(props: ProposalCardsProps) {
                       updateDecision(idx, { selectedOption: null, status: 'pending', instruction: '' })
                       setExpandedInstruction(null)
                     }}
-                    className="text-xs text-gray-400 hover:text-gray-600 px-2 py-1 rounded hover:bg-gray-100 transition-colors flex-shrink-0"
+                    className="text-xs text-sand-400 hover:text-sand-600 px-2 py-1 rounded hover:bg-cream-100 transition-colors flex-shrink-0"
                   >
                     やり直す
                   </button>
@@ -282,7 +282,7 @@ export default function ProposalCards(props: ProposalCardsProps) {
             {/* Options Grid */}
             {!isSkipped && (
               <div className="px-5 pb-3">
-                <p className="text-xs text-gray-400 mb-2">
+                <p className="text-xs text-sand-400 mb-2">
                   {hasEmbeddedOptions ? '方向性を選択:' : 'アクション:'}
                 </p>
                 <div className={'grid gap-2 ' + (
@@ -294,21 +294,21 @@ export default function ProposalCards(props: ProposalCardsProps) {
                       <button
                         key={opt.id}
                         onClick={function() { handleSelectOption(idx, opt.id) }}
-                        className={'relative rounded-lg border-2 px-3 py-2.5 text-left transition-all ' + (
+                        className={'relative rounded-2xl px-3 py-2.5 text-left transition-all ' + (
                           isSelected
-                            ? 'border-blue-500 bg-blue-50 shadow-sm'
-                            : 'border-gray-200 bg-white hover:border-blue-300 hover:bg-blue-50/50'
+                            ? 'border-2 border-gold-500 bg-cream-100 shadow-sm'
+                            : 'border-2 border-cream-200 bg-white hover:border-gold-300 hover:bg-cream-50'
                         )}
                       >
                         <div className="flex items-center gap-2">
                           <div className={'w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 ' + (
-                            isSelected ? 'border-blue-500' : 'border-gray-300'
+                            isSelected ? 'border-gold-500' : 'border-cream-300'
                           )}>
                             {isSelected && (
-                              <div className="w-2 h-2 rounded-full bg-blue-500" />
+                              <div className="w-2 h-2 rounded-full bg-gold-500" />
                             )}
                           </div>
-                          <span className={'text-xs font-medium ' + (isSelected ? 'text-blue-700' : 'text-gray-700')}>
+                          <span className={'text-xs font-medium ' + (isSelected ? 'text-gold-600' : 'text-dark-900')}>
                             {opt.label}
                           </span>
                         </div>
@@ -322,7 +322,7 @@ export default function ProposalCards(props: ProposalCardsProps) {
             {/* Instruction Input */}
             {!isSkipped && (showInstruction || (hasEmbeddedOptions && decision.selectedOption)) && (
               <div className="px-5 pb-4">
-                <label className="text-xs text-gray-500 block mb-1.5">
+                <label className="text-xs text-sand-500 block mb-1.5">
                   指示コメント（任意 — 追加の修正指示があれば入力）:
                 </label>
                 <div className="flex gap-2">
@@ -331,12 +331,12 @@ export default function ProposalCards(props: ProposalCardsProps) {
                     onChange={function(e) { updateDecision(idx, { instruction: e.target.value }) }}
                     placeholder="例: 人件費の内訳は正社員・契約社員・業務委託の3区分で..."
                     rows={2}
-                    className="flex-1 text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                    className="flex-1 text-sm border border-cream-200 rounded-2xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-gold-400 focus:border-transparent resize-none"
                   />
                   {expandedInstruction === idx && (
                     <button
                       onClick={function() { handleConfirmInstruction(idx) }}
-                      className="self-end px-4 py-2 rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 transition-colors flex-shrink-0"
+                      className="self-end px-4 py-2 rounded-2xl text-sm font-medium text-white bg-dark-900 hover:bg-dark-800 transition-colors flex-shrink-0"
                     >
                       確定
                     </button>
@@ -375,7 +375,7 @@ export default function ProposalCards(props: ProposalCardsProps) {
         <div className="flex justify-center pt-2">
           <button
             onClick={handleApplyAll}
-            className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-medium text-white bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 transition-all shadow-md hover:shadow-lg"
+            className="flex items-center gap-2 px-6 py-2.5 rounded-3xl text-sm font-medium text-white bg-dark-900 hover:bg-dark-800 transition-all shadow-warm-md hover:shadow-warm-lg"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />

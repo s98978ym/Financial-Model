@@ -306,8 +306,8 @@ export function PLPreviewTable({
 
   if (totalItems === 0) {
     return (
-      <div className="bg-gray-50 rounded-xl border border-gray-200 p-8 text-center">
-        <p className="text-gray-400 text-sm">データがありません</p>
+      <div className="bg-white rounded-3xl shadow-warm p-8 text-center">
+        <p className="text-sand-300 text-sm">データがありません</p>
       </div>
     )
   }
@@ -322,7 +322,7 @@ export function PLPreviewTable({
         return (
           <div
             key={section.sheetName}
-            className={'rounded-xl border ' + colors.border + ' overflow-hidden shadow-sm'}
+            className={'rounded-3xl shadow-warm overflow-hidden ' + colors.border}
           >
             {/* Section Header */}
             <button
@@ -398,8 +398,8 @@ function MobileYearCard({
 }) {
   var [expanded, setExpanded] = useState(false)
   var pct = Math.round(row.avgConfidence * 100)
-  var confColor = pct >= 80 ? 'text-green-600' : pct >= 50 ? 'text-yellow-600' : 'text-red-600'
-  var confBg = pct >= 80 ? 'bg-green-100' : pct >= 50 ? 'bg-yellow-100' : 'bg-red-100'
+  var confColor = pct >= 80 ? 'text-emerald-600' : pct >= 50 ? 'text-amber-600' : 'text-red-600'
+  var confBg = pct >= 80 ? 'bg-emerald-50' : pct >= 50 ? 'bg-amber-50' : 'bg-red-50'
 
   // Find first non-null year value for quick display
   var firstVal = row.yearValues.find(function(yv): yv is EnrichedItem { return yv !== null })
@@ -407,8 +407,8 @@ function MobileYearCard({
   return (
     <div
       className={
-        'rounded-lg border p-3 transition-all ' +
-        (isSelected ? 'ring-2 ring-blue-400 border-blue-200 bg-blue-50/50' : 'border-gray-200 bg-white')
+        'rounded-2xl p-3 transition-all ' +
+        (isSelected ? 'ring-2 ring-gold-400 bg-gold-500/5 shadow-warm-md' : 'border-0 bg-white shadow-warm')
       }
     >
       {/* Card Header */}
@@ -420,7 +420,7 @@ function MobileYearCard({
           <div className="flex-1 min-w-0 text-left">
             <div className="flex items-center gap-1.5">
               {row.isEstimated && (
-                <span className="inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-700 flex-shrink-0">
+                <span className="inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-700 flex-shrink-0">
                   推定
                 </span>
               )}
@@ -429,7 +429,7 @@ function MobileYearCard({
               </span>
             </div>
             {row.unit && (
-              <span className="text-[10px] text-gray-400 mt-0.5 block">単位: {row.unit}</span>
+              <span className="text-[10px] text-sand-300 mt-0.5 block">単位: {row.unit}</span>
             )}
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
@@ -438,7 +438,7 @@ function MobileYearCard({
             </span>
             <SourceBadge source={row.primarySource} />
             <svg
-              className={'w-4 h-4 text-gray-400 transition-transform ' + (expanded ? 'rotate-180' : '')}
+              className={'w-4 h-4 text-sand-300 transition-transform ' + (expanded ? 'rotate-180' : '')}
               fill="none" viewBox="0 0 24 24" stroke="currentColor"
             >
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -448,11 +448,11 @@ function MobileYearCard({
         {/* Quick FY1 value preview */}
         {!expanded && firstVal && (
           <div className="mt-1.5 text-left">
-            <span className="text-[10px] text-gray-400">FY1: </span>
+            <span className="text-[10px] text-sand-300">FY1: </span>
             <span className={
               'font-mono font-semibold text-sm ' +
               (firstVal.source === 'document' ? 'text-blue-700' :
-               firstVal.source === 'inferred' ? 'text-amber-700' : 'text-gray-600')
+               firstVal.source === 'inferred' ? 'text-amber-700' : 'text-sand-600')
             }>
               {firstVal.formattedValue}
             </span>
@@ -462,7 +462,7 @@ function MobileYearCard({
 
       {/* Expanded: all year values */}
       {expanded && (
-        <div className="mt-3 pt-3 border-t border-gray-100 space-y-1.5">
+        <div className="mt-3 pt-3 border-t border-cream-200 space-y-1.5">
           {YEAR_HEADERS.map(function(header, yi) {
             var yv = row.yearValues[yi]
             return (
@@ -471,20 +471,20 @@ function MobileYearCard({
                 onClick={function() { if (yv) onRowClick?.(yv.raw) }}
                 className={
                   'flex items-center justify-between py-1.5 px-2 rounded ' +
-                  (yv ? 'cursor-pointer hover:bg-blue-50 active:bg-blue-100' : '') +
+                  (yv ? 'cursor-pointer hover:bg-cream-100' : '') +
                   (!yv ? ' opacity-50' : '')
                 }
               >
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] text-gray-400 w-7">FY{yi + 1}</span>
-                  <span className="text-xs text-gray-600">{header}</span>
+                  <span className="text-[10px] text-sand-300 w-7">FY{yi + 1}</span>
+                  <span className="text-xs text-sand-600">{header}</span>
                 </div>
                 <span className={
                   'font-mono font-semibold text-sm ' +
                   (yv
                     ? (yv.source === 'document' ? 'text-blue-700' :
-                       yv.source === 'inferred' ? 'text-amber-700' : 'text-gray-600')
-                    : 'text-gray-300')
+                       yv.source === 'inferred' ? 'text-amber-700' : 'text-sand-600')
+                    : 'text-cream-400')
                 }>
                   {yv ? yv.formattedValue : '—'}
                 </span>
@@ -544,24 +544,24 @@ function YearGroupedTable({
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b border-gray-200">
-            <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500 min-w-[160px]">
+          <tr className="border-b border-cream-200">
+            <th className="text-left px-4 py-2.5 text-xs font-medium text-sand-400 min-w-[160px]">
               項目
             </th>
             {YEAR_HEADERS.map(function(header, i) {
               return (
-                <th key={i} className="text-right px-3 py-2.5 text-xs font-medium text-gray-500 min-w-[90px]">
+                <th key={i} className="text-right px-3 py-2.5 text-xs font-medium text-sand-400 min-w-[90px]">
                   <div className="flex flex-col items-end">
-                    <span className="text-[10px] text-gray-400">FY{i + 1}</span>
+                    <span className="text-[10px] text-sand-300">FY{i + 1}</span>
                     <span>{header}</span>
                   </div>
                 </th>
               )
             })}
-            <th className="text-center px-3 py-2.5 text-xs font-medium text-gray-500 w-16">
+            <th className="text-center px-3 py-2.5 text-xs font-medium text-sand-400 w-16">
               ソース
             </th>
-            <th className="text-right px-3 py-2.5 text-xs font-medium text-gray-500 w-16">
+            <th className="text-right px-3 py-2.5 text-xs font-medium text-sand-400 w-16">
               確信度
             </th>
           </tr>
@@ -580,8 +580,8 @@ function YearGroupedTable({
               <tr
                 key={idx}
                 className={
-                  'border-b border-gray-100 last:border-b-0 transition-colors ' +
-                  (isRowSelected ? 'bg-blue-50 ring-1 ring-inset ring-blue-200' : 'hover:bg-white/60') +
+                  'border-b border-cream-200 last:border-b-0 transition-colors ' +
+                  (isRowSelected ? 'bg-gold-500/5' : 'hover:bg-cream-50') +
                   (row.isEstimated ? ' opacity-80' : '')
                 }
               >
@@ -589,7 +589,7 @@ function YearGroupedTable({
                 <td className="px-4 py-2.5">
                   <div className="flex items-center gap-2">
                     {row.isEstimated && (
-                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-700 flex-shrink-0">
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-700 flex-shrink-0">
                         推定
                       </span>
                     )}
@@ -598,7 +598,7 @@ function YearGroupedTable({
                         {row.label}
                       </div>
                       {row.unit && (
-                        <div className="text-[10px] text-gray-400">
+                        <div className="text-[10px] text-sand-300">
                           単位: {row.unit}
                         </div>
                       )}
@@ -611,7 +611,7 @@ function YearGroupedTable({
                   if (!yv) {
                     return (
                       <td key={yi} className="px-3 py-2.5 text-right">
-                        <span className="text-gray-300">—</span>
+                        <span className="text-cream-400">—</span>
                       </td>
                     )
                   }
@@ -627,15 +627,15 @@ function YearGroupedTable({
                       className={
                         'px-3 py-2.5 text-right cursor-pointer transition-colors ' +
                         (isThisCellSelected
-                          ? 'bg-blue-100 rounded'
-                          : 'hover:bg-blue-50 rounded')
+                          ? 'bg-gold-500/10 rounded'
+                          : 'hover:bg-gold-500/5 rounded')
                       }
                     >
                       <span className={
                         'font-mono font-semibold text-sm ' +
                         (yv.source === 'document' ? 'text-blue-700' :
                          yv.source === 'inferred' ? 'text-amber-700' :
-                         'text-gray-600')
+                         'text-sand-600')
                       }>
                         {yv.formattedValue}
                       </span>
@@ -676,23 +676,23 @@ function AssignmentTable({
   return (
     <table className="w-full text-sm">
       <thead>
-        <tr className="border-b border-gray-200">
-          <th className="text-left px-4 py-2 text-xs font-medium text-gray-500 w-12">
+        <tr className="border-b border-cream-200">
+          <th className="text-left px-4 py-2 text-xs font-medium text-sand-400 w-12">
             セル
           </th>
-          <th className="text-left px-4 py-2 text-xs font-medium text-gray-500">
+          <th className="text-left px-4 py-2 text-xs font-medium text-sand-400">
             コンセプト
           </th>
-          <th className="text-left px-4 py-2 text-xs font-medium text-gray-500 w-24">
+          <th className="text-left px-4 py-2 text-xs font-medium text-sand-400 w-24">
             カテゴリ
           </th>
-          <th className="text-left px-4 py-2 text-xs font-medium text-gray-500 w-20">
+          <th className="text-left px-4 py-2 text-xs font-medium text-sand-400 w-20">
             期間
           </th>
-          <th className="text-center px-4 py-2 text-xs font-medium text-gray-500 w-20">
+          <th className="text-center px-4 py-2 text-xs font-medium text-sand-400 w-20">
             ソース
           </th>
-          <th className="text-right px-4 py-2 text-xs font-medium text-gray-500 w-24">
+          <th className="text-right px-4 py-2 text-xs font-medium text-sand-400 w-24">
             確信度
           </th>
         </tr>
@@ -709,15 +709,15 @@ function AssignmentTable({
               key={item.sheet + '-' + item.cell + '-' + idx}
               onClick={function() { onRowClick?.(item.raw) }}
               className={
-                'border-b border-gray-100 last:border-b-0 cursor-pointer transition-colors ' +
+                'border-b border-cream-200 last:border-b-0 cursor-pointer transition-colors ' +
                 (isSelected
-                  ? 'bg-blue-100 ring-1 ring-inset ring-blue-300'
-                  : 'hover:bg-white/60') +
+                  ? 'bg-gold-500/10 ring-1 ring-inset ring-gold-400'
+                  : 'hover:bg-cream-50') +
                 (isEstimated ? ' opacity-80' : '')
               }
             >
               {/* Cell reference */}
-              <td className="px-4 py-2.5 font-mono text-xs text-gray-400">
+              <td className="px-4 py-2.5 font-mono text-xs text-sand-300">
                 {item.cell}
               </td>
 
@@ -725,7 +725,7 @@ function AssignmentTable({
               <td className="px-4 py-2.5">
                 <div className="flex items-center gap-2">
                   {isEstimated && (
-                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-700 flex-shrink-0">
+                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-700 flex-shrink-0">
                       推定
                     </span>
                   )}
@@ -734,7 +734,7 @@ function AssignmentTable({
                       {item.label || item.assignedConcept || '—'}
                     </div>
                     {item.label && item.assignedConcept && item.label !== item.assignedConcept && (
-                      <div className="text-xs text-gray-400 mt-0.5">
+                      <div className="text-xs text-sand-300 mt-0.5">
                         {item.assignedConcept.replace('【推定】', '')}
                       </div>
                     )}
@@ -750,7 +750,7 @@ function AssignmentTable({
               </td>
 
               {/* Period */}
-              <td className="px-4 py-2.5 text-xs text-gray-500">
+              <td className="px-4 py-2.5 text-xs text-sand-400">
                 {item.period || '—'}
               </td>
 
@@ -773,19 +773,19 @@ function AssignmentTable({
 
 /** Source badge with Japanese labels */
 function SourceBadge({ source }: { source: string }) {
-  if (!source) return <span className="text-gray-300">—</span>
+  if (!source) return <span className="text-cream-400">—</span>
 
   var config: Record<string, { bg: string; text: string; label: string }> = {
-    document: { bg: 'bg-blue-100', text: 'text-blue-700', label: '文書' },
-    inferred: { bg: 'bg-amber-100', text: 'text-amber-700', label: '推定' },
-    default: { bg: 'bg-gray-100', text: 'text-gray-500', label: '初期値' },
-    estimated: { bg: 'bg-amber-100', text: 'text-amber-700', label: '推定' },
-    direct: { bg: 'bg-blue-100', text: 'text-blue-700', label: '直接' },
-    calculated: { bg: 'bg-purple-100', text: 'text-purple-700', label: '算出' },
-    assumption: { bg: 'bg-slate-100', text: 'text-slate-600', label: '前提' },
+    document: { bg: 'bg-blue-50', text: 'text-blue-700', label: '文書' },
+    inferred: { bg: 'bg-amber-50', text: 'text-amber-700', label: '推定' },
+    default: { bg: 'bg-cream-200', text: 'text-sand-500', label: '初期値' },
+    estimated: { bg: 'bg-amber-50', text: 'text-amber-700', label: '推定' },
+    direct: { bg: 'bg-blue-50', text: 'text-blue-700', label: '直接' },
+    calculated: { bg: 'bg-purple-50', text: 'text-purple-700', label: '算出' },
+    assumption: { bg: 'bg-cream-200', text: 'text-sand-600', label: '前提' },
   }
 
-  var c = config[source] || { bg: 'bg-gray-100', text: 'text-gray-500', label: source }
+  var c = config[source] || { bg: 'bg-cream-200', text: 'text-sand-500', label: source }
 
   return (
     <span className={'inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium ' + c.bg + ' ' + c.text}>
@@ -797,12 +797,12 @@ function SourceBadge({ source }: { source: string }) {
 /** Confidence bar with percentage and color */
 function ConfidenceBar({ confidence }: { confidence: number }) {
   var pct = Math.round(confidence * 100)
-  var color = pct >= 80 ? 'bg-green-500' : pct >= 50 ? 'bg-yellow-500' : 'bg-red-400'
-  var textColor = pct >= 80 ? 'text-green-700' : pct >= 50 ? 'text-yellow-700' : 'text-red-600'
+  var color = pct >= 80 ? 'bg-emerald-500' : pct >= 50 ? 'bg-amber-500' : 'bg-red-400'
+  var textColor = pct >= 80 ? 'text-emerald-700' : pct >= 50 ? 'text-amber-700' : 'text-red-500'
 
   return (
     <div className="flex items-center gap-1.5 justify-end">
-      <div className="w-10 bg-gray-200 rounded-full h-1.5 hidden sm:block">
+      <div className="w-10 bg-cream-300 rounded-full h-1.5 hidden sm:block">
         <div
           className={color + ' h-1.5 rounded-full transition-all'}
           style={{ width: pct + '%' }}

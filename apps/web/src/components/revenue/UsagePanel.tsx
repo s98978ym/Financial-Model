@@ -69,38 +69,38 @@ export function UsagePanel({ config, onChange }: Props) {
       {/* Tier definitions */}
       <div>
         <div className="flex items-center justify-between mb-2">
-          <h4 className="text-xs font-semibold text-gray-700">料金ティア定義</h4>
+          <h4 className="text-xs font-semibold text-sand-600">料金ティア定義</h4>
           <button onClick={addTier} className="text-[10px] text-teal-600 hover:text-teal-800">+ ティア追加</button>
         </div>
-        <div className="bg-gray-50 rounded-lg border border-gray-200 overflow-x-auto">
+        <div className="bg-cream-50 rounded-2xl border border-cream-200 overflow-x-auto">
           <table className="w-full text-[11px]">
             <thead>
-              <tr className="border-b border-gray-200">
-                <th className="text-left px-3 py-2 text-gray-500 font-medium">ティア名</th>
-                <th className="text-right px-3 py-2 text-gray-500 font-medium">単価</th>
-                <th className="text-left px-3 py-2 text-gray-500 font-medium">利用単位</th>
-                <th className="text-right px-3 py-2 text-gray-500 font-medium">無料枠</th>
-                <th className="text-right px-3 py-2 text-gray-500 font-medium">平均利用量/月</th>
+              <tr className="border-b border-cream-200">
+                <th className="text-left px-3 py-2 text-sand-500 font-medium">ティア名</th>
+                <th className="text-right px-3 py-2 text-sand-500 font-medium">単価</th>
+                <th className="text-left px-3 py-2 text-sand-500 font-medium">利用単位</th>
+                <th className="text-right px-3 py-2 text-sand-500 font-medium">無料枠</th>
+                <th className="text-right px-3 py-2 text-sand-500 font-medium">平均利用量/月</th>
                 <th className="w-8"></th>
               </tr>
             </thead>
             <tbody>
               {config.tiers.map(function(tier) {
                 return (
-                  <tr key={tier.id} className="border-b border-gray-100 last:border-0 hover:bg-white">
+                  <tr key={tier.id} className="border-b border-cream-200 last:border-0 hover:bg-white">
                     <td className="px-3 py-2">
                       <input type="text" value={tier.name}
                         onChange={function(e) { updateTier(tier.id, { name: e.target.value }) }}
-                        className="w-full bg-transparent font-medium text-gray-900 outline-none focus:bg-teal-50 focus:rounded px-1 -mx-1" />
+                        className="w-full bg-transparent font-medium text-dark-900 outline-none focus:bg-cream-100 focus:rounded px-1 -mx-1" />
                     </td>
                     <td className="px-3 py-2 text-right">
                       <CellInput value={tier.unit_price} onChange={function(v) { updateTier(tier.id, { unit_price: v }) }} />
-                      <span className="text-[10px] text-gray-400">円</span>
+                      <span className="text-[10px] text-sand-400">円</span>
                     </td>
                     <td className="px-3 py-2">
                       <input type="text" value={tier.unit_label}
                         onChange={function(e) { updateTier(tier.id, { unit_label: e.target.value }) }}
-                        className="w-20 bg-transparent text-gray-600 outline-none focus:bg-teal-50 focus:rounded px-1 -mx-1" />
+                        className="w-20 bg-transparent text-sand-600 outline-none focus:bg-cream-100 focus:rounded px-1 -mx-1" />
                     </td>
                     <td className="px-3 py-2 text-right">
                       <CellInput value={tier.included_units} onChange={function(v) { updateTier(tier.id, { included_units: v }) }} integer />
@@ -110,7 +110,7 @@ export function UsagePanel({ config, onChange }: Props) {
                     </td>
                     <td className="px-1 py-2">
                       {config.tiers.length > 1 && (
-                        <button onClick={function() { removeTier(tier.id) }} className="text-gray-300 hover:text-red-500 transition-colors">
+                        <button onClick={function() { removeTier(tier.id) }} className="text-sand-300 hover:text-red-500 transition-colors">
                           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                           </svg>
@@ -127,12 +127,12 @@ export function UsagePanel({ config, onChange }: Props) {
 
       {/* User count projections per tier */}
       <div>
-        <h4 className="text-xs font-semibold text-gray-700 mb-2">ユーザー数推移</h4>
+        <h4 className="text-xs font-semibold text-sand-600 mb-2">ユーザー数推移</h4>
         <div className="bg-teal-50 rounded-lg border border-teal-100 overflow-x-auto">
           <table className="w-full text-[11px]">
             <thead>
               <tr className="border-b border-teal-200">
-                <th className="text-left px-3 py-2 text-gray-500 font-medium">ティア</th>
+                <th className="text-left px-3 py-2 text-sand-500 font-medium">ティア</th>
                 {FY_LABELS.map(function(fy) {
                   return <th key={fy} className="text-right px-3 py-2 text-teal-600 font-medium">{fy}</th>
                 })}
@@ -142,7 +142,7 @@ export function UsagePanel({ config, onChange }: Props) {
               {config.tiers.map(function(tier) {
                 return (
                   <tr key={tier.id} className="border-b border-teal-100 last:border-0 hover:bg-white/50">
-                    <td className="px-3 py-2 font-medium text-gray-700">{tier.name}</td>
+                    <td className="px-3 py-2 font-medium text-sand-600">{tier.name}</td>
                     {FY_LABELS.map(function(_, fi) {
                       return (
                         <td key={fi} className="px-3 py-2 text-right">
@@ -154,7 +154,7 @@ export function UsagePanel({ config, onChange }: Props) {
                 )
               })}
               <tr className="border-t-2 border-teal-200 bg-teal-100/50">
-                <td className="px-3 py-2 font-semibold text-gray-700">年間売上</td>
+                <td className="px-3 py-2 font-semibold text-sand-600">年間売上</td>
                 {fyRevenue.map(function(rev, fi) {
                   return <td key={fi} className="px-3 py-2 text-right font-mono font-bold text-teal-700">{formatYen(rev)}円</td>
                 })}
@@ -179,10 +179,10 @@ function CellInput({ value, onChange, integer }: { value: number; onChange: (v: 
   if (editing) return (
     <input type="text" value={draft} onChange={function(e) { setDraft(e.target.value) }}
       onBlur={commit} onKeyDown={function(e) { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); if (e.key === 'Escape') setEditing(false) }}
-      autoFocus className="w-16 text-right bg-white border border-teal-300 rounded px-1 py-0.5 text-[11px] font-mono outline-none focus:ring-1 focus:ring-teal-400" />
+      autoFocus className="w-16 text-right bg-white border border-gold-300 rounded px-1 py-0.5 text-[11px] font-mono outline-none focus:ring-1 focus:ring-gold-400" />
   )
   return (
-    <button onClick={startEdit} className="font-mono text-[11px] text-gray-900 px-1 py-0.5 rounded border border-transparent hover:border-teal-300 hover:bg-teal-50 cursor-pointer transition-colors">
+    <button onClick={startEdit} className="font-mono text-[11px] text-dark-900 px-1 py-0.5 rounded border border-transparent hover:border-gold-300 hover:bg-cream-100 cursor-pointer transition-colors">
       {(integer ? Math.round(value) : value).toLocaleString()}
     </button>
   )

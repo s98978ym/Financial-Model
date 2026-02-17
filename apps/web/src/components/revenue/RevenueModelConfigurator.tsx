@@ -88,8 +88,8 @@ export function RevenueModelConfigurator({ segments, value, onChange }: Props) {
           </svg>
         </div>
         <div>
-          <h3 className="text-sm font-semibold text-gray-900">売上構成ロジック設定</h3>
-          <p className="text-[10px] text-gray-500">各セグメントの売上ドライバーを詳細に設計</p>
+          <h3 className="text-sm font-semibold text-dark-900">売上構成ロジック設定</h3>
+          <p className="text-[10px] text-sand-500">各セグメントの売上ドライバーを詳細に設計</p>
         </div>
       </div>
 
@@ -101,21 +101,21 @@ export function RevenueModelConfigurator({ segments, value, onChange }: Props) {
         var suggestedMeta = suggestion ? getArchetypeMeta(suggestion.archetype) : null
 
         return (
-          <div key={seg.name} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div key={seg.name} className="bg-white rounded-xl border border-cream-200 overflow-hidden">
             {/* --- Segment header --- */}
             <button
               onClick={function() { toggleExpand(idx) }}
-              className="w-full px-4 py-3 flex items-center gap-3 hover:bg-gray-50 transition-colors"
+              className="w-full px-4 py-3 flex items-center gap-3 hover:bg-cream-50 transition-colors"
             >
               <div className="flex-1 min-w-0 text-left">
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-semibold text-gray-900">{seg.name}</span>
+                  <span className="text-sm font-semibold text-dark-900">{seg.name}</span>
                   {seg.model_type && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">{seg.model_type}</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-cream-100 text-sand-500">{seg.model_type}</span>
                   )}
                 </div>
                 {seg.revenue_formula && (
-                  <p className="text-[10px] text-gray-400 mt-0.5 truncate">{seg.revenue_formula}</p>
+                  <p className="text-[10px] text-sand-400 mt-0.5 truncate">{seg.revenue_formula}</p>
                 )}
               </div>
               {meta && (
@@ -127,19 +127,19 @@ export function RevenueModelConfigurator({ segments, value, onChange }: Props) {
                 </div>
               )}
               {!meta && suggestedMeta && (
-                <div className="flex items-center gap-1 text-xs text-gray-400">
+                <div className="flex items-center gap-1 text-xs text-sand-400">
                   <span className={'w-3.5 h-3.5 rounded text-[9px] font-bold flex items-center justify-center text-white opacity-60 ' + suggestedMeta.color}>
                     {suggestedMeta.icon}
                   </span>
                   <span className="opacity-60">{suggestedMeta.label}</span>
-                  <span className="text-[9px] text-gray-300">推奨</span>
+                  <span className="text-[9px] text-sand-300">推奨</span>
                 </div>
               )}
               {!meta && !suggestedMeta && (
-                <span className="text-xs text-gray-400">モデル未選択</span>
+                <span className="text-xs text-sand-400">モデル未選択</span>
               )}
               <svg
-                className={'w-4 h-4 text-gray-400 transition-transform ' + (isExpanded ? 'rotate-180' : '')}
+                className={'w-4 h-4 text-sand-400 transition-transform ' + (isExpanded ? 'rotate-180' : '')}
                 fill="none" viewBox="0 0 24 24" stroke="currentColor"
               >
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -148,16 +148,16 @@ export function RevenueModelConfigurator({ segments, value, onChange }: Props) {
 
             {/* --- Expanded content --- */}
             {isExpanded && (
-              <div className="border-t border-gray-100">
+              <div className="border-t border-cream-200">
                 {/* Archetype selector — grouped by MECE category */}
-                <div className="px-4 py-3 bg-gray-50 border-b border-gray-100">
-                  <div className="text-[10px] font-medium text-gray-500 mb-2">売上モデルを選択</div>
+                <div className="px-4 py-3 bg-cream-50 border-b border-cream-200">
+                  <div className="text-[10px] font-medium text-sand-500 mb-2">売上モデルを選択</div>
                   {(['取引型', '継続型', '仲介型', '権利・教育型'] as ArchetypeCategory[]).map(function(cat) {
                     var catArchetypes = ARCHETYPES.filter(function(a) { return a.category === cat })
                     if (catArchetypes.length === 0) return null
                     return (
                       <div key={cat} className="mb-2 last:mb-0">
-                        <div className="text-[9px] text-gray-400 font-medium mb-1">{cat}</div>
+                        <div className="text-[9px] text-sand-400 font-medium mb-1">{cat}</div>
                         <div className="flex gap-1.5 flex-wrap">
                           {catArchetypes.map(function(arch) {
                             var isSelected = model.archetype === arch.id
@@ -167,8 +167,8 @@ export function RevenueModelConfigurator({ segments, value, onChange }: Props) {
                                 onClick={function(e) { e.stopPropagation(); handleSelectArchetype(idx, arch.id) }}
                                 className={'flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-[11px] transition-all '
                                   + (isSelected
-                                    ? arch.color + ' text-white border-transparent shadow-sm'
-                                    : 'bg-white border-gray-200 text-gray-600 hover:border-gray-400'
+                                    ? arch.color + ' text-white border-transparent shadow-warm'
+                                    : 'bg-white border-cream-200 text-sand-600 hover:border-cream-300'
                                   )}
                               >
                                 <span className={'w-4 h-4 rounded text-[10px] font-bold flex items-center justify-center '
@@ -184,7 +184,7 @@ export function RevenueModelConfigurator({ segments, value, onChange }: Props) {
                     )
                   })}
                   {model.archetype && meta && (
-                    <p className="text-[10px] text-gray-400 mt-2">{meta.description}</p>
+                    <p className="text-[10px] text-sand-400 mt-2">{meta.description}</p>
                   )}
                 </div>
 
@@ -265,20 +265,20 @@ export function RevenueModelConfigurator({ segments, value, onChange }: Props) {
                   <div className="px-4 py-6 text-center">
                     {suggestion && suggestedMeta ? (
                       <div>
-                        <p className="text-xs text-gray-400 mb-2">Phase 2 の分析結果に基づく推奨モデル:</p>
+                        <p className="text-xs text-sand-400 mb-2">Phase 2 の分析結果に基づく推奨モデル:</p>
                         <button
                           onClick={function() { handleSelectArchetype(idx, suggestion!.archetype) }}
-                          className={'inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white shadow-sm transition-all hover:shadow-md ' + suggestedMeta.color}
+                          className={'inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white shadow-warm transition-all hover:shadow-warm-md ' + suggestedMeta.color}
                         >
                           <span className="w-5 h-5 rounded bg-white/30 text-[11px] font-bold flex items-center justify-center">
                             {suggestedMeta.icon}
                           </span>
                           {suggestedMeta.label}を適用
                         </button>
-                        <p className="text-[10px] text-gray-400 mt-1.5">{suggestedMeta.description}</p>
+                        <p className="text-[10px] text-sand-400 mt-1.5">{suggestedMeta.description}</p>
                       </div>
                     ) : (
-                      <p className="text-sm text-gray-400">上のボタンから売上モデルを選択してください</p>
+                      <p className="text-sm text-sand-400">上のボタンから売上モデルを選択してください</p>
                     )}
                   </div>
                 )}

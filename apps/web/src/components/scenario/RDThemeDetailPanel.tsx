@@ -263,21 +263,21 @@ export function RDThemeDetailPanel({ themes, onThemesChange, systemTotal }: RDTh
   })
 
   return (
-    <div className="mt-3 rounded-xl border border-gray-200 bg-gradient-to-b from-slate-50 to-white overflow-hidden shadow-sm">
+    <div className="mt-3 rounded-3xl shadow-warm bg-white overflow-hidden">
       {/* Header */}
-      <div className="px-4 py-3 border-b border-gray-100 bg-white">
+      <div className="px-4 py-3 border-b border-cream-200">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center shadow-sm">
+            <div className="w-7 h-7 rounded-lg bg-dark-900 flex items-center justify-center shadow-warm">
               <IconCode className="w-4 h-4 text-white" />
             </div>
             <div>
-              <div className="text-sm font-semibold text-gray-800">開発費内訳</div>
-              <div className="text-[10px] text-gray-400">R&D Cost Breakdown</div>
+              <div className="text-sm font-semibold text-dark-900">開発費内訳</div>
+              <div className="text-[10px] text-sand-400">R&D Cost Breakdown</div>
             </div>
           </div>
           <div className="text-right">
-            <div className="text-sm font-bold text-gray-900 font-mono">{formatYen(computedTotal)}</div>
+            <div className="text-sm font-bold text-dark-900 font-mono">{formatYen(computedTotal)}</div>
             {computedTotal !== systemTotal && systemTotal > 0 && (
               <div className="text-[10px] text-amber-500">目標: {formatYen(systemTotal)}</div>
             )}
@@ -287,7 +287,7 @@ export function RDThemeDetailPanel({ themes, onThemesChange, systemTotal }: RDTh
         {/* Composition bar */}
         {computedTotal > 0 && (
           <div className="mt-2.5">
-            <div className="h-2 rounded-full overflow-hidden flex bg-gray-100">
+            <div className="h-2 rounded-full overflow-hidden flex bg-cream-200">
               {catTotals.map(function(ct, idx) {
                 var pct = computedTotal > 0 ? (ct / computedTotal) * 100 : 0
                 var colors = [
@@ -311,7 +311,7 @@ export function RDThemeDetailPanel({ themes, onThemesChange, systemTotal }: RDTh
                 return (
                   <div key={idx} className="flex items-center gap-1">
                     <div className={'w-2 h-2 rounded-full ' + style.badge.split(' ')[0].replace('bg-', 'bg-').replace('100', '500')} style={{ backgroundColor: ['#3b82f6', '#8b5cf6', '#14b8a6', '#f59e0b', '#f43f5e', '#10b981'][idx % 6] }} />
-                    <span className="text-[9px] text-gray-500">{themesWithAmounts[idx].name} {pct.toFixed(0)}%</span>
+                    <span className="text-[9px] text-sand-500">{themesWithAmounts[idx].name} {pct.toFixed(0)}%</span>
                   </div>
                 )
               })}
@@ -329,7 +329,7 @@ export function RDThemeDetailPanel({ themes, onThemesChange, systemTotal }: RDTh
           var isEditingCatName = editingName && editingName.catIdx === catIdx && editingName.itemIdx == null
 
           return (
-            <div key={catIdx} className={'rounded-lg border border-gray-200 bg-white overflow-hidden border-l-[3px] ' + style.accent + ' shadow-sm hover:shadow-md transition-shadow'}>
+            <div key={catIdx} className={'rounded-2xl border border-cream-200 bg-white overflow-hidden border-l-[3px] ' + style.accent + ' shadow-warm hover:shadow-warm-md transition-shadow'}>
               {/* Category Header */}
               <div className="px-3 py-2.5 flex items-center gap-2.5">
                 <div className={'w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ' + style.bg}>
@@ -347,22 +347,22 @@ export function RDThemeDetailPanel({ themes, onThemesChange, systemTotal }: RDTh
                         if (e.key === 'Enter') commitName()
                         if (e.key === 'Escape') setEditingName(null)
                       }}
-                      className="text-sm font-semibold text-gray-800 bg-blue-50 border border-blue-300 rounded-md px-2 py-0.5 w-full focus:outline-none focus:ring-2 focus:ring-blue-400"
+                      className="text-sm font-semibold text-dark-900 bg-cream-100 border border-gold-300 rounded-md px-2 py-0.5 w-full focus:outline-none focus:ring-2 focus:ring-gold-400"
                       autoFocus
                     />
                   ) : (
                     <div className="flex items-center gap-1.5 group/catname">
-                      <span className="text-sm font-semibold text-gray-800 truncate">{theme.name}</span>
+                      <span className="text-sm font-semibold text-dark-900 truncate">{theme.name}</span>
                       <button
                         onClick={function() { startEditCatName(catIdx) }}
-                        className="opacity-0 group-hover/catname:opacity-100 transition-opacity p-0.5 rounded hover:bg-gray-100"
+                        className="opacity-0 group-hover/catname:opacity-100 transition-opacity p-0.5 rounded hover:bg-cream-100"
                         title="名前を編集"
                       >
-                        <IconPencil className="w-3 h-3 text-gray-400" />
+                        <IconPencil className="w-3 h-3 text-sand-400" />
                       </button>
                     </div>
                   )}
-                  <div className="text-[10px] text-gray-400">{theme.items.length} 項目</div>
+                  <div className="text-[10px] text-sand-400">{theme.items.length} 項目</div>
                 </div>
 
                 <div className="flex items-center gap-2 flex-shrink-0">
@@ -372,7 +372,7 @@ export function RDThemeDetailPanel({ themes, onThemesChange, systemTotal }: RDTh
                   {themesWithAmounts.length > 1 && (
                     <button
                       onClick={function() { removeCategory(catIdx) }}
-                      className="p-1 rounded-md text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors"
+                      className="p-1 rounded-md text-sand-300 hover:text-red-500 hover:bg-red-50 transition-colors"
                       title="カテゴリを削除"
                     >
                       <IconTrash className="w-3.5 h-3.5" />
@@ -390,10 +390,10 @@ export function RDThemeDetailPanel({ themes, onThemesChange, systemTotal }: RDTh
                     var isEditingThisAmount = editingAmount && editingAmount.catIdx === catIdx && editingAmount.itemIdx === itemIdx
 
                     return (
-                      <div key={itemIdx} className="group/item rounded-lg hover:bg-gray-50 transition-colors px-2 py-1.5">
+                      <div key={itemIdx} className="group/item rounded-lg hover:bg-cream-50 transition-colors px-2 py-1.5">
                         <div className="flex items-center gap-2">
                           {/* Dot indicator */}
-                          <div className={'w-1.5 h-1.5 rounded-full flex-shrink-0 ' + (amount > 0 ? 'bg-emerald-400' : 'bg-gray-200')} />
+                          <div className={'w-1.5 h-1.5 rounded-full flex-shrink-0 ' + (amount > 0 ? 'bg-emerald-400' : 'bg-cream-200')} />
 
                           {/* Item name */}
                           <div className="flex-1 min-w-0">
@@ -407,12 +407,12 @@ export function RDThemeDetailPanel({ themes, onThemesChange, systemTotal }: RDTh
                                   if (e.key === 'Enter') commitName()
                                   if (e.key === 'Escape') setEditingName(null)
                                 }}
-                                className="text-xs text-gray-700 bg-blue-50 border border-blue-300 rounded-md px-2 py-0.5 w-full focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                className="text-xs text-sand-600 bg-cream-100 border border-gold-300 rounded-md px-2 py-0.5 w-full focus:outline-none focus:ring-2 focus:ring-gold-400"
                                 autoFocus
                               />
                             ) : (
                               <div className="flex items-center gap-1 group/name">
-                                <span className="text-xs text-gray-700 truncate cursor-pointer hover:text-blue-600 transition-colors" onClick={function() { startEditItemName(catIdx, itemIdx) }}>
+                                <span className="text-xs text-sand-600 truncate cursor-pointer hover:text-gold-600 transition-colors" onClick={function() { startEditItemName(catIdx, itemIdx) }}>
                                   {item}
                                 </span>
                                 <button
@@ -420,7 +420,7 @@ export function RDThemeDetailPanel({ themes, onThemesChange, systemTotal }: RDTh
                                   className="opacity-0 group-hover/name:opacity-100 transition-opacity p-0.5"
                                   title="項目名を編集"
                                 >
-                                  <IconPencil className="w-2.5 h-2.5 text-gray-300" />
+                                  <IconPencil className="w-2.5 h-2.5 text-sand-300" />
                                 </button>
                               </div>
                             )}
@@ -430,7 +430,7 @@ export function RDThemeDetailPanel({ themes, onThemesChange, systemTotal }: RDTh
                           {isEditingThisAmount ? (
                             <div className="flex items-center gap-1 flex-shrink-0">
                               <div className="relative">
-                                <IconYen className="w-3 h-3 text-gray-400 absolute left-1.5 top-1/2 -translate-y-1/2" />
+                                <IconYen className="w-3 h-3 text-sand-400 absolute left-1.5 top-1/2 -translate-y-1/2" />
                                 <input
                                   type="text"
                                   value={amountText}
@@ -440,24 +440,24 @@ export function RDThemeDetailPanel({ themes, onThemesChange, systemTotal }: RDTh
                                     if (e.key === 'Enter') commitAmount()
                                     if (e.key === 'Escape') setEditingAmount(null)
                                   }}
-                                  className="w-20 text-xs font-mono text-right bg-white border border-blue-300 rounded-md pl-5 pr-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-400 shadow-sm"
+                                  className="w-20 text-xs font-mono text-right bg-white border border-gold-300 rounded-md pl-5 pr-2 py-1 focus:outline-none focus:ring-2 focus:ring-gold-400 shadow-warm"
                                   autoFocus
                                   placeholder="0"
                                 />
                               </div>
-                              <span className="text-[10px] text-gray-400">万円</span>
+                              <span className="text-[10px] text-sand-400">万円</span>
                             </div>
                           ) : (
                             <button
                               onClick={function() { startEditAmount(catIdx, itemIdx) }}
                               className={'flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-mono transition-all flex-shrink-0 ' + (
                                 amount > 0
-                                  ? 'text-gray-700 hover:bg-blue-50 hover:text-blue-700 bg-gray-50'
-                                  : 'text-gray-300 hover:bg-amber-50 hover:text-amber-600 border border-dashed border-gray-200 hover:border-amber-300'
+                                  ? 'text-sand-600 hover:bg-cream-100 hover:text-gold-600 bg-cream-50'
+                                  : 'text-sand-300 hover:bg-amber-50 hover:text-amber-600 border border-dashed border-cream-200 hover:border-amber-300'
                               )}
                               title="金額を編集"
                             >
-                              <IconYen className={'w-3 h-3 ' + (amount > 0 ? 'text-gray-400' : 'text-gray-200')} />
+                              <IconYen className={'w-3 h-3 ' + (amount > 0 ? 'text-sand-400' : 'text-cream-300')} />
                               {amount > 0 ? formatYen(amount) : '未設定'}
                             </button>
                           )}
@@ -466,7 +466,7 @@ export function RDThemeDetailPanel({ themes, onThemesChange, systemTotal }: RDTh
                           {theme.items.length > 1 && (
                             <button
                               onClick={function() { removeItem(catIdx, itemIdx) }}
-                              className="p-0.5 rounded text-gray-200 hover:text-red-500 hover:bg-red-50 opacity-0 group-hover/item:opacity-100 transition-all flex-shrink-0"
+                              className="p-0.5 rounded text-cream-300 hover:text-red-500 hover:bg-red-50 opacity-0 group-hover/item:opacity-100 transition-all flex-shrink-0"
                               title="項目を削除"
                             >
                               <IconTrash className="w-3 h-3" />
@@ -483,7 +483,7 @@ export function RDThemeDetailPanel({ themes, onThemesChange, systemTotal }: RDTh
                             step={500_000}
                             value={amount}
                             onChange={function(e) { handleSliderChange(catIdx, itemIdx, parseFloat(e.target.value)) }}
-                            className="w-full h-1 bg-gray-100 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                            className="w-full h-1 bg-cream-200 rounded-lg appearance-none cursor-pointer accent-gold-500"
                           />
                         </div>
                       </div>
@@ -494,7 +494,7 @@ export function RDThemeDetailPanel({ themes, onThemesChange, systemTotal }: RDTh
                 {/* Add item button */}
                 <button
                   onClick={function() { addItem(catIdx) }}
-                  className="mt-2 ml-2 flex items-center gap-1 text-[11px] text-gray-400 hover:text-blue-600 transition-colors px-2 py-1 rounded-md hover:bg-blue-50"
+                  className="mt-2 ml-2 flex items-center gap-1 text-[11px] text-sand-400 hover:text-gold-600 transition-colors px-2 py-1 rounded-md hover:bg-cream-100"
                 >
                   <IconPlus className="w-3 h-3" />
                   <span>項目を追加</span>
@@ -506,22 +506,22 @@ export function RDThemeDetailPanel({ themes, onThemesChange, systemTotal }: RDTh
       </div>
 
       {/* Footer: Add category + summary */}
-      <div className="px-4 py-3 border-t border-gray-100 bg-white flex items-center justify-between">
+      <div className="px-4 py-3 border-t border-cream-200 flex items-center justify-between">
         <button
           onClick={addCategory}
-          className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-blue-600 transition-colors px-3 py-1.5 rounded-lg border border-dashed border-gray-300 hover:border-blue-400 hover:bg-blue-50"
+          className="flex items-center gap-1.5 text-xs text-sand-500 hover:text-gold-600 transition-colors px-3 py-1.5 rounded-lg border border-dashed border-cream-300 hover:border-gold-400 hover:bg-cream-100"
         >
           <IconPlus className="w-3.5 h-3.5" />
           <span>カテゴリ追加</span>
         </button>
 
         <div className="flex items-center gap-3">
-          <div className="text-[10px] text-gray-400">
+          <div className="text-[10px] text-sand-400">
             {themesWithAmounts.length} カテゴリ / {themesWithAmounts.reduce(function(s, t) { return s + t.items.length }, 0)} 項目
           </div>
-          <div className="flex items-center gap-1.5 bg-gradient-to-r from-cyan-50 to-blue-50 px-3 py-1.5 rounded-lg border border-cyan-200">
-            <span className="text-xs text-gray-600">合計</span>
-            <span className="text-sm font-bold text-gray-900 font-mono">{formatYen(computedTotal)}</span>
+          <div className="flex items-center gap-1.5 bg-cream-100 px-3 py-1.5 rounded-2xl border border-cream-200">
+            <span className="text-xs text-sand-600">合計</span>
+            <span className="text-sm font-bold text-dark-900 font-mono">{formatYen(computedTotal)}</span>
           </div>
         </div>
       </div>

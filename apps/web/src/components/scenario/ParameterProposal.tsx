@@ -77,7 +77,7 @@ function formatValue(key: string, value: number): string {
 
 function ChangeArrow() {
   return (
-    <svg className="w-3 h-3 text-gray-400 mx-1 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <svg className="w-3 h-3 text-sand-400 mx-1 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
     </svg>
   )
@@ -132,23 +132,23 @@ export function ParameterProposal({ proposal, currentParams, onAccept, onReject 
   else if (proposal.source.includes('自然言語') || proposal.source.includes('NL')) sourceIcon = '💬'
 
   return (
-    <div className="bg-white rounded-lg border-2 border-blue-300 shadow-lg overflow-hidden animate-in slide-in-from-top-2 duration-300">
+    <div className="bg-white rounded-3xl shadow-warm-lg ring-1 ring-gold-300 overflow-hidden animate-in slide-in-from-top-2 duration-300">
       {/* Header */}
-      <div className="px-4 py-3 bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-blue-200">
+      <div className="px-4 py-3 bg-cream-100 border-b border-cream-200">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="text-lg">{sourceIcon}</span>
             <div>
-              <h3 className="text-sm font-semibold text-gray-900">パラメーター提案</h3>
-              <p className="text-[11px] text-gray-500">{proposal.source}</p>
+              <h3 className="text-sm font-semibold text-dark-900">パラメーター提案</h3>
+              <p className="text-[11px] text-sand-500">{proposal.source}</p>
             </div>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="text-[10px] text-gray-400">{acceptedCount}/{items.length}件選択</span>
+            <span className="text-[10px] text-sand-400">{acceptedCount}/{items.length}件選択</span>
           </div>
         </div>
         {proposal.sourceDetail && (
-          <div className="mt-1.5 text-[11px] text-indigo-600 bg-indigo-50 rounded px-2 py-1 border border-indigo-100">
+          <div className="mt-1.5 text-[11px] text-gold-600 bg-cream-200 rounded-xl px-2 py-1 border border-cream-300">
             {proposal.sourceDetail}
           </div>
         )}
@@ -157,10 +157,10 @@ export function ParameterProposal({ proposal, currentParams, onAccept, onReject 
       {/* Parameter change list */}
       <div className="px-4 py-2 max-h-60 overflow-y-auto">
         {/* Select all / none */}
-        <div className="flex items-center gap-2 pb-1.5 mb-1 border-b border-gray-100">
+        <div className="flex items-center gap-2 pb-1.5 mb-1 border-b border-cream-200">
           <button
             onClick={function() { toggleAll(!allAccepted) }}
-            className="text-[10px] text-blue-600 hover:text-blue-800"
+            className="text-[10px] text-gold-600 hover:text-gold-500"
           >
             {allAccepted ? '全て解除' : '全て選択'}
           </button>
@@ -175,15 +175,15 @@ export function ParameterProposal({ proposal, currentParams, onAccept, onReject 
               onClick={function() { toggleItem(i) }}
               className={'w-full flex items-center gap-2 py-2 px-1 rounded transition-all text-left ' +
                 (item.accepted
-                  ? 'bg-blue-50/50 hover:bg-blue-50'
+                  ? 'bg-cream-100 hover:bg-cream-50'
                   : 'opacity-50 hover:opacity-70'
                 ) +
-                (i < items.length - 1 ? ' border-b border-gray-50' : '')
+                (i < items.length - 1 ? ' border-b border-cream-100' : '')
               }
             >
               {/* Checkbox */}
               <div className={'w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 transition-colors ' +
-                (item.accepted ? 'bg-blue-500 border-blue-500' : 'border-gray-300 bg-white')}>
+                (item.accepted ? 'bg-gold-500 border-gold-500' : 'border-cream-300 bg-white')}>
                 {item.accepted && (
                   <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
@@ -193,12 +193,12 @@ export function ParameterProposal({ proposal, currentParams, onAccept, onReject 
 
               {/* Label */}
               <div className="flex-1 min-w-0">
-                <div className="text-[11px] font-medium text-gray-700 truncate">{item.label}</div>
+                <div className="text-[11px] font-medium text-sand-600 truncate">{item.label}</div>
               </div>
 
               {/* Current → Proposed */}
               <div className="flex items-center flex-shrink-0">
-                <span className="text-[11px] font-mono text-gray-400">
+                <span className="text-[11px] font-mono text-sand-400">
                   {formatValue(item.key, item.currentValue)}
                 </span>
                 {changed && (
@@ -211,7 +211,7 @@ export function ParameterProposal({ proposal, currentParams, onAccept, onReject 
                   </>
                 )}
                 {!changed && (
-                  <span className="text-[10px] text-gray-400 ml-2">変更なし</span>
+                  <span className="text-[10px] text-sand-400 ml-2">変更なし</span>
                 )}
               </div>
             </button>
@@ -220,10 +220,10 @@ export function ParameterProposal({ proposal, currentParams, onAccept, onReject 
       </div>
 
       {/* Action buttons */}
-      <div className="px-4 py-3 bg-gray-50 border-t border-gray-200 flex items-center justify-between">
+      <div className="px-4 py-3 bg-cream-100 border-t border-cream-200 flex items-center justify-between">
         <button
           onClick={onReject}
-          className="text-xs text-gray-500 hover:text-gray-700 px-3 py-1.5 rounded border border-gray-300 hover:bg-white transition-colors"
+          className="text-xs text-sand-500 hover:text-dark-900 px-3 py-1.5 rounded-xl border border-cream-300 hover:bg-white transition-colors"
         >
           却下
         </button>
@@ -233,8 +233,8 @@ export function ParameterProposal({ proposal, currentParams, onAccept, onReject 
             disabled={noneAccepted}
             className={'text-xs font-semibold px-4 py-1.5 rounded transition-colors ' +
               (noneAccepted
-                ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                : 'bg-blue-600 text-white hover:bg-blue-700 shadow-sm'
+                ? 'bg-cream-200 text-sand-400 cursor-not-allowed'
+                : 'bg-dark-900 text-white hover:bg-dark-800 shadow-warm'
               )
             }
           >

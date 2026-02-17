@@ -45,6 +45,7 @@ node_modules/
 out/
 package-lock.json
 tsconfig.tsbuildinfo
+next-env.d.ts
 
 # pytest
 .pytest_cache/

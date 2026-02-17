@@ -7,9 +7,9 @@ interface ScenarioTabsProps {
 }
 
 const TABS = [
-  { key: 'base' as const, label: 'Base', desc: '基本シナリオ', color: 'blue' },
-  { key: 'best' as const, label: 'Best', desc: '売上+20% / コスト-10%', color: 'green' },
-  { key: 'worst' as const, label: 'Worst', desc: '売上-20% / コスト+15%', color: 'red' },
+  { key: 'base' as const, label: 'Base', desc: '基本シナリオ', color: 'base' },
+  { key: 'best' as const, label: 'Best', desc: '売上+20% / コスト-10%', color: 'best' },
+  { key: 'worst' as const, label: 'Worst', desc: '売上-20% / コスト+15%', color: 'worst' },
 ]
 
 export function ScenarioTabs({ active, onChange, completionStatus }: ScenarioTabsProps) {
@@ -19,16 +19,16 @@ export function ScenarioTabs({ active, onChange, completionStatus }: ScenarioTab
         const isActive = active === tab.key
         const isComplete = completionStatus?.[tab.key] ?? false
         const colorMap: Record<string, string> = {
-          blue: isActive ? 'bg-blue-600 text-white' : 'bg-white text-blue-600 border-blue-200 hover:bg-blue-50',
-          green: isActive ? 'bg-green-600 text-white' : 'bg-white text-green-600 border-green-200 hover:bg-green-50',
-          red: isActive ? 'bg-red-600 text-white' : 'bg-white text-red-600 border-red-200 hover:bg-red-50',
+          base: isActive ? 'bg-dark-900 text-white shadow-warm' : 'bg-white text-sand-600 shadow-warm hover:bg-cream-50',
+          best: isActive ? 'bg-emerald-600 text-white shadow-warm' : 'bg-white text-sand-600 shadow-warm hover:bg-cream-50',
+          worst: isActive ? 'bg-red-600 text-white shadow-warm' : 'bg-white text-sand-600 shadow-warm hover:bg-cream-50',
         }
 
         return (
           <button
             key={tab.key}
             onClick={() => onChange(tab.key)}
-            className={`px-4 py-2 rounded-lg border transition-colors relative ${colorMap[tab.color as keyof typeof colorMap]}`}
+            className={`px-4 py-2 rounded-2xl transition-colors relative ${colorMap[tab.color as keyof typeof colorMap]}`}
           >
             <div className="flex items-center gap-1.5">
               <span className="font-medium">{tab.label}</span>
@@ -42,7 +42,7 @@ export function ScenarioTabs({ active, onChange, completionStatus }: ScenarioTab
                 </span>
               ) : (
                 <span className={`inline-flex items-center justify-center w-4 h-4 rounded-full text-[10px] ${
-                  isActive ? 'bg-white/20 text-white/70' : 'bg-gray-100 text-gray-400'
+                  isActive ? 'bg-white/20 text-white/70' : 'bg-cream-200 text-sand-400'
                 }`} title="未設定">
                   <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <circle cx="12" cy="12" r="9" />
