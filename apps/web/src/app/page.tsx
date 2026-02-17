@@ -13,9 +13,10 @@ var PHASE_LABELS: Record<number, string> = {
   5: 'パラメータ',
   6: 'シナリオ',
   7: 'エクスポート',
+  8: 'Q&A',
 }
 
-var MAX_PIPELINE_PHASE = 7
+var MAX_PIPELINE_PHASE = 8
 
 var STATUS_CONFIG: Record<string, { label: string; bg: string; text: string }> = {
   created: { label: '作成済み', bg: 'bg-gray-100', text: 'text-gray-600' },
@@ -296,7 +297,7 @@ export default function DashboardPage() {
                       <span className="text-xs text-gray-400">{phaseProgress}%</span>
                     </div>
                     <div className="flex gap-1">
-                      {[1, 2, 3, 4, 5, 6, 7].map(function(phase) {
+                      {[1, 2, 3, 4, 5, 6, 7, 8].map(function(phase) {
                         var isDone = phase < displayPhase
                         var isCurrent = phase === displayPhase
                         return (
@@ -316,7 +317,7 @@ export default function DashboardPage() {
                     </div>
                     {/* Phase Labels Row - hidden on mobile, visible on sm+ */}
                     <div className="hidden sm:flex gap-1 mt-1">
-                      {[1, 2, 3, 4, 5, 6, 7].map(function(phase) {
+                      {[1, 2, 3, 4, 5, 6, 7, 8].map(function(phase) {
                         var isCurrent = phase === displayPhase
                         return (
                           <div key={phase} className="flex-1 text-center">
