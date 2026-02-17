@@ -25,8 +25,8 @@ function RichAnswer({ text }: { text: string }) {
               {lines.filter(function(l) { return l.trim() }).map(function(line, li) {
                 var content = line.replace(/^\s*- /, '')
                 return (
-                  <li key={li} className="flex gap-2 text-sm text-gray-700 leading-relaxed">
-                    <span className="text-gray-300 mt-1 flex-shrink-0">•</span>
+                  <li key={li} className="flex gap-2 text-sm text-sand-600 leading-relaxed">
+                    <span className="text-sand-300 mt-1 flex-shrink-0">•</span>
                     <span><InlineMarkdown text={content} /></span>
                   </li>
                 )
@@ -37,7 +37,7 @@ function RichAnswer({ text }: { text: string }) {
 
         // Regular paragraph
         return (
-          <p key={bi} className="text-sm text-gray-700 leading-relaxed">
+          <p key={bi} className="text-sm text-sand-600 leading-relaxed">
             <InlineMarkdown text={block.replace(/\n/g, ' ')} />
           </p>
         )
@@ -53,7 +53,7 @@ function InlineMarkdown({ text }: { text: string }) {
     <>
       {parts.map(function(part, i) {
         if (part.startsWith('**') && part.endsWith('**')) {
-          return <strong key={i} className="font-semibold text-gray-900">{part.slice(2, -2)}</strong>
+          return <strong key={i} className="font-semibold text-dark-900">{part.slice(2, -2)}</strong>
         }
         return <span key={i}>{part}</span>
       })}
@@ -180,20 +180,20 @@ export function QADisplay({ items, onItemsChange }: QADisplayProps) {
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div className="px-4 sm:px-6 py-4 border-b border-gray-100 flex items-center justify-between gap-2">
+      <div className="bg-white rounded-3xl shadow-warm overflow-hidden">
+        <div className="px-4 sm:px-6 py-4 border-b border-cream-200 flex items-center justify-between gap-2">
           <div>
-            <h3 className="font-semibold text-gray-900">生成されたQ&A</h3>
-            <p className="text-xs text-gray-500 mt-0.5">{items.length}問・{categoryKeys.length}カテゴリ</p>
+            <h3 className="font-semibold text-dark-900">生成されたQ&A</h3>
+            <p className="text-xs text-sand-500 mt-0.5">{items.length}問・{categoryKeys.length}カテゴリ</p>
           </div>
           <div className="flex items-center gap-2">
             {onItemsChange && (
               <button
                 onClick={function() { setCustomizeMode(!customizeMode) }}
-                className={'text-xs px-3 py-1.5 rounded-lg border transition-colors ' + (
+                className={'text-xs px-3 py-1.5 rounded-2xl border transition-colors ' + (
                   customizeMode
                     ? 'border-purple-300 bg-purple-50 text-purple-700'
-                    : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                    : 'border-cream-300 text-sand-600 hover:bg-cream-100'
                 )}
               >
                 {customizeMode ? '完了' : 'カスタマイズ'}
@@ -201,13 +201,13 @@ export function QADisplay({ items, onItemsChange }: QADisplayProps) {
             )}
             <button
               onClick={handleExportMarkdown}
-              className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
+              className="text-xs px-3 py-1.5 rounded-2xl border border-cream-300 text-sand-600 hover:bg-cream-100 transition-colors"
             >
               MD出力
             </button>
             <button
               onClick={handleCopyAll}
-              className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
+              className="text-xs px-3 py-1.5 rounded-2xl border border-cream-300 text-sand-600 hover:bg-cream-100 transition-colors"
             >
               全コピー
             </button>
@@ -215,11 +215,11 @@ export function QADisplay({ items, onItemsChange }: QADisplayProps) {
         </div>
 
         {/* Category Tabs */}
-        <div className="px-4 py-3 border-b border-gray-100 flex gap-2 overflow-x-auto">
+        <div className="px-4 py-3 border-b border-cream-200 flex gap-2 overflow-x-auto">
           <button
             onClick={function() { setActiveCategory('all') }}
-            className={'px-3 py-1.5 rounded-lg text-xs font-medium transition-all ' + (
-              activeCategory === 'all' ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            className={'px-3 py-1.5 rounded-2xl text-xs font-medium transition-all ' + (
+              activeCategory === 'all' ? 'bg-dark-900 text-white' : 'bg-cream-200 text-sand-600 hover:bg-cream-300'
             )}
           >
             全て ({items.length})
@@ -230,7 +230,7 @@ export function QADisplay({ items, onItemsChange }: QADisplayProps) {
               <button
                 key={cat}
                 onClick={function() { setActiveCategory(cat) }}
-                className={'px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1 ' + (
+                className={'px-3 py-1.5 rounded-2xl text-xs font-medium transition-all flex items-center gap-1 ' + (
                   activeCategory === cat
                     ? info.bgColor + ' ' + info.color + ' border ' + info.borderColor
                     : 'bg-cream-200 text-sand-600 hover:bg-cream-300'
@@ -274,38 +274,38 @@ export function QADisplay({ items, onItemsChange }: QADisplayProps) {
     var isEditing = editingId === item.id
 
     return (
-      <div key={item.id} className={'rounded-xl border overflow-hidden transition-all ' + (
-        isExpanded ? 'shadow-md ' + info.borderColor : 'border-gray-200 hover:border-gray-300'
+      <div key={item.id} className={'rounded-3xl overflow-hidden transition-all ' + (
+        isExpanded ? 'shadow-warm-md ' + info.borderColor + ' border' : 'shadow-warm hover:shadow-warm-md'
       )}>
         {/* Question Header */}
         <div className="flex items-start">
           {customizeMode && (
-            <div className="flex flex-col gap-1 p-2 border-r border-gray-100">
-              <button onClick={function() { handleMoveUp(item.id) }} className="text-xs text-gray-400 hover:text-gray-600 px-1">▲</button>
-              <button onClick={function() { handleMoveDown(item.id) }} className="text-xs text-gray-400 hover:text-gray-600 px-1">▼</button>
+            <div className="flex flex-col gap-1 p-2 border-r border-cream-200">
+              <button onClick={function() { handleMoveUp(item.id) }} className="text-xs text-sand-400 hover:text-sand-600 px-1">▲</button>
+              <button onClick={function() { handleMoveDown(item.id) }} className="text-xs text-sand-400 hover:text-sand-600 px-1">▼</button>
               <button onClick={function() { handleDelete(item.id) }} className="text-xs text-red-400 hover:text-red-600 px-1">✕</button>
             </div>
           )}
           <button
             onClick={function() { setExpandedId(isExpanded ? null : item.id) }}
-            className="flex-1 text-left px-4 sm:px-5 py-3.5 flex items-start gap-3 hover:bg-gray-50 transition-colors min-h-[44px]"
+            className="flex-1 text-left px-4 sm:px-5 py-3.5 flex items-start gap-3 hover:bg-cream-100 transition-colors min-h-[44px]"
           >
-            <span className={'flex-shrink-0 w-6 h-6 rounded-lg flex items-center justify-center text-xs mt-0.5 ' + info.bgColor}>
+            <span className={'flex-shrink-0 w-6 h-6 rounded-2xl flex items-center justify-center text-xs mt-0.5 ' + info.bgColor}>
               {info.icon}
             </span>
             <div className="flex-1 min-w-0">
-              <div className="text-sm font-medium text-gray-900 leading-snug">{item.question}</div>
+              <div className="text-sm font-medium text-dark-900 leading-snug">{item.question}</div>
               {!isExpanded && (
-                <div className="text-xs text-gray-400 mt-1 truncate">{item.answer.replace(/\*\*/g, '').replace(/\n/g, ' ')}</div>
+                <div className="text-xs text-sand-400 mt-1 truncate">{item.answer.replace(/\*\*/g, '').replace(/\n/g, ' ')}</div>
               )}
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
               <span className="hidden sm:flex gap-1">
                 {item.tags.slice(0, 2).map(function(tag) {
-                  return <span key={tag} className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">{tag}</span>
+                  return <span key={tag} className="text-[10px] px-1.5 py-0.5 rounded bg-cream-200 text-sand-500">{tag}</span>
                 })}
               </span>
-              <span className={'inline-block transition-transform text-gray-400 text-xs ' + (isExpanded ? 'rotate-180' : '')}>▼</span>
+              <span className={'inline-block transition-transform text-sand-400 text-xs ' + (isExpanded ? 'rotate-180' : '')}>▼</span>
             </div>
           </button>
         </div>
@@ -316,38 +316,38 @@ export function QADisplay({ items, onItemsChange }: QADisplayProps) {
             {isEditing ? (
               <div className="mt-3 space-y-3">
                 <div>
-                  <label className="text-xs font-medium text-gray-500 mb-1 block">質問</label>
+                  <label className="text-xs font-medium text-sand-500 mb-1 block">質問</label>
                   <input
                     type="text"
                     value={editQuestion}
                     onChange={function(e) { setEditQuestion(e.target.value) }}
-                    className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full text-sm border border-cream-300 rounded-2xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-gold-400/30"
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-medium text-gray-500 mb-1 block">回答（**太字** - リスト可）</label>
+                  <label className="text-xs font-medium text-sand-500 mb-1 block">回答（**太字** - リスト可）</label>
                   <textarea
                     value={editText}
                     onChange={function(e) { setEditText(e.target.value) }}
                     rows={8}
-                    className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full text-sm border border-cream-300 rounded-2xl px-3 py-2 font-mono focus:outline-none focus:ring-2 focus:ring-gold-400/30"
                   />
                 </div>
                 <div className="flex gap-2 justify-end">
-                  <button onClick={cancelEdit} className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">キャンセル</button>
-                  <button onClick={saveEdit} className="text-xs px-3 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700">保存</button>
+                  <button onClick={cancelEdit} className="text-xs px-3 py-1.5 rounded-2xl border border-cream-300 text-sand-600 hover:bg-cream-100">キャンセル</button>
+                  <button onClick={saveEdit} className="text-xs px-3 py-1.5 rounded-2xl bg-dark-900 text-white hover:bg-dark-800">保存</button>
                 </div>
               </div>
             ) : (
               <>
-                <div className={'px-4 py-3 rounded-lg mt-3 ' + info.bgColor}>
+                <div className={'px-4 py-3 rounded-2xl mt-3 ' + info.bgColor}>
                   <RichAnswer text={item.answer} />
                 </div>
                 <div className="flex justify-end gap-2 mt-2">
                   {onItemsChange && (
                     <button
                       onClick={function(e) { e.stopPropagation(); startEdit(item) }}
-                      className="text-xs px-3 py-1 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 transition-colors"
+                      className="text-xs px-3 py-1 rounded-2xl border border-cream-300 text-sand-500 hover:bg-cream-100 transition-colors"
                     >
                       編集
                     </button>
@@ -372,7 +372,7 @@ function CopyButton({ item, onCopy }: { item: QAItem; onCopy: (item: QAItem) => 
     setTimeout(function() { setCopied(false) }, 1500)
   }
   return (
-    <button onClick={handleClick} className="text-xs px-3 py-1 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 transition-colors">
+    <button onClick={handleClick} className="text-xs px-3 py-1 rounded-2xl border border-cream-300 text-sand-500 hover:bg-cream-100 transition-colors">
       {copied ? 'コピー済' : 'コピー'}
     </button>
   )

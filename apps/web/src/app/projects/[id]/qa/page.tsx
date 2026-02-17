@@ -144,7 +144,7 @@ export default function QAPage() {
                 「Q&Aを生成」ボタンを押してください。
                 PLモデルのデータから自動的にQ&Aが作成されます。
               </p>
-              <div className="grid grid-cols-2 gap-4 max-w-sm mx-auto text-left">
+              <div className="grid grid-cols-2 gap-4 max-w-md mx-auto text-left">
                 <div className="bg-cream-100 rounded-2xl p-3">
                   <div className="text-xs font-medium text-dark-900 mb-1">収益・成長</div>
                   <div className="text-xs text-sand-600">売上予測、成長率の根拠</div>
@@ -160,11 +160,12 @@ export default function QAPage() {
                 <div className="bg-purple-50/50 rounded-2xl p-3">
                   <div className="text-xs font-medium text-purple-700 mb-1">資金・運営</div>
                   <div className="text-xs text-purple-600">資金調達、体制計画</div>
-                <div className="bg-orange-50 rounded-lg p-3">
+                </div>
+                <div className="bg-orange-50/50 rounded-2xl p-3">
                   <div className="text-xs font-medium text-orange-700 mb-1">リスク・競合</div>
                   <div className="text-xs text-orange-600">業界競合、ダウンサイド</div>
                 </div>
-                <div className="bg-purple-50 rounded-lg p-3">
+                <div className="bg-purple-50/50 rounded-2xl p-3">
                   <div className="text-xs font-medium text-purple-700 mb-1">資金・市場</div>
                   <div className="text-xs text-purple-600">バリュエーション、KPI</div>
                 </div>
