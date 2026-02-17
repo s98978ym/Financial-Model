@@ -63,14 +63,14 @@ export function MobileEvidenceSheet({ cell, onClose }: MobileEvidenceSheetProps)
     <>
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-black/30 z-40 lg:hidden"
+        className="fixed inset-0 bg-black/30 backdrop-blur-sm z-40 lg:hidden"
         onClick={onClose}
       />
 
       {/* Bottom Sheet */}
       <div
         ref={sheetRef}
-        className="fixed bottom-0 left-0 right-0 z-50 lg:hidden bg-white rounded-t-2xl shadow-2xl transition-all duration-300 ease-out"
+        className="fixed bottom-0 left-0 right-0 z-50 lg:hidden bg-white rounded-t-3xl shadow-warm-lg transition-all duration-300 ease-out"
         style={{
           height: sheetHeight,
           transform: 'translateY(' + translateY + 'px)',
@@ -83,16 +83,16 @@ export function MobileEvidenceSheet({ cell, onClose }: MobileEvidenceSheetProps)
           onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
         >
-          <div className="w-10 h-1 bg-gray-300 rounded-full" />
+          <div className="w-10 h-1 bg-cream-300 rounded-full" />
         </div>
 
         {/* Header */}
-        <div className="flex items-center justify-between px-4 pb-2 border-b border-gray-100">
-          <h3 className="text-sm font-semibold text-gray-700">エビデンス</h3>
+        <div className="flex items-center justify-between px-4 pb-2 border-b border-cream-200">
+          <h3 className="text-sm font-semibold text-dark-900">エビデンス</h3>
           <div className="flex items-center gap-2">
             <button
               onClick={function() { setIsExpanded(!isExpanded) }}
-              className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 active:bg-gray-200"
+              className="p-1.5 rounded-lg text-sand-400 hover:bg-cream-100 active:bg-cream-200"
               title={isExpanded ? '縮小' : '拡大'}
             >
               <svg className={'w-4 h-4 transition-transform ' + (isExpanded ? 'rotate-180' : '')} fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -101,7 +101,7 @@ export function MobileEvidenceSheet({ cell, onClose }: MobileEvidenceSheetProps)
             </button>
             <button
               onClick={onClose}
-              className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 active:bg-gray-200"
+              className="p-1.5 rounded-lg text-sand-400 hover:bg-cream-100 active:bg-cream-200"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />

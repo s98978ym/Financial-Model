@@ -237,23 +237,23 @@ export function NaturalLanguageInput({ parameters, onParameterChange, onBatchCha
   }
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-      <div className="px-5 py-3 border-b border-gray-100">
-        <h3 className="font-medium text-gray-900 text-sm">自然言語で調整</h3>
-        <p className="text-xs text-gray-500 mt-0.5">変更したい内容を日本語で入力してください</p>
+    <div className="bg-white rounded-3xl shadow-warm overflow-hidden">
+      <div className="px-5 py-3 border-b border-cream-200">
+        <h3 className="font-medium text-dark-900 text-sm">自然言語で調整</h3>
+        <p className="text-xs text-sand-500 mt-0.5">変更したい内容を日本語で入力してください</p>
       </div>
 
       {/* Messages */}
       {messages.length > 0 && (
-        <div className="px-4 py-3 max-h-40 overflow-y-auto space-y-2 bg-gray-50 border-b border-gray-100">
+        <div className="px-4 py-3 max-h-40 overflow-y-auto space-y-2 bg-cream-100 border-b border-cream-200">
           {messages.map(function(msg, i) {
             return (
               <div
                 key={i}
                 className={'text-xs rounded-lg px-3 py-2 max-w-[85%] whitespace-pre-line ' + (
                   msg.role === 'user'
-                    ? 'ml-auto bg-blue-600 text-white'
-                    : 'bg-white border border-gray-200 text-gray-700'
+                    ? 'ml-auto bg-dark-900 text-white'
+                    : 'bg-white border border-cream-200 text-sand-600'
                 )}
               >
                 {msg.text}
@@ -272,12 +272,12 @@ export function NaturalLanguageInput({ parameters, onParameterChange, onBatchCha
             value={input}
             onChange={function(e) { setInput(e.target.value) }}
             placeholder="例: 売上を2億円にして"
-            className="flex-1 text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="flex-1 text-sm border border-cream-200 rounded-2xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-gold-400 focus:border-transparent"
           />
           <button
             type="submit"
             disabled={!input.trim()}
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+            className="bg-dark-900 text-white px-4 py-2 rounded-2xl text-sm hover:bg-dark-800 disabled:bg-cream-300 disabled:cursor-not-allowed transition-colors"
           >
             適用
           </button>
@@ -292,7 +292,7 @@ export function NaturalLanguageInput({ parameters, onParameterChange, onBatchCha
                   key={example}
                   type="button"
                   onClick={function() { handleExample(example) }}
-                  className="text-xs px-2.5 py-1 rounded-full bg-gray-100 text-gray-600 hover:bg-blue-100 hover:text-blue-700 transition-colors"
+                  className="text-xs px-2.5 py-1 rounded-full bg-cream-200 text-sand-600 hover:bg-cream-300 hover:text-gold-600 transition-colors"
                 >
                   {example}
                 </button>

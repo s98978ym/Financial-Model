@@ -165,18 +165,18 @@ export default function Phase5Page() {
     >
       {/* Trigger */}
       {!isProcessing && !isComplete && !isFailed && (
-        <div className="text-center py-16 bg-gradient-to-b from-blue-50 to-white rounded-2xl border border-blue-100">
+        <div className="text-center py-16 bg-white shadow-warm rounded-3xl">
           <div className="text-4xl mb-4">📄</div>
-          <h3 className="text-lg font-semibold text-gray-800 mb-2">
+          <h3 className="text-lg font-semibold text-dark-900 mb-2">
             パラメータ抽出を実行
           </h3>
-          <p className="text-gray-500 text-sm mb-6 max-w-md mx-auto">
+          <p className="text-sand-500 text-sm mb-6 max-w-md mx-auto">
             事業計画書から売上・コスト・前提条件の数値を自動抽出し、
             PLモデルに反映します。
           </p>
           <button
             onClick={() => trigger()}
-            className="bg-blue-600 text-white px-8 py-3 rounded-xl hover:bg-blue-700 font-medium shadow-lg shadow-blue-200 transition-all hover:shadow-xl hover:shadow-blue-300"
+            className="bg-dark-900 text-white px-8 py-3 rounded-2xl hover:bg-dark-800 font-medium shadow-warm-md hover:shadow-warm-lg transition-all"
           >
             抽出を開始する
           </button>
@@ -187,28 +187,28 @@ export default function Phase5Page() {
       {isProcessing && (
         <div className="text-center py-16">
           <div className="relative w-16 h-16 mx-auto mb-6">
-            <div className="absolute inset-0 border-4 border-blue-100 rounded-full" />
-            <div className="absolute inset-0 border-4 border-blue-600 rounded-full animate-spin border-t-transparent" />
-            <span className="absolute inset-0 flex items-center justify-center text-sm font-bold text-blue-600">
+            <div className="absolute inset-0 border-4 border-cream-300 rounded-full" />
+            <div className="absolute inset-0 border-4 border-gold-500 rounded-full animate-spin border-t-transparent" />
+            <span className="absolute inset-0 flex items-center justify-center text-sm font-bold text-gold-600">
               {progress}%
             </span>
           </div>
-          <p className="text-gray-600 font-medium">パラメータを抽出中...</p>
-          <p className="text-gray-400 text-sm mt-1">事業計画書を分析しています</p>
+          <p className="text-sand-600 font-medium">パラメータを抽出中...</p>
+          <p className="text-sand-400 text-sm mt-1">事業計画書を分析しています</p>
         </div>
       )}
 
       {/* Error */}
       {isFailed && (
-        <div className="bg-red-50 border border-red-200 rounded-xl p-6 mb-6">
+        <div className="bg-red-50 shadow-warm rounded-3xl p-6 mb-6">
           <div className="flex items-start gap-3">
             <span className="text-red-500 text-xl mt-0.5">!</span>
             <div>
-              <p className="text-sm font-medium text-red-800">抽出に失敗しました</p>
+              <p className="text-sm font-medium text-red-600">抽出に失敗しました</p>
               <p className="text-sm text-red-600 mt-1">{error}</p>
               <button
                 onClick={() => trigger()}
-                className="mt-3 text-sm bg-red-100 text-red-700 px-4 py-1.5 rounded-lg hover:bg-red-200 transition-colors"
+                className="mt-3 text-sm bg-red-50 text-red-500 px-4 py-1.5 rounded-2xl hover:bg-red-100 transition-colors"
               >
                 再試行
               </button>
@@ -222,10 +222,10 @@ export default function Phase5Page() {
         <>
           {/* Warnings */}
           {warnings.length > 0 && (
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6">
+            <div className="bg-white shadow-warm rounded-3xl p-4 mb-6">
               <div className="flex items-start gap-2">
-                <span className="text-amber-500">⚠</span>
-                <div className="text-sm text-amber-700">
+                <span className="text-gold-500">⚠</span>
+                <div className="text-sm text-sand-600">
                   {warnings.map((w: string, i: number) => (
                     <p key={i}>{w}</p>
                   ))}
@@ -244,34 +244,34 @@ export default function Phase5Page() {
           {/* View Mode Toggle */}
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
-              <h3 className="text-sm font-semibold text-gray-700">抽出結果</h3>
+              <h3 className="text-sm font-semibold text-dark-900">抽出結果</h3>
               {lowConfFilter && (
                 <button
                   onClick={() => { setLowConfFilter(false); setViewMode('pl') }}
-                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700 hover:bg-amber-200 transition-colors"
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-50 text-amber-600 hover:bg-cream-300 transition-colors"
                 >
                   低確信度のみ表示中
                   <span className="ml-0.5">✕</span>
                 </button>
               )}
             </div>
-            <div className="flex bg-gray-100 rounded-lg p-0.5">
+            <div className="flex bg-cream-200 rounded-2xl p-0.5">
               <button
                 onClick={() => { setViewMode('pl'); setLowConfFilter(false) }}
-                className={`px-3 py-1.5 text-xs rounded-md transition-colors ${
+                className={`px-3 py-1.5 text-xs rounded-xl transition-colors ${
                   viewMode === 'pl'
-                    ? 'bg-white text-gray-800 shadow-sm font-medium'
-                    : 'text-gray-500 hover:text-gray-700'
+                    ? 'bg-white text-dark-900 shadow-sm font-medium'
+                    : 'text-sand-500 hover:text-dark-900'
                 }`}
               >
                 年次ビュー（1〜5年目）
               </button>
               <button
                 onClick={() => { setViewMode('flat'); setLowConfFilter(false) }}
-                className={`px-3 py-1.5 text-xs rounded-md transition-colors ${
+                className={`px-3 py-1.5 text-xs rounded-xl transition-colors ${
                   viewMode === 'flat' && !lowConfFilter
-                    ? 'bg-white text-gray-800 shadow-sm font-medium'
-                    : 'text-gray-500 hover:text-gray-700'
+                    ? 'bg-white text-dark-900 shadow-sm font-medium'
+                    : 'text-sand-500 hover:text-dark-900'
                 }`}
               >
                 セル一覧
@@ -339,14 +339,14 @@ export default function Phase5Page() {
           />
 
           {/* Summary & Actions */}
-          <div className="mt-8 bg-gradient-to-r from-gray-50 to-white rounded-xl border border-gray-200 p-6">
+          <div className="mt-8 bg-white rounded-3xl shadow-warm p-6">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-gray-800">次のステップ</h3>
-              <div className="flex items-center gap-2 text-sm text-gray-500">
+              <h3 className="font-semibold text-dark-900">次のステップ</h3>
+              <div className="flex items-center gap-2 text-sm text-sand-500">
                 <span className="inline-flex w-2 h-2 rounded-full bg-green-500" />
                 {stats.highConf}/{stats.total} 高確信度
                 <span className="mx-2">·</span>
-                <span className="inline-flex w-2 h-2 rounded-full bg-blue-500" />
+                <span className="inline-flex w-2 h-2 rounded-full bg-gold-500" />
                 {stats.docSource}/{stats.total} 文書由来
               </div>
             </div>
@@ -385,15 +385,15 @@ export default function Phase5Page() {
 
       {/* Empty results */}
       {isComplete && extractions.length === 0 && result && (
-        <div className="text-center py-12 bg-gray-50 rounded-xl border border-gray-200">
+        <div className="text-center py-12 bg-cream-200 rounded-3xl shadow-warm">
           <div className="text-3xl mb-3">📭</div>
-          <p className="text-gray-600 font-medium mb-2">抽出結果がありません</p>
-          <p className="text-gray-400 text-sm mb-4">
+          <p className="text-sand-600 font-medium mb-2">抽出結果がありません</p>
+          <p className="text-sand-400 text-sm mb-4">
             Phase 4 のモデル設計が正しく完了しているか確認してください
           </p>
           <button
             onClick={() => trigger()}
-            className="text-sm bg-blue-50 text-blue-600 px-4 py-2 rounded-lg hover:bg-blue-100"
+            className="text-sm bg-gold-500/10 text-gold-600 px-4 py-2 rounded-2xl hover:bg-gold-500/10"
           >
             再試行
           </button>
@@ -469,7 +469,7 @@ function FlatExtractionTable({
             value={searchQuery}
             onChange={function(e) { setSearchQuery(e.target.value) }}
             placeholder="ラベルで検索..."
-            className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="w-full text-sm border-0 bg-cream-100 rounded-2xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-gold-400/30 focus:border-transparent"
           />
           <div className="flex gap-1.5 overflow-x-auto pb-1">
             {[
@@ -484,8 +484,8 @@ function FlatExtractionTable({
                   onClick={function() { setSourceFilter(f.key) }}
                   className={'flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-colors min-h-[32px] ' + (
                     sourceFilter === f.key
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      ? 'bg-dark-900 text-white'
+                      : 'bg-cream-200 text-sand-600 hover:bg-cream-200'
                   )}
                 >
                   {f.label}
@@ -509,33 +509,33 @@ function FlatExtractionTable({
                 key={ext.sheet + '-' + ext.cell + '-' + idx}
                 onClick={function() { onRowClick?.(ext) }}
                 className={
-                  'rounded-lg border p-3 cursor-pointer active:scale-[0.98] transition-all ' +
-                  (isSelected ? 'ring-2 ring-blue-400 border-blue-200 bg-blue-50/50' : 'border-gray-200 bg-white hover:bg-gray-50')
+                  'rounded-2xl p-3 cursor-pointer active:scale-[0.98] transition-all ' +
+                  (isSelected ? 'ring-2 ring-gold-400 bg-gold-500/5 shadow-warm' : 'bg-white shadow-warm hover:shadow-warm-md')
                 }
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex-1 min-w-0">
-                    <div className="font-medium text-sm text-gray-800 truncate">
+                    <div className="font-medium text-sm text-dark-900 truncate">
                       {ext.label || ext.original_text || '—'}
                     </div>
-                    <div className="flex items-center gap-2 mt-1 text-[11px] text-gray-400">
+                    <div className="flex items-center gap-2 mt-1 text-[11px] text-sand-400">
                       <span className="font-mono">{ext.sheet}/{ext.cell}</span>
                       <span className={'inline-flex px-1.5 py-0.5 rounded-full text-[10px] font-semibold ' + (
-                        periodLabel === '—' ? 'bg-gray-100 text-gray-400' : 'bg-indigo-100 text-indigo-700'
+                        periodLabel === '—' ? 'bg-cream-200 text-sand-400' : 'bg-gold-500/10 text-gold-600'
                       )}>
                         {periodLabel}
                       </span>
                     </div>
                   </div>
                   <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                    <span className="font-mono font-semibold text-sm text-blue-700">
+                    <span className="font-mono font-semibold text-sm text-dark-900">
                       {typeof ext.value === 'number' ? ext.value.toLocaleString() : ext.value}
                     </span>
                     <div className="flex items-center gap-1.5">
                       <span className={'inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium ' + (
-                        ext.source === 'document' ? 'bg-blue-100 text-blue-700' :
-                        ext.source === 'inferred' ? 'bg-amber-100 text-amber-700' :
-                        'bg-gray-100 text-gray-500'
+                        ext.source === 'document' ? 'bg-gold-500/10 text-dark-900' :
+                        ext.source === 'inferred' ? 'bg-amber-50 text-amber-600' :
+                        'bg-cream-200 text-sand-500'
                       )}>
                         {ext.source === 'document' ? '文書' : ext.source === 'inferred' ? '推定' : '初期値'}
                       </span>
@@ -550,7 +550,7 @@ function FlatExtractionTable({
           })}
         </div>
         {filteredExtractions.length === 0 && (
-          <div className="text-center py-8 text-gray-400 text-sm">
+          <div className="text-center py-8 text-sand-400 text-sm">
             該当する項目がありません
           </div>
         )}
@@ -560,53 +560,53 @@ function FlatExtractionTable({
 
   // Desktop: table view
   return (
-    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+    <div className="bg-white rounded-3xl shadow-warm overflow-hidden">
       <table className="w-full text-sm">
-        <thead className="bg-gray-50 border-b border-gray-200">
+        <thead className="bg-cream-200 border-b border-cream-300">
           <tr>
-            <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">シート</th>
-            <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">セル</th>
-            <th className="text-left px-3 py-3 text-xs font-medium text-gray-500">ラベル</th>
-            <th className="text-center px-3 py-3 text-xs font-medium text-gray-500">年次</th>
-            <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">値</th>
-            <th className="text-center px-3 py-3 text-xs font-medium text-gray-500">ソース</th>
-            <th className="text-right px-3 py-3 text-xs font-medium text-gray-500">確信度</th>
+            <th className="text-left px-4 py-3 text-xs font-medium text-sand-500">シート</th>
+            <th className="text-left px-4 py-3 text-xs font-medium text-sand-500">セル</th>
+            <th className="text-left px-3 py-3 text-xs font-medium text-sand-500">ラベル</th>
+            <th className="text-center px-3 py-3 text-xs font-medium text-sand-500">年次</th>
+            <th className="text-right px-4 py-3 text-xs font-medium text-sand-500">値</th>
+            <th className="text-center px-3 py-3 text-xs font-medium text-sand-500">ソース</th>
+            <th className="text-right px-3 py-3 text-xs font-medium text-sand-500">確信度</th>
           </tr>
         </thead>
         <tbody>
           {extractions.map((ext: any, idx: number) => {
             const isSelected = selectedItem?.sheet === ext.sheet && selectedItem?.cell === ext.cell
             const pct = Math.round((ext.confidence || 0) * 100)
-            const confColor = pct >= 80 ? 'text-green-700' : pct >= 50 ? 'text-yellow-700' : 'text-red-600'
+            const confColor = pct >= 80 ? 'text-emerald-700' : pct >= 50 ? 'text-yellow-700' : 'text-red-600'
             const periodLabel = getPeriodLabel(ext)
             return (
               <tr
                 key={`${ext.sheet}-${ext.cell}-${idx}`}
                 onClick={() => onRowClick?.(ext)}
-                className={`border-b border-gray-50 cursor-pointer transition-colors ${
-                  isSelected ? 'bg-blue-50' : 'hover:bg-gray-50'
+                className={`border-b border-cream-200 cursor-pointer transition-colors ${
+                  isSelected ? 'bg-gold-500/5' : 'hover:bg-cream-100'
                 }`}
               >
-                <td className="px-4 py-2.5 text-gray-700 whitespace-nowrap text-xs">{ext.sheet}</td>
-                <td className="px-4 py-2.5 font-mono text-xs text-gray-400">{ext.cell}</td>
-                <td className="px-3 py-2.5 text-gray-700 text-xs truncate max-w-[140px]">
+                <td className="px-4 py-2.5 text-dark-900 whitespace-nowrap text-xs">{ext.sheet}</td>
+                <td className="px-4 py-2.5 font-mono text-xs text-sand-400">{ext.cell}</td>
+                <td className="px-3 py-2.5 text-dark-900 text-xs truncate max-w-[140px]">
                   {ext.label || ext.original_text || '—'}
                 </td>
                 <td className="px-3 py-2.5 text-center">
                   <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-                    periodLabel === '—' ? 'bg-gray-100 text-gray-400' : 'bg-indigo-100 text-indigo-700'
+                    periodLabel === '—' ? 'bg-cream-200 text-sand-400' : 'bg-gold-500/10 text-gold-600'
                   }`}>
                     {periodLabel}
                   </span>
                 </td>
-                <td className="px-4 py-2.5 text-right font-mono font-semibold text-blue-700">
+                <td className="px-4 py-2.5 text-right font-mono font-semibold text-dark-900">
                   {typeof ext.value === 'number' ? ext.value.toLocaleString() : ext.value}
                 </td>
                 <td className="px-3 py-2.5 text-center">
                   <span className={`inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium ${
-                    ext.source === 'document' ? 'bg-blue-100 text-blue-700' :
-                    ext.source === 'inferred' ? 'bg-amber-100 text-amber-700' :
-                    'bg-gray-100 text-gray-500'
+                    ext.source === 'document' ? 'bg-gold-500/10 text-dark-900' :
+                    ext.source === 'inferred' ? 'bg-amber-50 text-amber-600' :
+                    'bg-cream-200 text-sand-500'
                   }`}>
                     {ext.source === 'document' ? '文書' : ext.source === 'inferred' ? '推定' : '初期値'}
                   </span>
@@ -657,14 +657,14 @@ function LowConfidenceReview({
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="bg-amber-50 border border-amber-200 rounded-xl p-5">
+      <div className="bg-white shadow-warm rounded-3xl p-5">
         <div className="flex items-start justify-between">
           <div>
-            <h3 className="text-base font-semibold text-amber-900 flex items-center gap-2">
-              <span className="text-amber-500">!</span>
+            <h3 className="text-base font-semibold text-dark-900 flex items-center gap-2">
+              <span className="text-gold-500">!</span>
               要確認: 低確信度パラメータ {items.length} 件
             </h3>
-            <p className="text-sm text-amber-700 mt-1">
+            <p className="text-sm text-sand-600 mt-1">
               {impactSummary.pct > 0
                 ? `モデル全体の金額ベースで約 ${impactSummary.pct}% が推定値です。`
                 : '以下の項目は文書に十分な根拠がなく、推定値が使用されています。'}
@@ -673,7 +673,7 @@ function LowConfidenceReview({
           </div>
           <button
             onClick={onCancel}
-            className="text-sm text-gray-500 hover:text-gray-700 px-3 py-1"
+            className="text-sm text-sand-500 hover:text-dark-900 px-3 py-1"
           >
             閉じる
           </button>
@@ -681,13 +681,13 @@ function LowConfidenceReview({
 
         {/* Progress */}
         <div className="mt-4">
-          <div className="flex items-center justify-between text-xs text-amber-700 mb-1">
+          <div className="flex items-center justify-between text-xs text-sand-600 mb-1">
             <span>レビュー進捗</span>
             <span>{reviewedCount} / {items.length} 件完了</span>
           </div>
-          <div className="w-full bg-amber-200 rounded-full h-2">
+          <div className="w-full bg-cream-300 rounded-full h-2">
             <div
-              className="h-2 rounded-full bg-amber-500 transition-all"
+              className="h-2 rounded-full bg-gold-500 transition-all"
               style={{ width: items.length > 0 ? `${Math.round((reviewedCount / items.length) * 100)}%` : '0%' }}
             />
           </div>
@@ -717,22 +717,22 @@ function LowConfidenceReview({
       </div>
 
       {/* Batch Actions */}
-      <div className="flex items-center justify-between bg-white border border-gray-200 rounded-xl p-4">
+      <div className="flex items-center justify-between bg-white rounded-3xl shadow-warm p-4">
         <div className="flex items-center gap-3">
           <button
             onClick={onApproveAll}
-            className="text-sm text-amber-700 bg-amber-100 px-4 py-2 rounded-lg hover:bg-amber-200 transition-colors"
+            className="text-sm text-amber-600 bg-amber-50 px-4 py-2 rounded-2xl hover:bg-cream-300 transition-colors"
           >
             残り全て承認
           </button>
-          <span className="text-xs text-gray-400">
+          <span className="text-xs text-sand-400">
             未対応の推定値を現在の値のまま確定します
           </span>
         </div>
         <button
           onClick={onSave}
           disabled={savingEdits || reviewedCount === 0}
-          className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 text-sm font-medium disabled:opacity-50 transition-colors"
+          className="bg-dark-900 text-white px-6 py-2 rounded-2xl hover:bg-dark-800 text-sm font-medium disabled:opacity-50 transition-colors"
         >
           {savingEdits ? '保存中...' : `レビュー結果を保存 (${reviewedCount}件)`}
         </button>
@@ -793,31 +793,31 @@ function ReviewItemCard({
   // Completed state (approved or edited)
   if (isApproved || isEdited) {
     return (
-      <div className={`rounded-xl border p-4 transition-all ${
-        isEdited ? 'bg-blue-50 border-blue-200' : 'bg-green-50 border-green-200'
+      <div className={`rounded-3xl p-4 transition-all ${
+        isEdited ? 'bg-gold-500/5 shadow-warm' : 'bg-emerald-50 shadow-warm'
       }`}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <span className={`text-lg ${isEdited ? '' : ''}`}>{isEdited ? '\u270F\uFE0F' : '\u2705'}</span>
             <div>
-              <span className="text-sm font-medium text-gray-800">
+              <span className="text-sm font-medium text-dark-900">
                 {item.label || item.original_text || item.cell}
               </span>
-              <span className="text-xs text-gray-400 ml-2">{periodLabel}</span>
+              <span className="text-xs text-sand-400 ml-2">{periodLabel}</span>
             </div>
           </div>
           <div className="flex items-center gap-3">
             {isEdited && editData ? (
               <div className="text-right">
-                <span className="text-xs text-gray-400 line-through mr-2">
+                <span className="text-xs text-sand-400 line-through mr-2">
                   {typeof item.value === 'number' ? item.value.toLocaleString() : item.value}
                 </span>
-                <span className="text-sm font-mono font-bold text-blue-700">
+                <span className="text-sm font-mono font-bold text-dark-900">
                   {typeof editData.value === 'number' ? editData.value.toLocaleString() : editData.value}
                 </span>
               </div>
             ) : (
-              <span className="text-sm font-mono font-semibold text-gray-700">
+              <span className="text-sm font-mono font-semibold text-dark-900">
                 {typeof item.value === 'number' ? item.value.toLocaleString() : item.value}
               </span>
             )}
@@ -833,14 +833,14 @@ function ReviewItemCard({
                   setEditReason('')
                 }
               }}
-              className="text-xs text-gray-400 hover:text-gray-600"
+              className="text-xs text-sand-400 hover:text-sand-600"
             >
               変更
             </button>
           </div>
         </div>
         {isEdited && editData?.reason && (
-          <p className="text-xs text-blue-600 mt-1 ml-9">理由: {editData.reason}</p>
+          <p className="text-xs text-gold-600 mt-1 ml-9">理由: {editData.reason}</p>
         )}
       </div>
     )
@@ -849,52 +849,52 @@ function ReviewItemCard({
   // Editing state
   if (editing) {
     return (
-      <div className="rounded-xl border border-blue-300 bg-blue-50 p-4 space-y-3">
+      <div className="rounded-3xl bg-gold-500/5 shadow-warm p-4 space-y-3">
         <div className="flex items-center justify-between">
           <div>
-            <span className="text-sm font-medium text-gray-800">
+            <span className="text-sm font-medium text-dark-900">
               {item.label || item.original_text || item.cell}
             </span>
-            <span className="text-xs text-gray-400 ml-2">{periodLabel}</span>
+            <span className="text-xs text-sand-400 ml-2">{periodLabel}</span>
           </div>
-          <span className="text-xs text-gray-400">
+          <span className="text-xs text-sand-400">
             現在値: {typeof item.value === 'number' ? item.value.toLocaleString() : item.value}
           </span>
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="text-xs text-gray-500 block mb-1">修正値</label>
+            <label className="text-xs text-sand-500 block mb-1">修正値</label>
             <input
               type="text"
               value={editValue}
               onChange={function(e) { setEditValue(e.target.value) }}
               placeholder="例: 50000000"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-300 focus:border-blue-400 outline-none"
+              className="w-full border-cream-300 rounded-2xl px-3 py-2 text-sm focus:ring-2 focus:ring-gold-400/30 outline-none"
               autoFocus
             />
           </div>
           <div>
-            <label className="text-xs text-gray-500 block mb-1">修正理由（任意）</label>
+            <label className="text-xs text-sand-500 block mb-1">修正理由（任意）</label>
             <input
               type="text"
               value={editReason}
               onChange={function(e) { setEditReason(e.target.value) }}
               placeholder="例: 実績ベースで修正"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-300 focus:border-blue-400 outline-none"
+              className="w-full border-cream-300 rounded-2xl px-3 py-2 text-sm focus:ring-2 focus:ring-gold-400/30 outline-none"
             />
           </div>
         </div>
         <div className="flex items-center justify-end gap-2">
           <button
             onClick={function() { setEditing(false) }}
-            className="text-xs text-gray-500 hover:text-gray-700 px-3 py-1.5"
+            className="text-xs text-sand-500 hover:text-dark-900 px-3 py-1.5"
           >
             キャンセル
           </button>
           <button
             onClick={handleSubmitEdit}
             disabled={!editValue.trim()}
-            className="text-xs bg-blue-600 text-white px-4 py-1.5 rounded-lg hover:bg-blue-700 disabled:opacity-50"
+            className="text-xs bg-dark-900 text-white px-4 py-1.5 rounded-2xl hover:bg-dark-800 disabled:opacity-50"
           >
             確定
           </button>
@@ -905,29 +905,29 @@ function ReviewItemCard({
 
   // Default state: pending review
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-4 hover:border-gray-300 transition-colors">
+    <div className="rounded-3xl bg-white shadow-warm p-4 hover:shadow-warm-md transition-all">
       <div className="flex items-start justify-between">
         <div className="flex-1">
           <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-gray-800">
+            <span className="text-sm font-medium text-dark-900">
               {item.label || item.original_text || item.cell}
             </span>
             <span className={`inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium ${
-              item.source === 'document' ? 'bg-blue-100 text-blue-700' :
-              item.source === 'inferred' ? 'bg-amber-100 text-amber-700' :
-              'bg-gray-100 text-gray-500'
+              item.source === 'document' ? 'bg-gold-500/10 text-dark-900' :
+              item.source === 'inferred' ? 'bg-amber-50 text-amber-600' :
+              'bg-cream-200 text-sand-500'
             }`}>
               {sourceLabel}
             </span>
             <span className="text-xs text-red-500 font-mono font-semibold">{pct}%</span>
             <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-              periodLabel === '—' ? 'bg-gray-100 text-gray-400' : 'bg-indigo-100 text-indigo-700'
+              periodLabel === '—' ? 'bg-cream-200 text-sand-400' : 'bg-gold-500/10 text-gold-600'
             }`}>
               {periodLabel}
             </span>
           </div>
           {/* Evidence / Rationale */}
-          <div className="mt-2 text-xs text-gray-500">
+          <div className="mt-2 text-xs text-sand-500">
             {evidence?.quote ? (
               <span>&ldquo;{evidence.quote}&rdquo;</span>
             ) : evidence?.rationale ? (
@@ -935,12 +935,12 @@ function ReviewItemCard({
             ) : item.reasoning ? (
               <span>{item.reasoning}</span>
             ) : (
-              <span className="text-gray-400">文書に記載なし — 推定値を使用</span>
+              <span className="text-sand-400">文書に記載なし — 推定値を使用</span>
             )}
           </div>
         </div>
         <div className="flex items-center gap-2 ml-4">
-          <span className="text-lg font-mono font-bold text-blue-700 mr-2">
+          <span className="text-lg font-mono font-bold text-dark-900 mr-2">
             {typeof item.value === 'number' ? item.value.toLocaleString() : item.value}
           </span>
           <button
@@ -949,13 +949,13 @@ function ReviewItemCard({
               setEditValue('')
               setEditReason('')
             }}
-            className="text-xs border border-gray-300 text-gray-600 px-3 py-1.5 rounded-lg hover:bg-gray-50 transition-colors"
+            className="text-xs border-cream-300 text-sand-600 px-3 py-1.5 rounded-2xl hover:bg-cream-100 transition-colors"
           >
             値を修正
           </button>
           <button
             onClick={function() { onApprove(item) }}
-            className="text-xs border border-green-300 text-green-700 px-3 py-1.5 rounded-lg hover:bg-green-50 transition-colors"
+            className="text-xs border-emerald-200 text-emerald-700 px-3 py-1.5 rounded-2xl hover:bg-emerald-50 transition-colors"
           >
             承認
           </button>
@@ -982,15 +982,15 @@ function NextStepCard({
   return (
     <button
       onClick={onClick}
-      className={`text-left p-4 rounded-xl border transition-all hover:shadow-md ${
+      className={`text-left p-4 rounded-3xl transition-all ${
         priority === 'medium'
-          ? 'border-amber-200 bg-amber-50 hover:bg-amber-100'
-          : 'border-gray-200 bg-white hover:bg-gray-50'
+          ? 'bg-white shadow-warm hover:shadow-warm-md'
+          : 'bg-white shadow-warm hover:shadow-warm-md'
       }`}
     >
       <div className="text-xl mb-2">{icon}</div>
-      <div className="text-sm font-medium text-gray-800">{title}</div>
-      <div className="text-xs text-gray-500 mt-1">{description}</div>
+      <div className="text-sm font-medium text-dark-900">{title}</div>
+      <div className="text-xs text-sand-500 mt-1">{description}</div>
     </button>
   )
 }

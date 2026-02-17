@@ -43,28 +43,28 @@ export function QADisplay({ items }: QADisplayProps) {
   return (
     <div className="space-y-4">
       {/* Header with Category Filters */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+      <div className="bg-white rounded-3xl shadow-warm overflow-hidden">
+        <div className="px-6 py-4 border-b border-cream-200 flex items-center justify-between">
           <div>
-            <h3 className="font-semibold text-gray-900">生成されたQ&A</h3>
-            <p className="text-xs text-gray-500 mt-0.5">{items.length}問のQ&Aが{categoryKeys.length}カテゴリに分類されています</p>
+            <h3 className="font-semibold text-dark-900">生成されたQ&A</h3>
+            <p className="text-xs text-sand-500 mt-0.5">{items.length}問のQ&Aが{categoryKeys.length}カテゴリに分類されています</p>
           </div>
           <button
             onClick={handleCopyAll}
-            className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 hover:text-gray-800 transition-colors"
+            className="text-xs px-3 py-1.5 rounded-lg border border-cream-200 text-sand-600 hover:bg-cream-50 hover:text-dark-900 transition-colors"
           >
             全てコピー
           </button>
         </div>
 
         {/* Category Filter Tabs */}
-        <div className="px-4 py-3 border-b border-gray-100 flex gap-2 overflow-x-auto">
+        <div className="px-4 py-3 border-b border-cream-200 flex gap-2 overflow-x-auto">
           <button
             onClick={function() { setActiveCategory('all') }}
             className={'px-3 py-1.5 rounded-lg text-xs font-medium transition-all ' + (
               activeCategory === 'all'
-                ? 'bg-gray-900 text-white'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                ? 'bg-dark-900 text-white'
+                : 'bg-cream-200 text-sand-600 hover:bg-cream-300'
             )}
           >
             全て ({items.length})
@@ -78,7 +78,7 @@ export function QADisplay({ items }: QADisplayProps) {
                 className={'px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1 ' + (
                   activeCategory === cat
                     ? info.bgColor + ' ' + info.color + ' border ' + info.borderColor
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    : 'bg-cream-200 text-sand-600 hover:bg-cream-300'
                 )}
               >
                 <span>{info.icon}</span>
@@ -100,7 +100,7 @@ export function QADisplay({ items }: QADisplayProps) {
               <div className="flex items-center gap-2 px-1">
                 <span>{info.icon}</span>
                 <h4 className={'text-sm font-semibold ' + info.color}>{info.label}</h4>
-                <span className="text-xs text-gray-400">{catItems.length}問</span>
+                <span className="text-xs text-sand-400">{catItems.length}問</span>
               </div>
               {catItems.map(function(item) {
                 return (
@@ -156,32 +156,32 @@ function QACard({
   }
 
   return (
-    <div className={'rounded-xl border overflow-hidden transition-all ' + (
-      isExpanded ? 'shadow-md ' + info.borderColor : 'border-gray-200 hover:border-gray-300'
+    <div className={'rounded-3xl border overflow-hidden transition-all ' + (
+      isExpanded ? 'shadow-warm-md ' + info.borderColor : 'border-cream-200 hover:border-cream-300'
     )}>
       {/* Question Header */}
       <button
         onClick={onToggle}
-        className="w-full text-left px-5 py-3.5 flex items-start gap-3 hover:bg-gray-50 transition-colors"
+        className="w-full text-left px-5 py-3.5 flex items-start gap-3 hover:bg-cream-50 transition-colors"
       >
         <span className={'flex-shrink-0 w-6 h-6 rounded-lg flex items-center justify-center text-xs mt-0.5 ' + info.bgColor}>
           {info.icon}
         </span>
         <div className="flex-1 min-w-0">
-          <div className="text-sm font-medium text-gray-900 leading-snug">{item.question}</div>
+          <div className="text-sm font-medium text-dark-900 leading-snug">{item.question}</div>
           {!isExpanded && (
-            <div className="text-xs text-gray-400 mt-1 truncate">{item.answer}</div>
+            <div className="text-xs text-sand-400 mt-1 truncate">{item.answer}</div>
           )}
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           {item.tags.slice(0, 2).map(function(tag) {
             return (
-              <span key={tag} className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">
+              <span key={tag} className="text-[10px] px-1.5 py-0.5 rounded bg-cream-200 text-sand-500">
                 {tag}
               </span>
             )
           })}
-          <span className={'inline-block transition-transform text-gray-400 text-xs ' + (isExpanded ? 'rotate-180' : '')}>
+          <span className={'inline-block transition-transform text-sand-400 text-xs ' + (isExpanded ? 'rotate-180' : '')}>
             ▼
           </span>
         </div>
@@ -191,12 +191,12 @@ function QACard({
       {isExpanded && (
         <div className={'px-5 pb-4 pt-0 border-t ' + info.borderColor}>
           <div className={'px-4 py-3 rounded-lg mt-3 ' + info.bgColor}>
-            <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line">{item.answer}</p>
+            <p className="text-sm text-sand-600 leading-relaxed whitespace-pre-line">{item.answer}</p>
           </div>
           <div className="flex justify-end mt-2">
             <button
               onClick={handleCopy}
-              className="text-xs px-3 py-1 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 transition-colors"
+              className="text-xs px-3 py-1 rounded-2xl border border-cream-200 text-sand-500 hover:bg-cream-50 transition-colors"
             >
               {copied ? 'コピーしました' : 'コピー'}
             </button>

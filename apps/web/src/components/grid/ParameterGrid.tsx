@@ -127,7 +127,7 @@ export function ParameterGrid({ data, columns, onCellClick, onCellEdit }: Parame
   )
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+    <div className="bg-white rounded-3xl shadow-warm overflow-hidden">
       <div className="ag-theme-alpine" style={{ width: '100%', height: '500px' }}>
         <AgGridReact
           ref={gridRef}

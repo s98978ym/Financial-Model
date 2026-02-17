@@ -169,11 +169,12 @@ export default function Phase3Page() {
     >
       {/* Trigger button */}
       {!isProcessing && !isComplete && !isFailed && (
-        <div className="text-center py-12 bg-gray-50 rounded-lg border border-dashed border-gray-300">
-          <p className="text-gray-500 mb-4">Phase 3 マッピングを開始してください</p>
+        <div className="text-center py-16 bg-white rounded-3xl shadow-warm">
+          <div className="w-14 h-14 rounded-2xl bg-cream-200 flex items-center justify-center mx-auto mb-4 text-2xl">🗺️</div>
+          <p className="text-sand-500 mb-5">Phase 3 マッピングを開始してください</p>
           <button
             onClick={function() { trigger({ selected_proposal: phase2Proposal || {} }) }}
-            className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 active:bg-blue-800"
+            className="bg-dark-900 text-white px-6 py-3 rounded-2xl hover:bg-dark-800 font-medium shadow-warm-md transition-all"
           >
             テンプレートマッピングを実行
           </button>
@@ -182,19 +183,25 @@ export default function Phase3Page() {
 
       {/* Processing */}
       {isProcessing && (
-        <div className="text-center py-12">
-          <div className="inline-block w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mb-4" />
-          <p className="text-gray-600">テンプレートをマッピング中... ({progress}%)</p>
+        <div className="text-center py-16">
+          <div className="relative w-14 h-14 mx-auto mb-6">
+            <div className="absolute inset-0 border-3 border-cream-300 rounded-full" />
+            <div className="absolute inset-0 border-3 border-gold-500 rounded-full animate-spin border-t-transparent" />
+            <span className="absolute inset-0 flex items-center justify-center text-sm font-bold text-gold-600">
+              {progress}%
+            </span>
+          </div>
+          <p className="text-dark-900 font-medium">テンプレートをマッピング中...</p>
         </div>
       )}
 
       {/* Error */}
       {isFailed && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
-          <p className="text-sm text-red-700">マッピングに失敗しました: {error}</p>
+        <div className="bg-red-50 rounded-2xl p-5 mb-6">
+          <p className="text-sm text-red-600">マッピングに失敗しました: {error}</p>
           <button
             onClick={function() { trigger({ selected_proposal: phase2Proposal || {} }) }}
-            className="mt-2 text-sm text-red-600 hover:underline"
+            className="mt-3 text-sm text-red-500 hover:text-red-600 font-medium transition-colors"
           >
             再試行
           </button>
@@ -205,46 +212,46 @@ export default function Phase3Page() {
       {isComplete && mappings.length > 0 && (
         <>
           {result?.overall_structure && (
-            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6">
+            <div className="bg-white rounded-3xl shadow-warm p-5 mb-5">
               <div className="flex items-start gap-3">
-                <div className="w-6 h-6 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <svg className="w-3.5 h-3.5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <div className="w-8 h-8 rounded-xl bg-cream-200 flex items-center justify-center flex-shrink-0">
+                  <svg className="w-4 h-4 text-gold-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-blue-700 mb-1">テンプレート概要</p>
-                  <p className="text-sm text-blue-800">{result.overall_structure}</p>
+                  <p className="text-xs font-semibold text-dark-900 mb-1">テンプレート概要</p>
+                  <p className="text-sm text-sand-600">{result.overall_structure}</p>
                 </div>
               </div>
             </div>
           )}
 
-          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden mb-6">
+          <div className="bg-white rounded-3xl shadow-warm overflow-hidden mb-5">
             <table className="w-full text-sm">
-              <thead className="bg-gray-50">
+              <thead className="bg-cream-100">
                 <tr>
-                  <th className="text-left px-4 py-3 text-gray-500 font-medium">シート名</th>
-                  <th className="text-left px-4 py-3 text-gray-500 font-medium">目的</th>
-                  <th className="text-left px-4 py-3 text-gray-500 font-medium">対応セグメント</th>
-                  <th className="text-right px-4 py-3 text-gray-500 font-medium">確信度</th>
+                  <th className="text-left px-5 py-3 text-sand-500 font-medium text-xs">シート名</th>
+                  <th className="text-left px-5 py-3 text-sand-500 font-medium text-xs">目的</th>
+                  <th className="text-left px-5 py-3 text-sand-500 font-medium text-xs">対応セグメント</th>
+                  <th className="text-right px-5 py-3 text-sand-500 font-medium text-xs">確信度</th>
                 </tr>
               </thead>
               <tbody>
                 {mappings.map(function(m: any, idx: number) {
                   return (
-                    <tr key={m.sheet || idx} className="border-t border-gray-100 hover:bg-gray-50">
-                      <td className="px-4 py-3 font-medium text-gray-900">{m.sheet || m.sheet_name}</td>
-                      <td className="px-4 py-3">
-                        <span className="bg-blue-100 text-blue-700 text-xs px-2 py-0.5 rounded">
+                    <tr key={m.sheet || idx} className="border-t border-cream-200 hover:bg-cream-50 transition-colors">
+                      <td className="px-5 py-3 font-medium text-dark-900">{m.sheet || m.sheet_name}</td>
+                      <td className="px-5 py-3">
+                        <span className="bg-cream-200 text-sand-600 text-xs px-2.5 py-0.5 rounded-full">
                           {purposeLabels[m.sheet_purpose] || purposeLabels[m.purpose] || m.sheet_purpose || m.purpose || '—'}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-gray-600">{m.mapped_segment || m.segment || '—'}</td>
-                      <td className="px-4 py-3 text-right">
-                        <span className={'text-xs font-medium px-2 py-0.5 rounded ' + (
-                          (m.confidence || 0) >= 0.8 ? 'bg-green-100 text-green-700' :
-                          (m.confidence || 0) >= 0.5 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'
+                      <td className="px-5 py-3 text-sand-600">{m.mapped_segment || m.segment || '—'}</td>
+                      <td className="px-5 py-3 text-right">
+                        <span className={'text-xs font-medium px-2.5 py-1 rounded-full ' + (
+                          (m.confidence || 0) >= 0.8 ? 'bg-emerald-50 text-emerald-700' :
+                          (m.confidence || 0) >= 0.5 ? 'bg-amber-50 text-amber-700' : 'bg-red-50 text-red-600'
                         )}>
                           {Math.round((m.confidence || 0) * 100)}%
                         </span>
@@ -258,7 +265,7 @@ export default function Phase3Page() {
 
           {/* ═══ REVENUE MODEL CONFIGURATOR ═══ */}
           {segments.length > 0 && (
-            <div className="mb-6">
+            <div className="mb-5">
               <RevenueModelConfigurator
                 segments={segments}
                 value={revenueModels}
@@ -272,7 +279,7 @@ export default function Phase3Page() {
                   <button
                     onClick={handleSaveRevenueModels}
                     disabled={savingRevenue}
-                    className="text-xs text-blue-600 hover:text-blue-800 disabled:text-gray-400"
+                    className="text-xs text-gold-600 hover:text-gold-500 disabled:text-sand-300 font-medium transition-colors"
                   >
                     {savingRevenue ? '保存中...' : '設定を保存'}
                   </button>
@@ -294,18 +301,18 @@ export default function Phase3Page() {
             <button
               onClick={handleProceedToPhase4}
               disabled={savingRevenue || saveDecisions.isPending}
-              className="bg-blue-600 text-white px-5 py-2 rounded-lg hover:bg-blue-700 text-sm disabled:opacity-50"
+              className="bg-dark-900 text-white px-5 py-3 rounded-2xl hover:bg-dark-800 text-sm font-medium disabled:opacity-50 shadow-warm-md transition-all"
             >
               {savingRevenue ? '保存中...' : 'Phase 4 へ進む'}
             </button>
           </div>
 
           {saveError && (
-            <div className="mt-4 bg-red-50 border border-red-200 rounded-lg p-3 flex items-center justify-between">
-              <p className="text-xs text-red-600">保存に失敗しました: {saveError}</p>
+            <div className="mt-4 bg-red-50 rounded-2xl p-4 flex items-center justify-between">
+              <p className="text-xs text-red-500">保存に失敗しました: {saveError}</p>
               <button
                 onClick={function() { router.push('/projects/' + projectId + '/phase4') }}
-                className="text-xs text-blue-600 hover:underline ml-3 whitespace-nowrap"
+                className="text-xs text-gold-600 hover:text-gold-500 ml-3 whitespace-nowrap font-medium"
               >
                 保存をスキップして進む
               </button>
@@ -314,22 +321,22 @@ export default function Phase3Page() {
 
           {saveDecisions.isPending && (
             <div className="mt-4 text-center">
-              <p className="text-sm text-gray-500">提案を保存中...</p>
+              <p className="text-sm text-sand-400">提案を保存中...</p>
             </div>
           )}
         </>
       )}
 
       {isComplete && mappings.length === 0 && result && (
-        <div className="bg-gray-50 rounded-lg border border-gray-200 p-4">
-          <p className="text-sm text-gray-600 mb-3">
+        <div className="bg-white rounded-3xl shadow-warm p-6 text-center">
+          <p className="text-sm text-sand-500 mb-3">
             シートマッピングが生成されませんでした。
           </p>
-          <div className="flex gap-3">
-            <button onClick={function() { trigger({ selected_proposal: phase2Proposal || {} }) }} className="text-sm text-blue-600 hover:underline">再試行</button>
+          <div className="flex gap-3 justify-center">
+            <button onClick={function() { trigger({ selected_proposal: phase2Proposal || {} }) }} className="text-sm text-gold-600 hover:text-gold-500 font-medium">再試行</button>
             <button
               onClick={function() { router.push('/projects/' + projectId + '/phase4') }}
-              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm"
+              className="bg-dark-900 text-white px-5 py-2.5 rounded-2xl hover:bg-dark-800 text-sm font-medium shadow-warm-sm transition-all"
             >
               Phase 4 へ進む
             </button>

@@ -118,33 +118,26 @@ export function KPISummaryCards({ extractions, assignments, sheetMappings }: KPI
     return result
   }, [extractions, assignments, sheetMappings])
 
-  const colorMap = {
-    blue: { bg: 'bg-blue-50', border: 'border-blue-200', value: 'text-blue-700', sub: 'text-blue-500' },
-    green: { bg: 'bg-green-50', border: 'border-green-200', value: 'text-green-700', sub: 'text-green-500' },
-    orange: { bg: 'bg-orange-50', border: 'border-orange-200', value: 'text-orange-700', sub: 'text-orange-500' },
-    red: { bg: 'bg-red-50', border: 'border-red-200', value: 'text-red-700', sub: 'text-red-500' },
-    slate: { bg: 'bg-slate-50', border: 'border-slate-200', value: 'text-slate-700', sub: 'text-slate-500' },
-  }
-
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
       {cards.map((card, i) => {
-        const c = colorMap[card.color]
         return (
           <div
             key={i}
-            className={`${c.bg} ${c.border} border rounded-xl p-4 transition-shadow hover:shadow-md`}
+            className="bg-white rounded-3xl shadow-warm p-5 transition-all hover:shadow-warm-md"
           >
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-medium text-sand-400 tracking-wide">
                 {card.label}
               </span>
-              <span className="text-lg">{card.icon}</span>
+              <div className="w-8 h-8 rounded-xl bg-cream-200 flex items-center justify-center text-sm">
+                {card.icon}
+              </div>
             </div>
-            <div className={`text-2xl font-bold ${c.value} mb-1`}>
+            <div className="text-2xl font-bold text-dark-900 mb-0.5">
               {card.value}
             </div>
-            <div className={`text-xs ${c.sub}`}>
+            <div className="text-xs text-sand-400">
               {card.subtext}
             </div>
           </div>

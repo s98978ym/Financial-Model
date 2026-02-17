@@ -71,16 +71,16 @@ export function LicensingPanel({ config, onChange }: Props) {
       {/* Product definitions */}
       <div>
         <div className="flex items-center justify-between mb-2">
-          <h4 className="text-xs font-semibold text-gray-700">ライセンス製品定義</h4>
+          <h4 className="text-xs font-semibold text-sand-600">ライセンス製品定義</h4>
           <button onClick={addProduct} className="text-[10px] text-indigo-600 hover:text-indigo-800">+ 製品追加</button>
         </div>
-        <div className="bg-gray-50 rounded-lg border border-gray-200 overflow-x-auto">
+        <div className="bg-cream-50 rounded-2xl border border-cream-200 overflow-x-auto">
           <table className="w-full text-[11px]">
             <thead>
-              <tr className="border-b border-gray-200">
-                <th className="text-left px-3 py-2 text-gray-500 font-medium">製品名</th>
-                <th className="text-right px-3 py-2 text-gray-500 font-medium">ライセンス料</th>
-                <th className="text-right px-3 py-2 text-gray-500 font-medium">保守料率</th>
+              <tr className="border-b border-cream-200">
+                <th className="text-left px-3 py-2 text-sand-500 font-medium">製品名</th>
+                <th className="text-right px-3 py-2 text-sand-500 font-medium">ライセンス料</th>
+                <th className="text-right px-3 py-2 text-sand-500 font-medium">保守料率</th>
                 <th className="text-right px-3 py-2 text-indigo-600 font-semibold">年間保守料</th>
                 <th className="w-8"></th>
               </tr>
@@ -88,26 +88,26 @@ export function LicensingPanel({ config, onChange }: Props) {
             <tbody>
               {config.products.map(function(prod) {
                 return (
-                  <tr key={prod.id} className="border-b border-gray-100 last:border-0 hover:bg-white">
+                  <tr key={prod.id} className="border-b border-cream-200 last:border-0 hover:bg-white">
                     <td className="px-3 py-2">
                       <input type="text" value={prod.name}
                         onChange={function(e) { updateProduct(prod.id, { name: e.target.value }) }}
-                        className="w-full bg-transparent font-medium text-gray-900 outline-none focus:bg-indigo-50 focus:rounded px-1 -mx-1" />
+                        className="w-full bg-transparent font-medium text-dark-900 outline-none focus:bg-cream-100 focus:rounded px-1 -mx-1" />
                     </td>
                     <td className="px-3 py-2 text-right">
                       <CellInput value={prod.license_fee} onChange={function(v) { updateProduct(prod.id, { license_fee: v }) }} integer />
-                      <span className="text-[10px] text-gray-400">円</span>
+                      <span className="text-[10px] text-sand-400">円</span>
                     </td>
                     <td className="px-3 py-2 text-right">
                       <CellInput value={prod.maintenance_rate * 100} onChange={function(v) { updateProduct(prod.id, { maintenance_rate: v / 100 }) }} />
-                      <span className="text-[10px] text-gray-400">%</span>
+                      <span className="text-[10px] text-sand-400">%</span>
                     </td>
                     <td className="px-3 py-2 text-right font-mono text-indigo-700">
                       {formatYen(prod.license_fee * prod.maintenance_rate)}円/年
                     </td>
                     <td className="px-1 py-2">
                       {config.products.length > 1 && (
-                        <button onClick={function() { removeProduct(prod.id) }} className="text-gray-300 hover:text-red-500 transition-colors">
+                        <button onClick={function() { removeProduct(prod.id) }} className="text-sand-300 hover:text-red-500 transition-colors">
                           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                           </svg>
@@ -124,20 +124,20 @@ export function LicensingPanel({ config, onChange }: Props) {
 
       {/* Renewal rate */}
       <div className="flex items-center gap-3 text-[11px] px-1">
-        <span className="text-gray-500 font-medium">ライセンス更新率:</span>
+        <span className="text-sand-500 font-medium">ライセンス更新率:</span>
         <CellInput value={config.renewal_rate * 100}
           onChange={function(v) { onChange({ ...config, renewal_rate: v / 100 }) }} />
-        <span className="text-gray-400">%</span>
+        <span className="text-sand-400">%</span>
       </div>
 
       {/* License count projections */}
       <div>
-        <h4 className="text-xs font-semibold text-gray-700 mb-2">累計ライセンス数推移</h4>
+        <h4 className="text-xs font-semibold text-sand-600 mb-2">累計ライセンス数推移</h4>
         <div className="bg-indigo-50 rounded-lg border border-indigo-100 overflow-x-auto">
           <table className="w-full text-[11px]">
             <thead>
               <tr className="border-b border-indigo-200">
-                <th className="text-left px-3 py-2 text-gray-500 font-medium">製品</th>
+                <th className="text-left px-3 py-2 text-sand-500 font-medium">製品</th>
                 {FY_LABELS.map(function(fy) {
                   return <th key={fy} className="text-right px-3 py-2 text-indigo-600 font-medium">{fy}</th>
                 })}
@@ -147,7 +147,7 @@ export function LicensingPanel({ config, onChange }: Props) {
               {config.products.map(function(prod) {
                 return (
                   <tr key={prod.id} className="border-b border-indigo-100 last:border-0 hover:bg-white/50">
-                    <td className="px-3 py-2 font-medium text-gray-700">{prod.name}</td>
+                    <td className="px-3 py-2 font-medium text-sand-600">{prod.name}</td>
                     {FY_LABELS.map(function(_, fi) {
                       return (
                         <td key={fi} className="px-3 py-2 text-right">
@@ -159,7 +159,7 @@ export function LicensingPanel({ config, onChange }: Props) {
                 )
               })}
               <tr className="border-t-2 border-indigo-200 bg-indigo-100/50">
-                <td className="px-3 py-2 font-semibold text-gray-700">売上</td>
+                <td className="px-3 py-2 font-semibold text-sand-600">売上</td>
                 {fyRevenue.map(function(rev, fi) {
                   return <td key={fi} className="px-3 py-2 text-right font-mono font-bold text-indigo-700">{formatYen(rev)}円</td>
                 })}
@@ -184,10 +184,10 @@ function CellInput({ value, onChange, integer }: { value: number; onChange: (v: 
   if (editing) return (
     <input type="text" value={draft} onChange={function(e) { setDraft(e.target.value) }}
       onBlur={commit} onKeyDown={function(e) { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); if (e.key === 'Escape') setEditing(false) }}
-      autoFocus className="w-16 text-right bg-white border border-indigo-300 rounded px-1 py-0.5 text-[11px] font-mono outline-none focus:ring-1 focus:ring-indigo-400" />
+      autoFocus className="w-16 text-right bg-white border border-gold-300 rounded px-1 py-0.5 text-[11px] font-mono outline-none focus:ring-1 focus:ring-gold-400" />
   )
   return (
-    <button onClick={startEdit} className="font-mono text-[11px] text-gray-900 px-1 py-0.5 rounded border border-transparent hover:border-indigo-300 hover:bg-indigo-50 cursor-pointer transition-colors">
+    <button onClick={startEdit} className="font-mono text-[11px] text-dark-900 px-1 py-0.5 rounded border border-transparent hover:border-gold-300 hover:bg-cream-100 cursor-pointer transition-colors">
       {(integer ? Math.round(value) : value).toLocaleString()}
     </button>
   )
