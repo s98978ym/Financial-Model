@@ -89,7 +89,6 @@ export default function QAPage() {
   var handleGenerate = useCallback(function() {
     setIsGenerating(true)
 
-    // Simulate generation delay for UX
     setTimeout(function() {
       var items = generateQA(
         {
@@ -102,8 +101,13 @@ export default function QAPage() {
       )
       setQAItems(items)
       setIsGenerating(false)
-    }, 600)
+    }, 400)
   }, [parameters, plResult, industry, settings])
+
+  // Allow QADisplay to update items (edit/customize)
+  var handleItemsChange = useCallback(function(newItems: QAItem[]) {
+    setQAItems(newItems)
+  }, [])
 
   return (
     <PhaseLayout
@@ -130,7 +134,7 @@ export default function QAPage() {
         {/* Right: QA Display */}
         <div className="lg:col-span-2">
           {qaItems.length > 0 ? (
-            <QADisplay items={qaItems} />
+            <QADisplay items={qaItems} onItemsChange={handleItemsChange} />
           ) : (
             <div className="bg-white rounded-3xl shadow-warm p-12 text-center">
               <div className="text-5xl mb-4">💬</div>
@@ -156,6 +160,13 @@ export default function QAPage() {
                 <div className="bg-purple-50/50 rounded-2xl p-3">
                   <div className="text-xs font-medium text-purple-700 mb-1">資金・運営</div>
                   <div className="text-xs text-purple-600">資金調達、体制計画</div>
+                <div className="bg-orange-50 rounded-lg p-3">
+                  <div className="text-xs font-medium text-orange-700 mb-1">リスク・競合</div>
+                  <div className="text-xs text-orange-600">業界競合、ダウンサイド</div>
+                </div>
+                <div className="bg-purple-50 rounded-lg p-3">
+                  <div className="text-xs font-medium text-purple-700 mb-1">資金・市場</div>
+                  <div className="text-xs text-purple-600">バリュエーション、KPI</div>
                 </div>
               </div>
             </div>
