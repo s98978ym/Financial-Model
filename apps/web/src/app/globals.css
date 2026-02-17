@@ -3,14 +3,19 @@
 @tailwind utilities;
 
 :root {
-  --foreground-rgb: 0, 0, 0;
-  --background-rgb: 249, 250, 251;
+  --foreground-rgb: 28, 28, 46;
+  --background-rgb: 245, 240, 234;
+  --card-rgb: 255, 255, 255;
+  --gold-rgb: 212, 168, 83;
+  --sidebar-rgb: 28, 28, 46;
 }
 
 body {
   color: rgb(var(--foreground-rgb));
   background: rgb(var(--background-rgb));
-  font-feature-settings: "tnum"; /* Tabular numbers for financial data */
+  font-feature-settings: "tnum";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 /* ═══════════════════════════════════════════
@@ -24,36 +29,41 @@ body {
    Calculated: Black font
    ═══════════════════════════════════════════ */
 
+/* Warm card utility */
+.card-warm {
+  @apply bg-white rounded-3xl shadow-warm;
+}
+
 /* AG Grid custom theme overrides */
 .ag-theme-alpine {
-  --ag-header-background-color: #f8fafc;
-  --ag-row-hover-color: #f1f5f9;
-  --ag-selected-row-background-color: #e2e8f0;
+  --ag-header-background-color: #FAF6EF;
+  --ag-row-hover-color: #F5F0EA;
+  --ag-selected-row-background-color: #EDE6D9;
 }
 
 /* Confidence badge styles */
 .conf-badge {
-  @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium;
+  @apply inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium;
 }
 .conf-badge-high {
-  @apply bg-green-100 text-green-800;
+  @apply bg-emerald-50 text-emerald-700;
 }
 .conf-badge-mid {
-  @apply bg-yellow-100 text-yellow-800;
+  @apply bg-amber-50 text-amber-700;
 }
 .conf-badge-low {
-  @apply bg-red-100 text-red-800;
+  @apply bg-red-50 text-red-700;
 }
 
 /* Source badge styles */
 .source-badge {
-  @apply inline-flex items-center px-1.5 py-0.5 rounded text-xs font-mono;
+  @apply inline-flex items-center px-2 py-1 rounded-full text-xs font-mono;
 }
 .source-doc {
-  @apply bg-blue-100 text-blue-700;
+  @apply bg-blue-50 text-blue-700;
 }
 .source-infer {
-  @apply bg-amber-100 text-amber-700;
+  @apply bg-amber-50 text-amber-700;
 }
 .source-default {
   @apply bg-gray-100 text-gray-500;
@@ -100,9 +110,7 @@ body {
    Mobile UX Enhancements
    ═══════════════════════════════════════════ */
 
-/* Touch-friendly minimum target sizes on mobile */
 @media (max-width: 767px) {
-  /* Increase form input padding for easier touch */
   input[type="text"],
   input[type="email"],
   input[type="password"],
@@ -110,15 +118,13 @@ body {
   textarea,
   select {
     min-height: 44px;
-    font-size: 16px; /* Prevents iOS zoom on focus */
+    font-size: 16px;
   }
 
-  /* Ensure range sliders have enough touch area */
   input[type="range"] {
     min-height: 32px;
   }
 
-  /* Reduce horizontal padding on mobile for more content space */
   .mobile-compact-px {
     padding-left: 1rem;
     padding-right: 1rem;
