@@ -27,6 +27,7 @@ Thumbs.db
 # Output files (generated)
 output/
 *.xlsx.bak
+artifacts/fam-eval/
 
 # Environment / Secrets
 .env
