@@ -28,6 +28,19 @@ def test_run_reference_pdca_writes_scores_and_summary(tmp_path) -> None:
 
     assert (tmp_path / result.run_id / "scores.json").exists()
     assert result.baseline_score is not None
+    summary_text = (tmp_path / result.run_id / "summary.md").read_text(encoding="utf-8")
+    assert "## 評価項目の説明" in summary_text
+    assert "`structure`" in summary_text
+    assert "`model_sheets`" in summary_text
+    assert "`pl`" in summary_text
+    assert "`explainability`" in summary_text
+    assert "## 総合評価" in summary_text
+    assert "## 個別評価" in summary_text
+    assert "## 検証した仮説" in summary_text
+    assert "## 結果" in summary_text
+    assert "## 課題" in summary_text
+    assert "## 改善内容" in summary_text
+    assert "## 次の方針" in summary_text
 
 
 def test_fam_reference_cli_writes_artifacts(tmp_path) -> None:

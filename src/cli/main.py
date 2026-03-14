@@ -35,12 +35,15 @@ def fam_reference_eval(
         artifact_root=Path(artifact_root),
         runner=runner,
     )
+    run_root = Path(artifact_root) / result.run_id
 
     return {
         "run_id": result.run_id,
         "baseline_score": result.baseline_score,
         "best_candidate_id": result.best_candidate_id,
         "best_candidate_score": result.best_candidate_score,
+        "summary_path": str(run_root / "summary.md"),
+        "scores_path": str(run_root / "scores.json"),
     }
 
 
