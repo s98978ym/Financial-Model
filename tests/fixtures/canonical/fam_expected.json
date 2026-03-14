@@ -1,0 +1,94 @@
+{
+  "metadata": {
+    "project_name": "FAM",
+    "currency": "JPY",
+    "horizon_years": 5,
+    "source_documents": ["fam_business_plan.pdf"],
+    "notes": "Canonical fixture for mixed-model business"
+  },
+  "targets": {
+    "revenue_targets": [
+      {"year": "FY3", "value": 500000000, "evidence": "リリース3年目:5億円", "source": "document"}
+    ],
+    "operating_profit_targets": [],
+    "ebitda_targets": [],
+    "breakeven_targets": [
+      {"year": "FY3", "type": "single_year", "evidence": "リリース3年目:単月黒字", "source": "document"}
+    ]
+  },
+  "segments": [
+    {
+      "segment_id": "meal",
+      "name": "ミール",
+      "customer_type": "B2B/B2C",
+      "offer_type": "nutrition_meal",
+      "engines": [
+        {
+          "engine_id": "meal_team_supply",
+          "engine_type": "unit_economics",
+          "name": "チーム向け供給",
+          "drivers": [
+            {
+              "driver_id": "meal_price_per_item",
+              "name": "価格/アイテム",
+              "unit": "JPY",
+              "category": "price",
+              "series": {"fy1": 500, "fy2": 500, "fy3": 500, "fy4": 500, "fy5": 500},
+              "source": "document",
+              "confidence": 0.9,
+              "mode": "fixed",
+              "decision_required": false,
+              "tags": ["meal"]
+            }
+          ],
+          "revenue_equation": "price_per_item * items_per_meal * meals_per_year * unit_count",
+          "cost_equation": "pack_cost * boxes_per_year + shipping_cost * shipments",
+          "constraints": {},
+          "assumptions": []
+        }
+      ],
+      "assumptions": []
+    },
+    {
+      "segment_id": "academy",
+      "name": "アカデミー",
+      "customer_type": "B2B/B2C",
+      "offer_type": "education",
+      "engines": [
+        {
+          "engine_id": "academy_courses",
+          "engine_type": "progression",
+          "name": "資格課程",
+          "drivers": [],
+          "revenue_equation": "entrants * price * completion_rate * certification_rate",
+          "cost_equation": null,
+          "constraints": {},
+          "assumptions": []
+        }
+      ],
+      "assumptions": []
+    },
+    {
+      "segment_id": "consulting",
+      "name": "コンサル",
+      "customer_type": "B2B",
+      "offer_type": "project_service",
+      "engines": [
+        {
+          "engine_id": "consulting_contracts",
+          "engine_type": "project_capacity",
+          "name": "年契/単発",
+          "drivers": [],
+          "revenue_equation": "project_count * unit_price",
+          "cost_equation": "project_count * delivery_cost_per_project",
+          "constraints": {"capacity_driver": "consultant_capacity"},
+          "assumptions": []
+        }
+      ],
+      "assumptions": []
+    }
+  ],
+  "cost_pools": [],
+  "bindings": [],
+  "global_assumptions": ["FAM mixed-model fixture"]
+}

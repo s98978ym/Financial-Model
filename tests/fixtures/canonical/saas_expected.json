@@ -1,0 +1,54 @@
+{
+  "metadata": {
+    "project_name": "SaaS Demo",
+    "currency": "JPY",
+    "horizon_years": 5,
+    "source_documents": ["saas_plan.pdf"],
+    "notes": "Canonical fixture for SaaS"
+  },
+  "targets": {
+    "revenue_targets": [
+      {"year": "FY1", "value": 100000000, "evidence": "初年度売上1億円", "source": "document"}
+    ],
+    "operating_profit_targets": [],
+    "ebitda_targets": [],
+    "breakeven_targets": []
+  },
+  "segments": [
+    {
+      "segment_id": "saas",
+      "name": "SaaS Subscription",
+      "customer_type": "B2B",
+      "offer_type": "software",
+      "engines": [
+        {
+          "engine_id": "saas_subscription",
+          "engine_type": "subscription",
+          "name": "標準プラン",
+          "drivers": [
+            {
+              "driver_id": "subscribers",
+              "name": "契約社数",
+              "unit": "count",
+              "category": "volume",
+              "series": {"fy1": 100, "fy2": 150, "fy3": 220, "fy4": 300, "fy5": 380},
+              "source": "document",
+              "confidence": 0.85,
+              "mode": "fixed",
+              "decision_required": false,
+              "tags": ["subscription"]
+            }
+          ],
+          "revenue_equation": "subscribers * arpu * 12",
+          "cost_equation": "subscribers * support_cost_per_account",
+          "constraints": {},
+          "assumptions": []
+        }
+      ],
+      "assumptions": []
+    }
+  ],
+  "cost_pools": [],
+  "bindings": [],
+  "global_assumptions": ["SaaS fixture"]
+}
