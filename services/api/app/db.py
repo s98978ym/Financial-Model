@@ -16,6 +16,7 @@ import os
 import uuid
 from contextlib import contextmanager
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -66,6 +67,7 @@ def _run_migrations(pool):
         conn = pool.getconn()
         try:
             cur = conn.cursor()
+            _ensure_base_schema(conn)
             # --- memo column ---
             cur.execute(
                 "SELECT column_name FROM information_schema.columns "
@@ -120,6 +122,31 @@ def _run_migrations(pool):
             pool.putconn(conn)
     except Exception as e:
         logger.warning("Could not run migrations: %s", e)
+
+
+def _bootstrap_schema_sql_path() -> Path:
+    return Path(__file__).resolve().parents[3] / "infra" / "init.sql"
+
+
+def _projects_table_exists(cur) -> bool:
+    cur.execute(
+        "SELECT EXISTS (SELECT 1 FROM information_schema.tables "
+        "WHERE table_schema = 'public' AND table_name = %s)",
+        ("projects",),
+    )
+    row = cur.fetchone()
+    return bool(row and row[0])
+
+
+def _ensure_base_schema(conn) -> None:
+    cur = conn.cursor()
+    if _projects_table_exists(cur):
+        return
+
+    bootstrap_sql = _bootstrap_schema_sql_path().read_text(encoding="utf-8")
+    cur.execute(bootstrap_sql)
+    conn.commit()
+    logger.info("Bootstrapped PostgreSQL schema from infra/init.sql")
 
 
 @contextmanager

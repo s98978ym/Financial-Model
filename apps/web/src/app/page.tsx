@@ -49,7 +49,7 @@ function getPhaseRoute(projectId: string, phase: number): string {
 
 export default function DashboardPage() {
   var queryClient = useQueryClient()
-  var { data: projects, isLoading } = useQuery({
+  var { data: projects, isLoading, isError, error } = useQuery({
     queryKey: ['projects'],
     queryFn: api.listProjects,
   })
@@ -106,6 +106,10 @@ export default function DashboardPage() {
       statusCounts[p.status] = (statusCounts[p.status] || 0) + 1
     })
   }
+
+  var errorMessage = error instanceof Error && error.message
+    ? error.message
+    : 'しばらく待ってから再読み込みしてください。'
 
   return (
     <div className="max-w-6xl mx-auto">
@@ -201,6 +205,19 @@ export default function DashboardPage() {
               <div className="absolute inset-0 rounded-full border-2 border-gold-500 border-t-transparent animate-spin"></div>
             </div>
             <p className="text-sand-400 text-sm">読み込み中...</p>
+          </div>
+        </div>
+      ) : isError ? (
+        <div className="py-24 bg-white rounded-3xl shadow-warm border border-rose-100">
+          <div className="max-w-xl mx-auto px-6 text-center">
+            <div className="w-16 h-16 rounded-3xl bg-rose-50 flex items-center justify-center mx-auto mb-5">
+              <svg className="w-7 h-7 text-rose-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zM12 15.75h.007v.008H12v-.008z" />
+              </svg>
+            </div>
+            <p className="text-dark-900 mb-2 font-semibold">プロジェクトを読み込めませんでした</p>
+            <p className="text-sand-500 text-sm mb-3">API との接続または初期化に失敗しています。</p>
+            <p className="text-rose-600 text-sm font-medium break-words">{errorMessage}</p>
           </div>
         </div>
       ) : sortedProjects.length > 0 ? (
