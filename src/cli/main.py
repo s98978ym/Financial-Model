@@ -10,14 +10,79 @@ from typing import Optional, List
 try:
     import typer
     app = typer.Typer(help="PL Generator - Auto-generate P&L Excel from business plans")
+    eval_app = typer.Typer(help="Reference evaluation workflows")
+    source_cache_app = typer.Typer(help="Manage the FAM source cache")
+    app.add_typer(eval_app, name="eval")
+    eval_app.add_typer(source_cache_app, name="source-cache")
 except ImportError:
     # Fallback: we'll use argparse
     app = None
+    eval_app = None
+    source_cache_app = None
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+
+def fam_reference_eval(
+    plan_pdf: str,
+    reference_workbook: str,
+    artifact_root: str = "artifacts/fam-eval",
+    runner: str = "fixture",
+) -> dict:
+    """Run the FAM reference-driven PDCA evaluation loop."""
+    from ..evals.pdca_loop import run_reference_pdca
+
+    result = run_reference_pdca(
+        plan_pdf=Path(plan_pdf),
+        reference_workbook=Path(reference_workbook),
+        artifact_root=Path(artifact_root),
+        runner=runner,
+    )
+    run_root = Path(artifact_root) / result.run_id
+
+    return {
+        "run_id": result.run_id,
+        "baseline_score": result.baseline_score,
+        "best_candidate_id": result.best_candidate_id,
+        "best_candidate_score": result.best_candidate_score,
+        "summary_path": str(run_root / "summary.md"),
+        "scores_path": str(run_root / "scores.json"),
+    }
+
+
+def source_cache_show(registry_path: Optional[str] = None) -> dict:
+    """Show source-cache metadata."""
+    from ..evals.source_registry import source_registry_metadata
+
+    return source_registry_metadata(Path(registry_path) if registry_path else None)
+
+
+def source_cache_upsert(
+    source_type: str,
+    title: str,
+    url: str,
+    publisher: str,
+    quote: str,
+    registry_path: Optional[str] = None,
+) -> dict:
+    """Insert or update one source-cache entry."""
+    from ..evals.source_registry import upsert_analysis_source_ref
+
+    updated = upsert_analysis_source_ref(
+        source_type,
+        title=title,
+        url=url,
+        publisher=publisher,
+        quote=quote,
+        registry_path=Path(registry_path) if registry_path else None,
+    )
+    return {
+        "source_type": source_type,
+        "updated_ref": updated,
+        "registry_path": str(Path(registry_path)) if registry_path else None,
+    }
 
 _PDCA_PHASE_DEFAULTS = {
     5: {
@@ -502,6 +567,38 @@ if app is not None:
         """Generate PL Excel files from a business plan."""
         generate(input_file, template, config, output_dir, cases, industry, business_model, strictness, simulation)
 
+    @eval_app.command("fam-reference")
+    def cli_fam_reference(
+        plan_pdf: str = typer.Option(..., help="Business plan PDF"),
+        reference_workbook: str = typer.Option(..., help="Reference workbook (.xlsx)"),
+        artifact_root: str = typer.Option("artifacts/fam-eval", help="Artifact output directory"),
+        runner: str = typer.Option("fixture", help="fixture or live"),
+    ):
+        """Run the FAM reference evaluation loop."""
+        payload = fam_reference_eval(plan_pdf, reference_workbook, artifact_root, runner)
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+
+    @source_cache_app.command("show")
+    def cli_source_cache_show(
+        registry_path: Optional[str] = typer.Option(None, help="Override source cache JSON path"),
+    ):
+        """Show source-cache metadata."""
+        payload = source_cache_show(registry_path)
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+
+    @source_cache_app.command("upsert")
+    def cli_source_cache_upsert(
+        source_type: str = typer.Option(..., help="Analysis source type"),
+        title: str = typer.Option(..., help="Source title"),
+        url: str = typer.Option(..., help="Source URL"),
+        publisher: str = typer.Option(..., help="Source publisher"),
+        quote: str = typer.Option(..., help="Curated short quote"),
+        registry_path: Optional[str] = typer.Option(None, help="Override source cache JSON path"),
+    ):
+        """Insert or update one source-cache entry."""
+        payload = source_cache_upsert(source_type, title, url, publisher, quote, registry_path)
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+
     pdca_app = typer.Typer(help="LLM improvement PDCA tools")
     pdca_campaign_app = typer.Typer(help="Manage PDCA campaigns")
     pdca_app.add_typer(pdca_campaign_app, name="campaign")
@@ -675,6 +772,25 @@ def main():
         gen_p.add_argument("--strictness", default="normal")
         gen_p.add_argument("--simulation", action="store_true")
 
+        eval_p = sub.add_parser("eval", help="Run reference evaluation workflows")
+        eval_sub = eval_p.add_subparsers(dest="eval_command")
+        fam_ref_p = eval_sub.add_parser("fam-reference", help="Run FAM reference evaluation")
+        fam_ref_p.add_argument("--plan-pdf", required=True)
+        fam_ref_p.add_argument("--reference-workbook", required=True)
+        fam_ref_p.add_argument("--artifact-root", default="artifacts/fam-eval")
+        fam_ref_p.add_argument("--runner", default="fixture")
+        source_cache_p = eval_sub.add_parser("source-cache", help="Manage the FAM source cache")
+        source_cache_sub = source_cache_p.add_subparsers(dest="source_cache_command")
+        source_cache_show_p = source_cache_sub.add_parser("show", help="Show source-cache metadata")
+        source_cache_show_p.add_argument("--registry-path", default=None)
+        source_cache_upsert_p = source_cache_sub.add_parser("upsert", help="Insert or update one source-cache entry")
+        source_cache_upsert_p.add_argument("--source-type", required=True)
+        source_cache_upsert_p.add_argument("--title", required=True)
+        source_cache_upsert_p.add_argument("--url", required=True)
+        source_cache_upsert_p.add_argument("--publisher", required=True)
+        source_cache_upsert_p.add_argument("--quote", required=True)
+        source_cache_upsert_p.add_argument("--registry-path", default=None)
+
         pdca_p = sub.add_parser("pdca", help="LLM PDCA tools")
         pdca_sub = pdca_p.add_subparsers(dest="pdca_command")
 
@@ -748,6 +864,22 @@ def main():
             analyze(args.input_file, args.template, args.config, args.out, args.industry, args.business_model, args.strictness)
         elif args.command == "generate":
             generate(args.input_file, args.template, args.config, args.out, args.cases, args.industry, args.business_model, args.strictness, args.simulation)
+        elif args.command == "eval" and args.eval_command == "fam-reference":
+            payload = fam_reference_eval(args.plan_pdf, args.reference_workbook, args.artifact_root, args.runner)
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
+        elif args.command == "eval" and args.eval_command == "source-cache" and args.source_cache_command == "show":
+            payload = source_cache_show(args.registry_path)
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
+        elif args.command == "eval" and args.eval_command == "source-cache" and args.source_cache_command == "upsert":
+            payload = source_cache_upsert(
+                args.source_type,
+                args.title,
+                args.url,
+                args.publisher,
+                args.quote,
+                args.registry_path,
+            )
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
         elif args.command == "pdca":
             if args.pdca_command == "campaign":
                 if args.pdca_campaign_command == "create":

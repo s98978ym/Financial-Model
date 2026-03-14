@@ -1,0 +1,111 @@
+from pathlib import Path
+
+import subprocess
+import sys
+
+from src.evals.candidate_profiles import CandidateProfile
+from src.evals.pdca_loop import run_reference_pdca
+
+
+def test_run_reference_pdca_selects_highest_scoring_candidate(tmp_path) -> None:
+    result = run_reference_pdca(
+        plan_pdf=Path("/tmp/fake.pdf"),
+        reference_workbook=Path("tests/fixtures/evals/reference_workbook_minimal.xlsx"),
+        artifact_root=tmp_path,
+        runner="fixture",
+    )
+
+    assert result.best_candidate_id == "candidate-better"
+    assert (tmp_path / result.run_id / "summary.md").exists()
+
+
+def test_run_reference_pdca_writes_scores_and_summary(tmp_path) -> None:
+    result = run_reference_pdca(
+        plan_pdf=Path("/tmp/fake.pdf"),
+        reference_workbook=Path("tests/fixtures/evals/reference_workbook_minimal.xlsx"),
+        artifact_root=tmp_path,
+        runner="fixture",
+    )
+
+    assert (tmp_path / result.run_id / "scores.json").exists()
+    assert result.baseline_score is not None
+    summary_text = (tmp_path / result.run_id / "summary.md").read_text(encoding="utf-8")
+    assert "## 評価項目の説明" in summary_text
+    assert "## スコア推移グラフ" in summary_text
+    assert "## 施策・効果・課題" in summary_text
+    assert "`structure`" in summary_text
+    assert "`model_sheets`" in summary_text
+    assert "`pl`" in summary_text
+    assert "`explainability`" in summary_text
+    assert "## 総合評価" in summary_text
+    assert "## 個別評価" in summary_text
+    assert "## 検証した仮説" in summary_text
+    assert "## 結果" in summary_text
+    assert "## 課題" in summary_text
+    assert "## 改善内容" in summary_text
+    assert "## 次の方針" in summary_text
+
+
+def test_fam_reference_cli_writes_artifacts(tmp_path) -> None:
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "src.cli.main",
+            "eval",
+            "fam-reference",
+            "--plan-pdf",
+            "/tmp/fake.pdf",
+            "--reference-workbook",
+            "tests/fixtures/evals/reference_workbook_minimal.xlsx",
+            "--artifact-root",
+            str(tmp_path),
+            "--runner",
+            "fixture",
+        ],
+        cwd=Path(__file__).resolve().parents[2],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0
+    assert "best_candidate_id" in result.stdout
+
+
+def test_run_reference_pdca_uses_explicit_profiles_when_provided(tmp_path) -> None:
+    result = run_reference_pdca(
+        plan_pdf=Path("/tmp/fake.pdf"),
+        reference_workbook=Path("tests/fixtures/evals/reference_workbook_minimal.xlsx"),
+        artifact_root=tmp_path,
+        runner="fixture",
+        profiles=[
+            CandidateProfile(
+                candidate_id="candidate-baseline-like",
+                label="Fixture baseline-like candidate",
+                runner="fixture",
+                config={"fixture_name": "baseline_result.json"},
+            )
+        ],
+    )
+
+    assert result.best_candidate_id == "candidate-baseline-like"
+
+
+def test_run_reference_pdca_uses_explicit_baseline_mode_when_provided(tmp_path) -> None:
+    result = run_reference_pdca(
+        plan_pdf=Path("/tmp/fake.pdf"),
+        reference_workbook=Path("tests/fixtures/evals/reference_workbook_minimal.xlsx"),
+        artifact_root=tmp_path,
+        runner="fixture",
+        baseline_mode="candidate_result.json",
+        profiles=[
+            CandidateProfile(
+                candidate_id="candidate-baseline-like",
+                label="Fixture baseline-like candidate",
+                runner="fixture",
+                config={"fixture_name": "baseline_result.json"},
+            )
+        ],
+    )
+
+    assert result.best_candidate_score < result.baseline_score

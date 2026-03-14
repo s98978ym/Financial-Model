@@ -1,0 +1,124 @@
+{
+  "metadata": {
+    "version": "2026-03-15",
+    "purpose": "Stable hand-curated evidence cache for FAM revenue overlays.",
+    "update_scope": [
+      "sales_efficiency_analysis",
+      "partner_strategy_analysis",
+      "staged_acceleration_analysis",
+      "validation_period_analysis",
+      "acceleration_period_analysis",
+      "gated_acceleration_analysis",
+      "branding_lift_analysis",
+      "marketing_efficiency_analysis"
+    ]
+  },
+  "refs": {
+    "branding_lift_analysis": [
+      {
+        "title": "How brands use MMM to find and fuel their growth engine",
+        "url": "https://business.google.com/us/think/measurement/marketing-mix-modelling-growth-engine/",
+        "publisher": "Think with Google",
+        "quote": "Brand and performance should be measured together because upper-funnel investment can lift downstream efficiency."
+      },
+      {
+        "title": "Marketing measurement handbook",
+        "url": "https://business.google.com/us/think/measurement/marketing-measurement-handbook/",
+        "publisher": "Think with Google",
+        "quote": "Measurement should connect incremental impact and future scaling decisions rather than only last-click outcomes."
+      }
+    ],
+    "marketing_efficiency_analysis": [
+      {
+        "title": "2025 CPL and CAC Benchmarks",
+        "url": "https://blog.hubspot.com/marketing/2022-cpl-and-cac-benchmarks",
+        "publisher": "HubSpot",
+        "quote": "CAC and CPL vary widely by channel, so scaling should follow economics that are already proven."
+      },
+      {
+        "title": "How brands use MMM to find and fuel their growth engine",
+        "url": "https://business.google.com/us/think/measurement/marketing-mix-modelling-growth-engine/",
+        "publisher": "Think with Google",
+        "quote": "Brand demand improves the efficiency of direct-response media when the mix is coordinated."
+      }
+    ],
+    "sales_efficiency_analysis": [
+      {
+        "title": "2024 B2B Sales Benchmarks",
+        "url": "https://www.ebsta.com/wp-content/uploads/2024/02/B2B-Sales-Benchmarks-2024_.pdf",
+        "publisher": "Ebsta",
+        "quote": "Higher-performing sales teams pair stronger win rates with shorter cycles and better pipeline quality."
+      },
+      {
+        "title": "2024 B2B Sales Benchmarks: H1 Update",
+        "url": "https://www.ebsta.com/wp-content/uploads/2024/07/H1-Update-2024-B2B-Sales-Benchmarks.pdf",
+        "publisher": "Ebsta",
+        "quote": "Sales productivity depends on converting qualified pipeline efficiently rather than adding volume alone."
+      }
+    ],
+    "partner_strategy_analysis": [
+      {
+        "title": "The Business Case for Modern Partner Enablement",
+        "url": "https://www.continu.com/research/the-business-case-for-modern-partner-enablement",
+        "publisher": "Continu",
+        "quote": "Enablement quality influences partner-sourced revenue, ramp speed, and ongoing partner productivity."
+      },
+      {
+        "title": "2024 B2B Sales Benchmarks",
+        "url": "https://www.ebsta.com/wp-content/uploads/2024/02/B2B-Sales-Benchmarks-2024_.pdf",
+        "publisher": "Ebsta",
+        "quote": "Channel quality and deal progression matter as much as raw lead count in B2B sales outcomes."
+      }
+    ],
+    "staged_acceleration_analysis": [
+      {
+        "title": "Marketing measurement handbook",
+        "url": "https://business.google.com/us/think/measurement/marketing-measurement-handbook/",
+        "publisher": "Think with Google",
+        "quote": "Teams should validate incrementality and economics before scaling spend aggressively."
+      },
+      {
+        "title": "The easy formula to calculate true CAC across all your marketing channels",
+        "url": "https://blog.hubspot.com/marketing/multi-channel-cac",
+        "publisher": "HubSpot",
+        "quote": "True CAC should be understood across channels before larger investment is committed."
+      }
+    ],
+    "validation_period_analysis": [
+      {
+        "title": "Marketing measurement handbook",
+        "url": "https://business.google.com/us/think/measurement/marketing-measurement-handbook/",
+        "publisher": "Think with Google",
+        "quote": "Early-stage validation should focus on incrementality, not vanity metrics."
+      }
+    ],
+    "acceleration_period_analysis": [
+      {
+        "title": "How brands use MMM to find and fuel their growth engine",
+        "url": "https://business.google.com/us/think/measurement/marketing-mix-modelling-growth-engine/",
+        "publisher": "Think with Google",
+        "quote": "Once the growth engine is understood, mix decisions can support scaling with more confidence."
+      },
+      {
+        "title": "2025 CPL and CAC Benchmarks",
+        "url": "https://blog.hubspot.com/marketing/2022-cpl-and-cac-benchmarks",
+        "publisher": "HubSpot",
+        "quote": "Channel economics should guide where incremental spend is added during scale-up."
+      }
+    ],
+    "gated_acceleration_analysis": [
+      {
+        "title": "Marketing measurement handbook",
+        "url": "https://business.google.com/us/think/measurement/marketing-measurement-handbook/",
+        "publisher": "Think with Google",
+        "quote": "Measurement guardrails are needed before increasing investment materially."
+      },
+      {
+        "title": "The easy formula to calculate true CAC across all your marketing channels",
+        "url": "https://blog.hubspot.com/marketing/multi-channel-cac",
+        "publisher": "HubSpot",
+        "quote": "CAC visibility gives teams a practical gate for deciding when to scale."
+      }
+    ]
+  }
+}
