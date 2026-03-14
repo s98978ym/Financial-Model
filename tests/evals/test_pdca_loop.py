@@ -30,6 +30,8 @@ def test_run_reference_pdca_writes_scores_and_summary(tmp_path) -> None:
     assert result.baseline_score is not None
     summary_text = (tmp_path / result.run_id / "summary.md").read_text(encoding="utf-8")
     assert "## 評価項目の説明" in summary_text
+    assert "## スコア推移グラフ" in summary_text
+    assert "## 施策・効果・課題" in summary_text
     assert "`structure`" in summary_text
     assert "`model_sheets`" in summary_text
     assert "`pl`" in summary_text

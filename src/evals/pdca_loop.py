@@ -382,6 +382,26 @@ def _write_summary(
     lines.extend(
         [
             "",
+            "## スコア推移グラフ",
+            "```text",
+        ]
+    )
+    lines.extend(_score_graph_lines(baseline_score, candidate_scores, profiles))
+    lines.extend(["```"])
+
+    lines.extend(
+        [
+            "",
+            "## 施策・効果・課題",
+            "| 候補 | 施策 | 効果 | 残課題 |",
+            "|---|---|---|---|",
+        ]
+    )
+    lines.extend(_initiative_table_lines(baseline_score, candidate_scores, profiles))
+
+    lines.extend(
+        [
+            "",
             "## 総合評価",
             f"- Baseline: `{baseline_score.total_score:.4f}`",
             f"  - 解釈: {_overall_interpretation(baseline_score.total_score, 'baseline')}",
@@ -635,3 +655,72 @@ def _next_directions(candidate_scores: Dict[str, ScoreResult], runner: str) -> l
 
     directions.append("live runner で同じ summary 形式を維持しながら、FAM 実データで仮説の改善量を追えるようにします。")
     return directions
+
+
+def _score_graph_lines(
+    baseline_score: ScoreResult,
+    candidate_scores: Dict[str, ScoreResult],
+    profiles: Iterable[CandidateProfile],
+) -> list[str]:
+    lines = [_bar_line("Baseline", baseline_score.total_score)]
+    for profile in profiles:
+        score = candidate_scores.get(profile.candidate_id)
+        if score is None or _is_upper_bound_candidate(profile.candidate_id):
+            continue
+        lines.append(_bar_line(profile.candidate_id, score.total_score))
+    if any(_is_upper_bound_candidate(profile.candidate_id) for profile in profiles):
+        upper_bound_score = candidate_scores.get("candidate-reference-seeded")
+        if upper_bound_score is not None:
+            lines.append(_bar_line("UpperBound", upper_bound_score.total_score))
+    return lines
+
+
+def _bar_line(label: str, score: float) -> str:
+    width = max(1, round(score * 20))
+    return f"{label:<32} {score:>6.4f}  {'█' * width}"
+
+
+def _initiative_table_lines(
+    baseline_score: ScoreResult,
+    candidate_scores: Dict[str, ScoreResult],
+    profiles: Iterable[CandidateProfile],
+) -> list[str]:
+    lines = [
+        "| baseline | PDF のみで現状再現力を測る | 総合 `"
+        + f"{baseline_score.total_score:.4f}"
+        + "` | 構造は半分見えるが model_sheets / pl が未再現 |"
+    ]
+    for profile in profiles:
+        score = candidate_scores.get(profile.candidate_id)
+        if score is None:
+            continue
+        delta = round(score.total_score - baseline_score.total_score, 4)
+        effect = f"総合 `{score.total_score:.4f}` (`{delta:+.4f}`)"
+        issue = _short_issue(score)
+        if _is_upper_bound_candidate(profile.candidate_id):
+            issue = "参照 workbook を seed にした上限比較"
+        lines.append(
+            f"| {profile.candidate_id} | {_short_measure(profile)} | {effect} | {issue} |"
+        )
+    return lines
+
+
+def _short_measure(profile: CandidateProfile) -> str:
+    mapping = {
+        "candidate-structure-seeded": "segment と engine_type を seed",
+        "candidate-structure-pl-extracted": "PDF から PL 系列を直接抽出",
+        "candidate-structure-model-pl-extracted": "PDF から academy モデル系列も抽出",
+        "candidate-integrated-derived": "meal 抽出 + consulting 補完を統合",
+        "candidate-reference-seeded": "参照 workbook の model/pl を seed",
+    }
+    return mapping.get(profile.candidate_id, profile.label)
+
+
+def _short_issue(score: ScoreResult) -> str:
+    if score.layer_scores.get("model_sheets", 0.0) < 0.1:
+        return "model_sheets がまだ弱い"
+    if score.layer_scores.get("pl", 0.0) < 0.2:
+        return "PL 再現がまだ弱い"
+    if score.layer_scores.get("explainability", 0.0) < 0.9:
+        return "説明責任は改善中だが未完成"
+    return "大きな課題は縮小"
