@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import subprocess
@@ -44,6 +45,41 @@ def test_run_reference_pdca_writes_scores_and_summary(tmp_path) -> None:
     assert "## 課題" in summary_text
     assert "## 改善内容" in summary_text
     assert "## 次の方針" in summary_text
+
+
+def test_run_reference_pdca_writes_diagnosis_and_score_deltas(tmp_path) -> None:
+    result = run_reference_pdca(
+        plan_pdf=Path("/tmp/fake.pdf"),
+        reference_workbook=Path("tests/fixtures/evals/reference_workbook_minimal.xlsx"),
+        artifact_root=tmp_path,
+        runner="fixture",
+    )
+
+    run_root = tmp_path / result.run_id
+    scores = json.loads((run_root / "scores.json").read_text(encoding="utf-8"))
+    diagnosis = json.loads((run_root / "diagnosis.json").read_text(encoding="utf-8"))
+
+    candidate = next(iter(scores["candidates"].values()))
+    assert "layer_deltas" in candidate
+    assert "rank" in candidate
+    assert diagnosis["candidates"]
+
+
+def test_summary_contains_hypothesis_logic_evidence_and_next_actions(tmp_path) -> None:
+    result = run_reference_pdca(
+        plan_pdf=Path("/tmp/fake.pdf"),
+        reference_workbook=Path("tests/fixtures/evals/reference_workbook_minimal.xlsx"),
+        artifact_root=tmp_path,
+        runner="fixture",
+    )
+
+    summary = (tmp_path / result.run_id / "summary.md").read_text(encoding="utf-8")
+
+    assert "## 仮説内容" in summary
+    assert "## 仮説検証結果" in summary
+    assert "## ロジック" in summary
+    assert "## 根拠ファクトとデータ" in summary
+    assert "## 次の改善施策" in summary
 
 
 def test_fam_reference_cli_writes_artifacts(tmp_path) -> None:

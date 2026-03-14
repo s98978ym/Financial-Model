@@ -13,6 +13,7 @@ from typing import Any, Dict, Iterable
 from src.ingest.reader import read_document
 
 from .candidate_profiles import CandidateProfile, fixture_path, fixture_profiles, live_profiles
+from .diagnosis import build_candidate_diagnosis
 from .external_analysis import build_external_analysis_candidate
 from .pdf_signals import extract_academy_signals, extract_meal_signals, extract_pl_signals
 from .reference_workbook import ReferenceWorkbook, extract_reference_workbook
@@ -92,6 +93,13 @@ def run_reference_pdca(
     for candidate_id, payload in candidates.items():
         _write_json(run_root / "candidates" / f"{candidate_id}.json", payload)
     _write_scores(run_root / "scores.json", baseline_score, candidate_scores)
+    _write_diagnosis(
+        run_root / "diagnosis.json",
+        baseline_score=baseline_score,
+        candidate_scores=candidate_scores,
+        profiles=profiles,
+        candidates=candidates,
+    )
     _write_summary(
         run_root / "summary.md",
         plan_pdf=plan_pdf,
@@ -101,6 +109,7 @@ def run_reference_pdca(
         best_candidate_id=best_candidate_id,
         runner=runner,
         profiles=profiles,
+        candidates=candidates,
     )
 
     return PDCAEvalResult(
@@ -417,22 +426,84 @@ def _write_json(path: Path, payload: Dict[str, Any]) -> None:
 
 
 def _write_scores(path: Path, baseline_score: ScoreResult, candidate_scores: Dict[str, ScoreResult]) -> None:
+    ranked_candidate_ids = _ranked_candidate_ids(candidate_scores)
     payload = {
         "layer_definitions": LAYER_DEFINITIONS,
         "baseline": {
             "total_score": baseline_score.total_score,
             "layer_scores": baseline_score.layer_scores,
+            "layer_deltas": {
+                layer_name: 0.0 for layer_name in baseline_score.layer_scores
+            },
+            "rank": 0,
+            "is_upper_bound": False,
+            "is_practical_candidate": False,
         },
         "candidates": {
             candidate_id: {
                 "total_score": score.total_score,
                 "delta_vs_baseline": round(score.total_score - baseline_score.total_score, 4),
                 "layer_scores": score.layer_scores,
+                "layer_deltas": _layer_deltas(score, baseline_score),
+                "rank": ranked_candidate_ids.index(candidate_id) + 1,
+                "is_upper_bound": _is_upper_bound_candidate(candidate_id),
+                "is_practical_candidate": not _is_upper_bound_candidate(candidate_id),
             }
             for candidate_id, score in candidate_scores.items()
         },
     }
     _write_json(path, payload)
+
+
+def _write_diagnosis(
+    path: Path,
+    *,
+    baseline_score: ScoreResult,
+    candidate_scores: Dict[str, ScoreResult],
+    profiles: Iterable[CandidateProfile],
+    candidates: Dict[str, Dict[str, Any]],
+) -> None:
+    profile_map = {profile.candidate_id: profile for profile in profiles}
+    payload = {
+        "baseline": {
+            "total_score": baseline_score.total_score,
+            "layer_scores": baseline_score.layer_scores,
+        },
+        "candidates": {},
+    }
+    for candidate_id, score in candidate_scores.items():
+        profile = profile_map.get(candidate_id)
+        if profile is None:
+            continue
+        payload["candidates"][candidate_id] = build_candidate_diagnosis(
+            profile,
+            score,
+            baseline_score,
+            evidence_summary=_evidence_summary(candidates.get(candidate_id, {})),
+        )
+    _write_json(path, payload)
+
+
+def _candidate_diagnoses(
+    *,
+    baseline_score: ScoreResult,
+    candidate_scores: Dict[str, ScoreResult],
+    profiles: Iterable[CandidateProfile],
+    candidates: Dict[str, Dict[str, Any]],
+) -> Dict[str, Dict[str, Any]]:
+    profile_map = {profile.candidate_id: profile for profile in profiles}
+    diagnoses: Dict[str, Dict[str, Any]] = {}
+    for candidate_id, score in candidate_scores.items():
+        profile = profile_map.get(candidate_id)
+        if profile is None:
+            continue
+        diagnoses[candidate_id] = build_candidate_diagnosis(
+            profile,
+            score,
+            baseline_score,
+            evidence_summary=_evidence_summary(candidates.get(candidate_id, {})),
+        )
+    return diagnoses
 
 
 def _write_summary(
@@ -444,8 +515,15 @@ def _write_summary(
     best_candidate_id: str,
     runner: str,
     profiles: Iterable[CandidateProfile],
+    candidates: Dict[str, Dict[str, Any]],
 ) -> None:
     profile_map = {profile.candidate_id: profile for profile in profiles}
+    diagnoses = _candidate_diagnoses(
+        baseline_score=baseline_score,
+        candidate_scores=candidate_scores,
+        profiles=profiles,
+        candidates=candidates,
+    )
     practical_best_id, practical_best_score = _select_practical_best(candidate_scores)
     practical_delta = None
     if practical_best_id and practical_best_score is not None:
@@ -512,6 +590,25 @@ def _write_summary(
     lines.extend(
         [
             "",
+            "## 仮説内容",
+            f"- baseline: {_baseline_hypothesis(runner)}",
+        ]
+    )
+    for profile in profiles:
+        lines.extend(
+            [
+                f"### {profile.candidate_id}",
+                f"- タイトル: {profile.hypothesis_title or profile.label}",
+                f"- 仮説: {profile.hypothesis_detail or _candidate_hypothesis(profile, runner)}",
+                f"- ON: {', '.join(profile.toggles_on) if profile.toggles_on else '-'}",
+                f"- OFF: {', '.join(profile.toggles_off) if profile.toggles_off else '-'}",
+                f"- 期待効果: {_format_expected_impacts(profile.expected_impacts)}",
+            ]
+        )
+
+    lines.extend(
+        [
+            "",
             "## 個別評価",
             "### baseline",
             f"- 総合スコア: `{baseline_score.total_score:.4f}`",
@@ -549,6 +646,54 @@ def _write_summary(
     lines.extend(
         [
             "",
+            "## 仮説検証結果",
+        ]
+    )
+    for candidate_id, diagnosis in diagnoses.items():
+        lines.extend(
+            [
+                f"### {candidate_id}",
+                f"- 判定: {_verdict_label(diagnosis['verdict']['status'])}",
+                f"- 理由: {diagnosis['verdict']['reason']}",
+                f"- 差分: {_format_layer_deltas(diagnosis['score']['layers'])}",
+            ]
+        )
+
+    lines.extend(
+        [
+            "",
+            "## ロジック",
+        ]
+    )
+    for candidate_id, diagnosis in diagnoses.items():
+        lines.append(f"### {candidate_id}")
+        if diagnosis["logic"]["steps"]:
+            lines.extend(f"- {step}" for step in diagnosis["logic"]["steps"])
+        else:
+            lines.append("- ロジックの追加説明はありません。")
+
+    lines.extend(
+        [
+            "",
+            "## 根拠ファクトとデータ",
+        ]
+    )
+    for candidate_id, diagnosis in diagnoses.items():
+        evidence = diagnosis["evidence"]
+        lines.extend(
+            [
+                f"### {candidate_id}",
+                f"- source_types: {', '.join(evidence.get('source_types', [])) or '-'}",
+                f"- PDF facts: {_format_evidence_list(evidence.get('pdf_facts', []))}",
+                f"- External: {_format_external_sources(evidence.get('external_sources', []))}",
+                f"- Benchmark fills: {_format_evidence_list(evidence.get('benchmark_fills', []))}",
+                f"- Seed notes: {_format_evidence_list(evidence.get('seed_notes', []))}",
+            ]
+        )
+
+    lines.extend(
+        [
+            "",
             "## 結果",
             f"- baseline: {_overall_interpretation(baseline_score.total_score, 'baseline')}",
         ]
@@ -577,6 +722,19 @@ def _write_summary(
     lines.extend(
         [
             "",
+            "## 次の改善施策",
+        ]
+    )
+    for candidate_id, diagnosis in diagnoses.items():
+        lines.append(f"### {candidate_id}")
+        if diagnosis.get("next_actions"):
+            lines.extend(f"- {action}" for action in diagnosis["next_actions"])
+        else:
+            lines.append("- 次の改善施策はまだ定義されていません。")
+
+    lines.extend(
+        [
+            "",
             "## 次の方針",
         ]
     )
@@ -597,6 +755,121 @@ def _layer_detail_lines(score: ScoreResult) -> list[str]:
             ]
         )
     return lines
+
+
+def _layer_deltas(score: ScoreResult, baseline_score: ScoreResult) -> Dict[str, float]:
+    return {
+        layer_name: round(
+            score.layer_scores.get(layer_name, 0.0) - baseline_score.layer_scores.get(layer_name, 0.0),
+            4,
+        )
+        for layer_name in score.layer_scores
+    }
+
+
+def _ranked_candidate_ids(candidate_scores: Dict[str, ScoreResult]) -> list[str]:
+    return sorted(
+        candidate_scores,
+        key=lambda candidate_id: candidate_scores[candidate_id].total_score,
+        reverse=True,
+    )
+
+
+def _evidence_summary(candidate_payload: Dict[str, Any]) -> Dict[str, Any]:
+    assumptions = candidate_payload.get("assumptions", [])
+    pdf_facts: list[str] = []
+    benchmark_fills: list[str] = []
+    external_sources: list[Dict[str, Any]] = []
+    seed_notes: list[str] = []
+
+    for assumption in assumptions:
+        source_type = assumption.get("source_type", "")
+        explanation = assumption.get("explanation") or assumption.get("metric_name") or assumption.get("name") or ""
+        if source_type == "document" and explanation:
+            pdf_facts.append(explanation)
+        elif "benchmark" in source_type and explanation:
+            benchmark_fills.append(explanation)
+        elif source_type in {"external", "public_market", "industry", "competitor", "trend"}:
+            for ref in assumption.get("evidence_refs", []):
+                external_sources.append(
+                    {
+                        "title": ref.get("title") or ref.get("source_id") or "",
+                        "url": ref.get("url") or "",
+                        "quote": ref.get("quote") or "",
+                    }
+                )
+        elif "seed" in source_type and explanation:
+            seed_notes.append(explanation)
+
+    return {
+        "pdf_facts": _unique_nonempty(pdf_facts),
+        "external_sources": _dedupe_external_sources(external_sources),
+        "benchmark_fills": _unique_nonempty(benchmark_fills),
+        "seed_notes": _unique_nonempty(seed_notes),
+    }
+
+
+def _unique_nonempty(items: Iterable[str]) -> list[str]:
+    seen: list[str] = []
+    for item in items:
+        if item and item not in seen:
+            seen.append(item)
+    return seen
+
+
+def _dedupe_external_sources(items: Iterable[Dict[str, Any]]) -> list[Dict[str, Any]]:
+    deduped: list[Dict[str, Any]] = []
+    seen: set[tuple[str, str, str]] = set()
+    for item in items:
+        key = (item.get("title", ""), item.get("url", ""), item.get("quote", ""))
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(item)
+    return deduped
+
+
+def _format_expected_impacts(expected_impacts: Dict[str, float]) -> str:
+    if not expected_impacts:
+        return "-"
+    return ", ".join(f"{layer_name} {delta:+.4f}" for layer_name, delta in expected_impacts.items())
+
+
+def _verdict_label(status: str) -> str:
+    return {
+        "hit": "当たり",
+        "partial_hit": "一部当たり",
+        "miss": "外れ",
+    }.get(status, status)
+
+
+def _format_layer_deltas(layer_details: Dict[str, Dict[str, float]]) -> str:
+    return ", ".join(
+        f"{layer_name} {detail.get('delta', 0.0):+.4f}"
+        for layer_name, detail in layer_details.items()
+    )
+
+
+def _format_evidence_list(items: Iterable[str]) -> str:
+    values = [item for item in items if item]
+    return "; ".join(values) if values else "-"
+
+
+def _format_external_sources(items: Iterable[Dict[str, Any]]) -> str:
+    formatted: list[str] = []
+    for item in items:
+        title = item.get("title") or "source"
+        url = item.get("url") or ""
+        quote = item.get("quote") or ""
+        if url and quote:
+            formatted.append(f"{title} ({url}) - {quote}")
+        elif url:
+            formatted.append(f"{title} ({url})")
+        elif quote:
+            formatted.append(f"{title} - {quote}")
+        else:
+            formatted.append(title)
+    return "; ".join(formatted) if formatted else "-"
 
 
 def _layer_interpretation(layer_name: str, layer_score: float) -> str:
