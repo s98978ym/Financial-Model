@@ -46,14 +46,22 @@ def _get_pool():
         import psycopg2
         from psycopg2 import pool as pg_pool
 
-        _pool = pg_pool.ThreadedConnectionPool(
+        candidate_pool = pg_pool.ThreadedConnectionPool(
             minconn=1,
             maxconn=3,
             dsn=DATABASE_URL,
             connect_timeout=5,
         )
         logger.info("PostgreSQL connection pool created")
-        _run_migrations(_pool)
+        try:
+            _run_migrations(candidate_pool)
+        except Exception:
+            try:
+                candidate_pool.closeall()
+            except Exception:
+                logger.warning("Failed to close broken PostgreSQL pool", exc_info=True)
+            raise
+        _pool = candidate_pool
         return _pool
     except Exception as e:
         logger.warning("Failed to create PostgreSQL pool: %s — using in-memory fallback", e)
@@ -143,6 +151,7 @@ def _ensure_base_schema(conn) -> None:
     if _projects_table_exists(cur):
         return
 
+    cur.execute("CREATE EXTENSION IF NOT EXISTS pgcrypto")
     bootstrap_sql = _bootstrap_schema_sql_path().read_text(encoding="utf-8")
     cur.execute(bootstrap_sql)
     conn.commit()
