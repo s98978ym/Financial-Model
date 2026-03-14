@@ -45,6 +45,24 @@ def live_profiles() -> List[CandidateProfile]:
             config={"mode": "structure_seeded"},
         ),
         CandidateProfile(
+            candidate_id="candidate-structure-pl-extracted",
+            label="PDF structure + PL extracted candidate",
+            runner="live",
+            config={"mode": "structure_pl_extracted"},
+        ),
+        CandidateProfile(
+            candidate_id="candidate-structure-model-pl-extracted",
+            label="PDF structure + academy model + PL extracted candidate",
+            runner="live",
+            config={"mode": "structure_model_pl_extracted"},
+        ),
+        CandidateProfile(
+            candidate_id="candidate-integrated-derived",
+            label="PDF structure + model extraction + benchmark completion candidate",
+            runner="live",
+            config={"mode": "integrated_derived"},
+        ),
+        CandidateProfile(
             candidate_id="candidate-reference-seeded",
             label="PDF reference-seeded candidate",
             runner="live",

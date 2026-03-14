@@ -12,6 +12,7 @@ from typing import Any, Dict, Iterable
 from src.ingest.reader import read_document
 
 from .candidate_profiles import CandidateProfile, fixture_path, fixture_profiles, live_profiles
+from .pdf_signals import extract_academy_signals, extract_meal_signals, extract_pl_signals
 from .reference_workbook import ReferenceWorkbook, extract_reference_workbook
 from .scoring import ScoreResult, score_candidate
 
@@ -171,6 +172,58 @@ def _build_live_payload(
             "assumptions": _document_assumptions(detected_segments, approved=False),
         }
 
+    if mode == "structure_pl_extracted":
+        pl_lines = extract_pl_signals(text)
+        return {
+            "segments": [{"name": name, "engine_type": _expected_engine(name)} for name in detected_segments],
+            "model_sheets": {
+                name: {metric_name: [] for metric_name in reference.model_sheets.get(name, {})}
+                for name in detected_segments
+            },
+            "pl_lines": pl_lines,
+            "assumptions": _document_assumptions(detected_segments, approved=False)
+            + _line_item_assumptions(pl_lines),
+        }
+
+    if mode == "structure_model_pl_extracted":
+        pl_lines = extract_pl_signals(text)
+        academy_signals = extract_academy_signals(text)
+        return {
+            "segments": [{"name": name, "engine_type": _expected_engine(name)} for name in detected_segments],
+            "model_sheets": {
+                "アカデミー": academy_signals,
+                **{
+                    name: {metric_name: [] for metric_name in reference.model_sheets.get(name, {})}
+                    for name in detected_segments
+                    if name != "アカデミー"
+                },
+            },
+            "pl_lines": pl_lines,
+            "assumptions": _document_assumptions(detected_segments, approved=False)
+            + _line_item_assumptions(pl_lines)
+            + _model_signal_assumptions("アカデミー", academy_signals),
+        }
+
+    if mode == "integrated_derived":
+        pl_lines = extract_pl_signals(text)
+        academy_signals = extract_academy_signals(text)
+        meal_signals = extract_meal_signals(text)
+        consulting_signals = _consulting_benchmark_signals(pl_lines)
+        return {
+            "segments": [{"name": name, "engine_type": _expected_engine(name)} for name in detected_segments],
+            "model_sheets": {
+                "アカデミー": academy_signals,
+                "ミール": meal_signals,
+                "コンサル": consulting_signals,
+            },
+            "pl_lines": pl_lines,
+            "assumptions": _document_assumptions(detected_segments, approved=False)
+            + _line_item_assumptions(pl_lines)
+            + _model_signal_assumptions("アカデミー", academy_signals)
+            + _model_signal_assumptions("ミール", meal_signals)
+            + _benchmark_model_assumptions("コンサル", consulting_signals),
+        }
+
     if mode == "reference_seeded":
         return {
             "segments": [{"name": name, "engine_type": _expected_engine(name)} for name in detected_segments],
@@ -225,6 +278,51 @@ def _benchmark_assumptions(reference: ReferenceWorkbook) -> list[dict[str, Any]]
         }
         for segment_name in reference.segment_names
     ]
+
+
+def _line_item_assumptions(pl_lines: Dict[str, list[float]]) -> list[dict[str, Any]]:
+    return [
+        {
+            "source_type": "document",
+            "evidence_refs": [{"source_id": f"pl:{label}"}],
+            "review_status": "approved",
+        }
+        for label, series in pl_lines.items()
+        if series
+    ]
+
+
+def _model_signal_assumptions(segment_name: str, model_signals: Dict[str, list[float]]) -> list[dict[str, Any]]:
+    return [
+        {
+            "source_type": "document",
+            "evidence_refs": [{"source_id": f"model:{segment_name}:{metric_name}"}],
+            "review_status": "approved",
+        }
+        for metric_name, series in model_signals.items()
+        if series
+    ]
+
+
+def _benchmark_model_assumptions(segment_name: str, model_signals: Dict[str, list[float]]) -> list[dict[str, Any]]:
+    return [
+        {
+            "source_type": "benchmark",
+            "evidence_refs": [{"source_id": f"benchmark:{segment_name}:{metric_name}"}],
+            "review_status": "approved",
+        }
+        for metric_name, series in model_signals.items()
+        if series
+    ]
+
+
+def _consulting_benchmark_signals(pl_lines: Dict[str, list[float]]) -> Dict[str, list[float]]:
+    first_revenue = pl_lines.get("売上", [0.0])[0] if pl_lines.get("売上") else 0.0
+    per_team_price = round(first_revenue / 3, 4) if first_revenue else 15_000_000.0
+    return {
+        "sku_unit_price": [per_team_price],
+        "sku_retention": [0.6],
+    }
 
 
 def _write_reference(path: Path, reference: ReferenceWorkbook) -> None:
@@ -452,6 +550,12 @@ def _candidate_hypothesis(profile: CandidateProfile, runner: str) -> str:
     if runner == "live":
         if profile.candidate_id == "candidate-structure-seeded":
             return "ミール・アカデミー・コンサルの segment と engine_type を先に与えると、構造再現が改善するはず。"
+        if profile.candidate_id == "candidate-structure-pl-extracted":
+            return "事業構造に加えて PDF から PL 系列を直接抜ければ、`pl` と `explainability` が改善するはず。"
+        if profile.candidate_id == "candidate-structure-model-pl-extracted":
+            return "PDF からアカデミーの単価・人数・売上系列も抜ければ、`model_sheets` が改善して総合スコアがさらに上がるはず。"
+        if profile.candidate_id == "candidate-integrated-derived":
+            return "PDF で拾える meal/academy の断片と、欠損が大きい consulting の benchmark 補完を組み合わせると、`model_sheets` がさらに改善するはず。"
         if profile.candidate_id == "candidate-reference-seeded":
             return "参照 workbook のモデルシートと PL を seed にすると、現時点の上限再現度を測れるはず。"
     return f"{profile.label} が baseline より高いスコアを取れるかを確認する。"
@@ -505,6 +609,12 @@ def _improvements(profiles: Iterable[CandidateProfile], runner: str) -> list[str
         for profile in profiles:
             if profile.candidate_id == "candidate-structure-seeded":
                 improvements.append("事業の柱と engine_type を seed して、構造理解だけを先に押し上げる候補を追加しました。")
+            elif profile.candidate_id == "candidate-structure-pl-extracted":
+                improvements.append("PDF 本文から売上・粗利・OPEX の系列を直接抽出し、PL 再現と説明責任を改善する候補を追加しました。")
+            elif profile.candidate_id == "candidate-structure-model-pl-extracted":
+                improvements.append("PDF 本文からアカデミーの単価・人数・売上系列も直接抽出し、model_sheets の改善候補を追加しました。")
+            elif profile.candidate_id == "candidate-integrated-derived":
+                improvements.append("meal の unit economics を PDF 断片から導出し、consulting は benchmark で欠損を補完する統合候補を追加しました。")
             elif profile.candidate_id == "candidate-reference-seeded":
                 improvements.append("参照 workbook の model_sheets と PL を seed して、現時点の理論上限を測る候補を追加しました。")
         return improvements
