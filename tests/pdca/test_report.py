@@ -24,7 +24,8 @@ def test_report_includes_hypothesis_and_decision_placeholders(tmp_path: Path):
     report = render_report(manifest, summary)
 
     assert manifest.hypothesis in report
-    assert "Decision: pending" in report
+    assert "# 実験レポート" in report
+    assert "判定: pending" in report
 
 
 def test_report_includes_criteria_scores(tmp_path: Path):
@@ -72,4 +73,5 @@ def test_report_includes_criteria_scores(tmp_path: Path):
     report = report_path.read_text(encoding="utf-8")
 
     assert "avg_confidence" in report
-    assert "baseline_source" in report
+    assert "比較指標" in report
+    assert "基準出力" in report

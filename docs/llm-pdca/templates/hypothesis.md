@@ -1,17 +1,17 @@
-# Hypothesis
+# 仮説
 
-## Problem
+## いまの課題
 
-What is going wrong today?
+いま何がうまくいっていないか
 
-## Change
+## 変えること
 
-What are we changing?
+今回どこを変更するか
 
-## Expected Outcome
+## 期待する変化
 
-What should improve if the hypothesis is correct?
+仮説が正しければ、何が良くなるはずか
 
-## Risk
+## リスク
 
-What might get worse?
+悪化しうる点は何か

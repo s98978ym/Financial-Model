@@ -1,19 +1,19 @@
-# Review
+# レビュー
 
-## What Improved
-
-- 
-
-## What Regressed
+## 良くなった点
 
 - 
 
-## Human Judgment
+## 悪化した点
+
+- 
+
+## 最終判断
 
 - adopted
 - rejected
 - hold
 
-## Notes
+## メモ
 
 - 

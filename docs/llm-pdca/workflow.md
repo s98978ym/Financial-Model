@@ -1,18 +1,18 @@
-# Workflow
+# ワークフロー
 
-## Goal
+## 目的
 
-Run prompt and output improvement experiments without depending on the production pipeline.
+本番パイプラインに依存せず、prompt と出力の改善実験を回せるようにします。
 
-## Happy Path
+## 基本の流れ
 
-1. Create a campaign
+1. campaign を作成する
 
 ```bash
 plgen pdca campaign create --campaign-id camp-20260314-001 --name "Phase 5 quality" --phase 5
 ```
 
-2. Create an experiment
+2. experiment を作成する
 
 ```bash
 plgen pdca init \
@@ -22,7 +22,7 @@ plgen pdca init \
   --hypothesis "evidence guidance improves extraction quality"
 ```
 
-3. Optionally save prompt snapshots
+3. 必要に応じて prompt snapshot を保存する
 
 ```bash
 plgen pdca snapshot \
@@ -34,32 +34,32 @@ plgen pdca snapshot \
   --context-file /path/to/context.json
 ```
 
-4. Produce baseline and candidate outputs outside the PDCA module
+4. PDCA モジュールの外で baseline と candidate の出力を用意する
 
-- Codex output
-- Claude Code output
-- manually exported JSON from another controlled path
+- Codex で生成した出力
+- Claude Code で生成した出力
+- 他の管理された経路から手動で取り出した JSON
 
-5. Import both outputs
+5. 2 つの出力を取り込む
 
 ```bash
 plgen pdca import-output --experiment-id exp-20260314-001 --role baseline --payload-file /path/to/baseline.json
 plgen pdca import-output --experiment-id exp-20260314-001 --role candidate --payload-file /path/to/candidate.json
 ```
 
-6. Compare
+6. 比較する
 
 ```bash
 plgen pdca compare --experiment-id exp-20260314-001
 ```
 
-7. Generate report
+7. レポートを作成する
 
 ```bash
 plgen pdca report --experiment-id exp-20260314-001
 ```
 
-8. Record the decision
+8. 判定を記録する
 
 ```bash
 plgen pdca promote \
@@ -68,24 +68,24 @@ plgen pdca promote \
   --reason "confidence improved without losing extraction coverage"
 ```
 
-## Decision Meanings
+## 判定の意味
 
-- `adopted`: candidate is good enough to become the preferred next baseline
-- `rejected`: candidate should not be reused
-- `hold`: experiment is complete, but a human wants more review before deciding
+- `adopted`: candidate を次の baseline 候補として採用する
+- `rejected`: candidate は再利用しない
+- `hold`: 実験は完了したが、人が追加確認してから判断する
 
-## Starting The Next Experiment
+## 次の experiment の始め方
 
-When an experiment is `adopted`, use its candidate as the conceptual source for the next baseline and set `baseline_source` accordingly during the next `init`.
+experiment が `adopted` になったら、その candidate を次の baseline の起点として扱い、次の `init` で `baseline_source` に反映します。
 
-Recommended convention:
+推奨ルール:
 
-- previous winner: `exp-20260314-001`
-- next experiment baseline source: `experiment:exp-20260314-001`
+- 前回採用した experiment: `exp-20260314-001`
+- 次の experiment の baseline source: `experiment:exp-20260314-001`
 
-## Common Mistakes
+## よくあるミス
 
-- Importing only the candidate output
-- Comparing outputs from different documents
-- Forgetting to save prompt snapshots before comparing
-- Recording `adopted` without a human-readable reason
+- candidate だけを取り込んで baseline を入れない
+- 別の資料から得た出力同士を比較してしまう
+- 比較前に prompt snapshot を残し忘れる
+- 理由を書かずに `adopted` を記録してしまう

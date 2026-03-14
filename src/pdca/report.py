@@ -13,21 +13,21 @@ from .storage import experiment_dir, load_experiment_manifest
 def render_report(manifest: ExperimentManifest, summary: dict[str, Any]) -> str:
     decision = manifest.decision or "pending"
     lines = [
-        "# Experiment Report",
+        "# 実験レポート",
         "",
-        f"- experiment_id: {manifest.experiment_id}",
-        f"- campaign_id: {manifest.campaign_id}",
-        f"- target_phase: {manifest.target_phase}",
-        f"- baseline_source: {manifest.baseline_source}",
-        f"- Decision: {decision}",
+        f"- 実験ID: {manifest.experiment_id}",
+        f"- キャンペーンID: {manifest.campaign_id}",
+        f"- 対象フェーズ: {manifest.target_phase}",
+        f"- 基準出力: {manifest.baseline_source}",
+        f"- 判定: {decision}",
         "",
-        "## Hypothesis",
+        "## 仮説",
         "",
         manifest.hypothesis,
         "",
-        "## Criteria Scores",
+        "## 比較指標",
         "",
-        "| Criterion | Baseline | Candidate | Delta |",
+        "| 指標 | 基準 | 候補 | 差分 |",
         "| --- | --- | --- | --- |",
     ]
     for criterion, values in summary.get("criteria_scores", {}).items():
@@ -37,10 +37,10 @@ def render_report(manifest: ExperimentManifest, summary: dict[str, Any]) -> str:
     lines.extend(
         [
             "",
-            "## Notes",
+            "## メモ",
             "",
-            "- reviewer_notes:",
-            "- follow_up:",
+            "- レビューメモ:",
+            "- 次のアクション:",
             "",
         ]
     )

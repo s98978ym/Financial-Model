@@ -1,38 +1,38 @@
-# Evaluation Criteria
+# 評価基準
 
-The first version of the PDCA foundation only scores Phase 5 output.
+PDCA 基盤の初期版では、Phase 5 の出力だけを自動比較します。
 
-## Phase 5 Criteria
+## Phase 5 の評価項目
 
 ### `extraction_count`
 
-How many extraction records were produced.
+抽出レコードが何件出たかを見ます。
 
-Interpretation:
+見方:
 
-- higher can mean broader coverage
-- but higher is not always better if data quality drops
+- 多いほどカバレッジが広い可能性があります
+- ただし品質が落ちるなら、多ければ良いとは限りません
 
 ### `avg_confidence`
 
-Average of `confidence` across `extractions`.
+`extractions` 全体の `confidence` の平均です。
 
-Interpretation:
+見方:
 
-- higher suggests the model is more certain
-- compare together with coverage, not alone
+- 高いほどモデルの確信が強いと読めます
+- ただし単独ではなく、カバレッジと一緒に見ます
 
 ### `mapped_target_rate`
 
-Ratio of extraction records that include both `sheet` and `cell`.
+`sheet` と `cell` の両方を持つ抽出レコードの割合です。
 
-Interpretation:
+見方:
 
-- close to `1.0` means the output is mostly placeable into the workbook
+- `1.0` に近いほど、ワークブックに配置しやすい出力です
 
 ### `missing_required_fields`
 
-Total missing values across required fields:
+必須項目で欠けている値の合計です。
 
 - `sheet`
 - `cell`
@@ -40,25 +40,25 @@ Total missing values across required fields:
 - `concept`
 - `period`
 
-Interpretation:
+見方:
 
-- lower is better
+- 少ないほど良いです
 
 ### `json_validity`
 
-Whether the imported payload has a dictionary root and a valid `extractions` list.
+取り込んだ payload が辞書のルートを持ち、`extractions` が妥当なリストかを見ます。
 
-Interpretation:
+見方:
 
-- `False` means the output is not safely comparable
+- `False` の場合、その出力は安全に比較できません
 
-## What The First Version Does Not Judge
+## 初期版ではまだ自動判定しないもの
 
-Not yet automated:
+まだ自動化していない項目:
 
-- evidence grounding quality
-- business plausibility
-- cross-year consistency
-- domain-specific correctness
+- 根拠の引用品質
+- 事業としての妥当性
+- 年度をまたいだ整合性
+- ドメイン固有の正しさ
 
-Those still require human review in `compare/review.md`.
+これらは `compare/review.md` で人が確認する前提です。

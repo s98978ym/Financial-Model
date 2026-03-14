@@ -1,20 +1,20 @@
-# LLM PDCA Foundation
+# LLM PDCA 基盤
 
-`LLM PDCA Foundation` is a lightweight experiment ledger for improving prompt and output quality inside `Financial-Model`.
+`LLM PDCA 基盤` は、`Financial-Model` の中で prompt と出力品質を改善するための、軽量な実験記録レイヤーです。
 
-This first version is intentionally `import-first`:
+初期版は `import-first` を前提にしています。
 
-- use `plgen pdca ...` to create and track experiments
-- obtain baseline and candidate outputs outside the PDCA module
-- import those outputs into artifacts
-- compare them with Phase 5 criteria
-- record a decision
+- `plgen pdca ...` で実験を作成・管理する
+- baseline と candidate の出力は PDCA モジュールの外で取得する
+- その出力を artifact に取り込む
+- Phase 5 の基準で比較する
+- 最後に採用判断を記録する
 
-## Why It Exists
+## 目的
 
-The current repository has prompt definitions, prompt version storage, and provider primitives, but the existing execution path is not yet a stable experiment runner. The PDCA layer therefore focuses on reproducible records first, not automatic prompt deployment.
+このリポジトリには prompt 定義、prompt version 保存、provider の土台がありますが、既存の実行経路はまだ安定した実験ランナーにはなっていません。そこで PDCA 層は、まず `再現できる記録` を残すことに集中し、自動反映や本番連携は後続フェーズに回します。
 
-## Shortest Working Flow
+## 最短の動かし方
 
 ```bash
 plgen pdca campaign create --campaign-id camp-20260314-001 --name "Phase 5 quality" --phase 5
@@ -26,12 +26,12 @@ plgen pdca report --experiment-id exp-20260314-001
 plgen pdca promote --experiment-id exp-20260314-001 --decision adopted --reason "confidence improved without losing coverage"
 ```
 
-## Artifact Layout
+## Artifact の構成
 
 - `artifacts/llm-pdca/campaigns/`
 - `artifacts/llm-pdca/experiments/`
 
-Each experiment keeps:
+各 experiment には次のものを保存します。
 
 - `manifest.json`
 - `hypothesis.md`
@@ -39,30 +39,30 @@ Each experiment keeps:
 - `outputs/`
 - `compare/`
 
-## Current Scope
+## いま対応している範囲
 
-Supported now:
+現時点で対応している機能:
 
-- campaign creation/listing
-- experiment creation/listing/show
-- prompt snapshot saving
-- output importing
-- Phase 5 comparison
-- markdown report generation
-- decision recording
+- campaign の作成と一覧表示
+- experiment の作成、一覧表示、詳細確認
+- prompt snapshot の保存
+- 出力 JSON の取り込み
+- Phase 5 の比較
+- Markdown レポート生成
+- 判定の記録
 
-Deferred:
+後続フェーズに回しているもの:
 
-- DB capture from existing runs
-- automatic prompt application
-- Claude Code skill automation
-- Phase 2/3/4 criteria
+- 既存 run からの DB capture
+- prompt の自動反映
+- Claude Code スキルによる運用自動化
+- Phase 2/3/4 の評価基準
 
-## Baseline Lineage
+## baseline の引き継ぎ
 
-Use `baseline_source` to show where a new experiment starts from:
+`baseline_source` を使って、新しい experiment がどこから始まったかを記録します。
 
 - `default`
 - `experiment:<exp-id>`
 
-That makes it possible to trace which adopted candidate became the next baseline.
+これで、どの adopted 案が次の baseline になったかを追跡できます。
