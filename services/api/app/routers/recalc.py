@@ -16,7 +16,7 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter
 
-from src.domain.canonical_model import CanonicalBusinessModel, Driver, RevenueEngine
+from src.domain.canonical_model import BusinessSegment, CanonicalBusinessModel, Driver, RevenueEngine
 from src.engines.base import EngineInput, EngineOutput
 from src.engines.progression import ProgressionEngine
 from src.engines.project_capacity import ProjectCapacityEngine
@@ -675,12 +675,30 @@ def _canonical_driver_value(
     return 0.0
 
 
+def _canonical_driver_series(
+    driver: Driver,
+    planner_result: Optional[PlannerResult] = None,
+) -> List[float]:
+    series = planner_result.solved_driver_values.get(driver.driver_id) if planner_result else None
+    if series is None:
+        series = driver.series
+
+    raw = [series.fy1, series.fy2, series.fy3, series.fy4, series.fy5]
+    filled: List[float] = []
+    last = 0.0
+    for value in raw:
+        if value is not None:
+            last = float(value)
+        filled.append(last)
+    return filled
+
+
 def _canonical_engine_config(
     engine: RevenueEngine,
     planner_result: Optional[PlannerResult] = None,
 ) -> Dict[str, Any]:
     values = {
-        driver.driver_id: _canonical_driver_value(driver, planner_result)
+        driver.driver_id: _canonical_driver_series(driver, planner_result)
         for driver in engine.drivers
     }
 
@@ -688,9 +706,9 @@ def _canonical_engine_config(
         return {
             "plans": [
                 {
-                    "monthly_price": values.get("monthly_price", 0),
-                    "subscribers": [values.get("subscribers", 0)] * 5,
-                    "monthly_cost_per_subscriber": values.get("monthly_cost_per_subscriber", 0),
+                    "monthly_price": values.get("monthly_price", [0])[0],
+                    "subscribers": values.get("subscribers", [0] * 5),
+                    "monthly_cost_per_subscriber": values.get("monthly_cost_per_subscriber", [0])[0],
                 }
             ]
         }
@@ -698,14 +716,14 @@ def _canonical_engine_config(
         config: Dict[str, Any] = {
             "skus": [
                 {
-                    "unit_price": values.get("unit_price", 0),
-                    "quantities": [values.get("project_count", values.get("quantities", 0))] * 5,
-                    "unit_cost": values.get("unit_cost", 0),
+                    "unit_price": values.get("unit_price", [0])[0],
+                    "quantities": values.get("project_count", values.get("quantities", [0] * 5)),
+                    "unit_cost": values.get("unit_cost", [0])[0],
                 }
             ]
         }
         if "headcount" in values:
-            config["headcount"] = [values["headcount"]] * 5
+            config["headcount"] = values["headcount"]
         if "max_projects_per_head" in engine.constraints:
             config["max_projects_per_head"] = engine.constraints["max_projects_per_head"]
         return config
@@ -713,9 +731,9 @@ def _canonical_engine_config(
         return {
             "tiers": [
                 {
-                    "price": values.get("price", values.get("tuition", 0)),
-                    "students": [values.get("students", values.get("entrants", 0))] * 5,
-                    "variable_cost_per_student": values.get("variable_cost_per_student", 0),
+                    "price": values.get("price", values.get("tuition", [0]))[0],
+                    "students": values.get("students", values.get("entrants", [0] * 5)),
+                    "variable_cost_per_student": values.get("variable_cost_per_student", [0])[0],
                 }
             ]
         }
@@ -723,16 +741,26 @@ def _canonical_engine_config(
         return {
             "skus": [
                 {
-                    "price": values.get("price", values.get("price_per_item", 0)),
-                    "items_per_txn": values.get("items_per_txn", values.get("items_per_meal", 1)),
-                    "txns_per_person": values.get("txns_per_person", 1),
-                    "annual_purchases": values.get("annual_purchases", 12),
-                    "customers": [values.get("customers", values.get("unit_count", 0))] * 5,
-                    "unit_cost": values.get("unit_cost", 0),
+                    "price": values.get("price", values.get("price_per_item", [0]))[0],
+                    "items_per_txn": values.get("items_per_txn", values.get("items_per_meal", [1]))[0],
+                    "txns_per_person": values.get("txns_per_person", [1])[0],
+                    "annual_purchases": values.get("annual_purchases", values.get("meals_per_year", [1]))[0],
+                    "customers": values.get("customers", values.get("unit_count", [0] * 5)),
+                    "unit_cost": values.get("unit_cost", [0])[0],
                 }
             ]
         }
     return {}
+
+
+def _single_engine_for_segment(segment: BusinessSegment) -> Optional[RevenueEngine]:
+    if not segment.engines:
+        return None
+    if len(segment.engines) > 1:
+        raise ValueError(
+            f"Segment '{segment.segment_id}' has multiple engines; recalc adapters currently support exactly one engine per segment."
+        )
+    return segment.engines[0]
 
 
 def _canonical_to_recalc_inputs(
@@ -743,7 +771,7 @@ def _canonical_to_recalc_inputs(
     revenue_model_configs: List[Dict[str, Any]] = []
 
     for segment in model.segments:
-        engine = segment.engines[0] if segment.engines else None
+        engine = _single_engine_for_segment(segment)
         if engine is None:
             continue
         config = _canonical_engine_config(engine, planner_result)

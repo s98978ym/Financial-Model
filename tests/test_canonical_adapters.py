@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from src.domain.canonical_model import (
     BusinessSegment,
     CanonicalBusinessModel,
@@ -143,3 +145,94 @@ def test_segment_model_types_from_canonical_matches_engine_types() -> None:
         "subscription",
         "project_capacity",
     ]
+
+
+def test_canonical_to_recalc_inputs_maps_meal_style_unit_economics_drivers() -> None:
+    model = CanonicalBusinessModel(
+        metadata=ModelMetadata(project_name="Meal Demo"),
+        segments=[
+            BusinessSegment(
+                segment_id="meal",
+                name="Meal",
+                engines=[
+                    RevenueEngine(
+                        engine_id="meal_engine",
+                        engine_type="unit_economics",
+                        name="Meal UE",
+                        drivers=[
+                            Driver(
+                                driver_id="price_per_item",
+                                name="価格/アイテム",
+                                unit="JPY",
+                                category="price",
+                                series=DriverSeries(fy1=500),
+                                mode="fixed",
+                            ),
+                            Driver(
+                                driver_id="items_per_meal",
+                                name="品数/食",
+                                unit="count",
+                                category="volume",
+                                series=DriverSeries(fy1=3),
+                                mode="fixed",
+                            ),
+                            Driver(
+                                driver_id="meals_per_year",
+                                name="年間提供食数",
+                                unit="count",
+                                category="volume",
+                                series=DriverSeries(fy1=4800),
+                                mode="fixed",
+                            ),
+                            Driver(
+                                driver_id="unit_count",
+                                name="ユニット数",
+                                unit="count",
+                                category="volume",
+                                series=DriverSeries(fy1=10),
+                                mode="solve_for",
+                            ),
+                        ],
+                    )
+                ],
+            )
+        ],
+    )
+
+    payload = _canonical_to_recalc_inputs(model)
+    sku = payload["revenue_model_configs"][0]["config"]["skus"][0]
+
+    assert sku["price"] == 500
+    assert sku["items_per_txn"] == 3
+    assert sku["annual_purchases"] == 4800
+    assert sku["txns_per_person"] == 1
+
+
+def test_canonical_adapters_raise_when_segment_has_multiple_engines() -> None:
+    model = CanonicalBusinessModel(
+        metadata=ModelMetadata(project_name="Multi Engine Demo"),
+        segments=[
+            BusinessSegment(
+                segment_id="hybrid",
+                name="Hybrid",
+                engines=[
+                    RevenueEngine(
+                        engine_id="sub_engine",
+                        engine_type="subscription",
+                        name="Subscription",
+                    ),
+                    RevenueEngine(
+                        engine_id="project_engine",
+                        engine_type="project_capacity",
+                        name="Projects",
+                    ),
+                ],
+            )
+        ],
+    )
+
+    with pytest.raises(ValueError, match="multiple engines"):
+        _canonical_to_recalc_inputs(model)
+
+    with pytest.raises(ValueError, match="multiple engines"):
+        segment_model_types_from_canonical(model)

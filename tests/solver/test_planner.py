@@ -104,6 +104,17 @@ def test_planner_returns_infeasible_when_solution_exceeds_allowed_range() -> Non
     assert any(violation.code == "range_exceeded" for violation in result.constraint_violations)
 
 
+def test_planner_writes_solution_into_target_year_series_not_only_fy1() -> None:
+    model = _subscription_model(target_revenue=360000)
+    model.targets.revenue_targets[0].year = "FY3"
+
+    result = plan_to_targets(model, _subscription_ledger(max_subscribers=40))
+
+    assert result.feasibility == "solved"
+    assert result.solved_driver_values["subscribers"].fy1 == 10
+    assert result.solved_driver_values["subscribers"].fy3 == 30
+
+
 def test_planner_returns_capacity_violation_for_consulting_case() -> None:
     model = CanonicalBusinessModel(
         metadata=ModelMetadata(project_name="FAM Consulting"),

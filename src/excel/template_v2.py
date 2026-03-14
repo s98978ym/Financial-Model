@@ -217,12 +217,21 @@ def compute_rd_rows(themes: Optional[List[Dict]] = None) -> Dict:
 RD_ROWS: Dict = compute_rd_rows()
 
 
+def _single_engine_type_for_segment(segment) -> str:
+    if not segment.engines:
+        return "subscription"
+    if len(segment.engines) > 1:
+        raise ValueError(
+            f"Segment '{segment.segment_id}' has multiple engines; workbook adapters currently support exactly one engine per segment."
+        )
+    return segment.engines[0].engine_type
+
+
 def segment_model_types_from_canonical(model: CanonicalBusinessModel) -> List[str]:
     """Return workbook segment model type labels from canonical segment engines."""
     model_types: List[str] = []
     for segment in model.segments:
-        engine = segment.engines[0] if segment.engines else None
-        model_types.append(engine.engine_type if engine else "subscription")
+        model_types.append(_single_engine_type_for_segment(segment))
     return model_types
 
 # Simulation sheet row positions

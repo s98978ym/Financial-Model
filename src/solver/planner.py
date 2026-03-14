@@ -113,7 +113,11 @@ def plan_to_targets(
                 violations.append(capacity_violation)
                 continue
 
-            solved_driver_values[solve_driver.driver_id] = DriverSeries(fy1=required_value)
+            solved_driver_values[solve_driver.driver_id] = _series_set(
+                solved_driver_values.get(solve_driver.driver_id, solve_driver.series),
+                target_index,
+                required_value,
+            )
 
     feasibility: Feasibility = "solved" if not violations else "infeasible"
     explanation = _build_explanation(target.value or 0.0, violations)
@@ -153,10 +157,10 @@ def _baseline_driver_series(
     for segment in model.segments:
         for engine in segment.engines:
             for driver in engine.drivers:
-                fy1 = driver.series.fy1
-                if fy1 is None and driver.driver_id in ledger_map:
-                    fy1 = ledger_map[driver.driver_id].value
-                baseline[driver.driver_id] = DriverSeries(fy1=fy1)
+                series = DriverSeries(**driver.series.model_dump())
+                if series.fy1 is None and driver.driver_id in ledger_map:
+                    series.fy1 = ledger_map[driver.driver_id].value
+                baseline[driver.driver_id] = series
     return baseline
 
 
@@ -211,15 +215,15 @@ def _engine_config_from_driver_values(
     engine: RevenueEngine,
     solved_driver_values: Dict[str, DriverSeries],
 ) -> Dict[str, object]:
-    values = {driver.driver_id: _driver_value(driver, solved_driver_values) for driver in engine.drivers}
+    values = {driver.driver_id: _driver_series_list(driver, solved_driver_values) for driver in engine.drivers}
 
     if engine.engine_type == "subscription":
         return {
             "plans": [
                 {
-                    "monthly_price": values.get("monthly_price", 0),
-                    "subscribers": [_series_fill(values.get("subscribers", 0))][0],
-                    "monthly_cost_per_subscriber": values.get("monthly_cost_per_subscriber", 0),
+                    "monthly_price": values.get("monthly_price", [0])[0],
+                    "subscribers": values.get("subscribers", _series_fill(0)),
+                    "monthly_cost_per_subscriber": values.get("monthly_cost_per_subscriber", [0])[0],
                 }
             ]
         }
@@ -227,14 +231,14 @@ def _engine_config_from_driver_values(
         config: Dict[str, object] = {
             "skus": [
                 {
-                    "unit_price": values.get("unit_price", 0),
-                    "quantities": [_series_fill(values.get("project_count", values.get("quantities", 0)))][0],
-                    "unit_cost": values.get("unit_cost", 0),
+                    "unit_price": values.get("unit_price", [0])[0],
+                    "quantities": values.get("project_count", values.get("quantities", _series_fill(0))),
+                    "unit_cost": values.get("unit_cost", [0])[0],
                 }
             ]
         }
         if "headcount" in values:
-            config["headcount"] = _series_fill(values["headcount"])
+            config["headcount"] = values["headcount"]
         if "max_projects_per_head" in engine.constraints:
             config["max_projects_per_head"] = engine.constraints["max_projects_per_head"]
         return config
@@ -242,9 +246,9 @@ def _engine_config_from_driver_values(
         return {
             "tiers": [
                 {
-                    "price": values.get("price", values.get("tuition", 0)),
-                    "students": _series_fill(values.get("students", values.get("entrants", 0))),
-                    "variable_cost_per_student": values.get("variable_cost_per_student", 0),
+                    "price": values.get("price", values.get("tuition", [0]))[0],
+                    "students": values.get("students", values.get("entrants", _series_fill(0))),
+                    "variable_cost_per_student": values.get("variable_cost_per_student", [0])[0],
                 }
             ]
         }
@@ -252,12 +256,12 @@ def _engine_config_from_driver_values(
         return {
             "skus": [
                 {
-                    "price": values.get("price", values.get("price_per_item", 0)),
-                    "items_per_txn": values.get("items_per_txn", values.get("items_per_meal", 1)),
-                    "txns_per_person": values.get("txns_per_person", values.get("meals_per_year", 1)),
-                    "annual_purchases": values.get("annual_purchases", 1),
-                    "customers": _series_fill(values.get("customers", values.get("unit_count", 0))),
-                    "unit_cost": values.get("unit_cost", 0),
+                    "price": values.get("price", values.get("price_per_item", [0]))[0],
+                    "items_per_txn": values.get("items_per_txn", values.get("items_per_meal", [1]))[0],
+                    "txns_per_person": values.get("txns_per_person", [1])[0],
+                    "annual_purchases": values.get("annual_purchases", values.get("meals_per_year", [1]))[0],
+                    "customers": values.get("customers", values.get("unit_count", _series_fill(0))),
+                    "unit_cost": values.get("unit_cost", [0])[0],
                 }
             ]
         }
@@ -277,6 +281,24 @@ def _driver_value(driver: Driver, solved_driver_values: Dict[str, DriverSeries])
     return 0.0
 
 
+def _driver_series_list(driver: Driver, solved_driver_values: Dict[str, DriverSeries]) -> List[float]:
+    series = solved_driver_values.get(driver.driver_id) or driver.series
+    raw = [series.fy1, series.fy2, series.fy3, series.fy4, series.fy5]
+    filled: List[float] = []
+    last = 0.0
+    for value in raw:
+        if value is not None:
+            last = float(value)
+        filled.append(last)
+    return filled
+
+
+def _series_set(series: DriverSeries, index: int, value: float) -> DriverSeries:
+    data = series.model_dump()
+    data[f"fy{index + 1}"] = value
+    return DriverSeries(**data)
+
+
 def _solve_required_value(
     engine: RevenueEngine,
     solve_driver: Driver,
@@ -290,7 +312,11 @@ def _solve_required_value(
 
     baseline_config = _engine_config_from_driver_values(engine, solved_driver_values)
     unit_values = dict(solved_driver_values)
-    unit_values[solve_driver.driver_id] = DriverSeries(fy1=1.0)
+    unit_values[solve_driver.driver_id] = _series_set(
+        unit_values.get(solve_driver.driver_id, solve_driver.series),
+        target_index,
+        1.0,
+    )
     unit_config = _engine_config_from_driver_values(engine, unit_values)
 
     baseline_output = plugin.compute(EngineInput(config=baseline_config))
