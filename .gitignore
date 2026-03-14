@@ -50,3 +50,7 @@ next-env.d.ts
 
 # pytest
 .pytest_cache/
+
+# LLM PDCA runtime artifacts
+artifacts/llm-pdca/campaigns/
+artifacts/llm-pdca/experiments/
