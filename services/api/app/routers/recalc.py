@@ -16,10 +16,25 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter
 
+from src.engines.base import EngineInput, EngineOutput
+from src.engines.progression import ProgressionEngine
+from src.engines.project_capacity import ProjectCapacityEngine
+from src.engines.subscription import SubscriptionEngine
+from src.engines.unit_economics import UnitEconomicsEngine
+
 from .. import db
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+_ENGINE_PLUGINS = {
+    "subscription": SubscriptionEngine(),
+    "consulting": ProjectCapacityEngine(),
+    "project_capacity": ProjectCapacityEngine(),
+    "academy": ProgressionEngine(),
+    "progression": ProgressionEngine(),
+    "unit_economics": UnitEconomicsEngine(),
+}
 
 
 # ---------------------------------------------------------------------------
@@ -451,6 +466,10 @@ def _compute_archetype_revenue(config: Dict[str, Any], archetype: str) -> Option
     Returns list of 5 annual revenue values, or None if config is insufficient.
     """
     try:
+        engine_output = _compute_archetype_output(config, archetype)
+        if engine_output and _should_use_engine_output(engine_output):
+            return engine_output.revenue
+
         if archetype == "subscription":
             plans = config.get("plans", [])
             if not plans:
@@ -626,6 +645,21 @@ def _compute_archetype_revenue(config: Dict[str, Any], archetype: str) -> Option
     return None
 
 
+def _compute_archetype_output(config: Dict[str, Any], archetype: str) -> Optional[EngineOutput]:
+    plugin = _ENGINE_PLUGINS.get(archetype)
+    if not plugin:
+        return None
+    return plugin.compute(EngineInput(config=config))
+
+
+def _should_use_engine_output(engine_output: EngineOutput) -> bool:
+    return (
+        any(engine_output.revenue)
+        or any(engine_output.variable_cost)
+        or not engine_output.warnings
+    )
+
+
 def _compute_segments(
     parameters: Dict[str, Any],
     revenue_model_configs: Optional[List[Dict[str, Any]]] = None,
@@ -697,8 +731,12 @@ def _compute_segments(
 
         # Try archetype-specific revenue first
         arch_revenue = None
+        arch_output = None
         arch_info = archetype_lookup.get(name)
         if arch_info:
+            arch_output = _compute_archetype_output(
+                arch_info["config"], arch_info["archetype"],
+            )
             arch_revenue = _compute_archetype_revenue(
                 arch_info["config"], arch_info["archetype"],
             )
@@ -711,8 +749,12 @@ def _compute_segments(
             # Use archetype-computed revenue
             for year in range(5):
                 rev = arch_revenue[year] if year < len(arch_revenue) else 0
-                cost = round(rev * cogs_rate)
-                gp = rev - cost
+                if arch_output and _should_use_engine_output(arch_output) and any(arch_output.variable_cost):
+                    cost = arch_output.variable_cost[year] if year < len(arch_output.variable_cost) else 0
+                    gp = arch_output.gross_profit[year] if year < len(arch_output.gross_profit) else rev - cost
+                else:
+                    cost = round(rev * cogs_rate)
+                    gp = rev - cost
                 revenue.append(rev)
                 cogs.append(cost)
                 gross_profit.append(gp)
