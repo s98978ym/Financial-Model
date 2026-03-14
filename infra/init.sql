@@ -1,6 +1,8 @@
 -- PL Generator Database Schema
 -- ================================
 
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
 -- Projects table
 CREATE TABLE IF NOT EXISTS projects (
     id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
