@@ -16,11 +16,13 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter
 
+from src.domain.canonical_model import CanonicalBusinessModel, Driver, RevenueEngine
 from src.engines.base import EngineInput, EngineOutput
 from src.engines.progression import ProgressionEngine
 from src.engines.project_capacity import ProjectCapacityEngine
 from src.engines.subscription import SubscriptionEngine
 from src.engines.unit_economics import UnitEconomicsEngine
+from src.solver.planner import PlannerResult
 
 from .. import db
 
@@ -658,6 +660,117 @@ def _should_use_engine_output(engine_output: EngineOutput) -> bool:
         or any(engine_output.variable_cost)
         or not engine_output.warnings
     )
+
+
+def _canonical_driver_value(
+    driver: Driver,
+    planner_result: Optional[PlannerResult] = None,
+) -> float:
+    if planner_result:
+        solved = planner_result.solved_driver_values.get(driver.driver_id)
+        if solved and solved.fy1 is not None:
+            return float(solved.fy1)
+    if driver.series.fy1 is not None:
+        return float(driver.series.fy1)
+    return 0.0
+
+
+def _canonical_engine_config(
+    engine: RevenueEngine,
+    planner_result: Optional[PlannerResult] = None,
+) -> Dict[str, Any]:
+    values = {
+        driver.driver_id: _canonical_driver_value(driver, planner_result)
+        for driver in engine.drivers
+    }
+
+    if engine.engine_type == "subscription":
+        return {
+            "plans": [
+                {
+                    "monthly_price": values.get("monthly_price", 0),
+                    "subscribers": [values.get("subscribers", 0)] * 5,
+                    "monthly_cost_per_subscriber": values.get("monthly_cost_per_subscriber", 0),
+                }
+            ]
+        }
+    if engine.engine_type == "project_capacity":
+        config: Dict[str, Any] = {
+            "skus": [
+                {
+                    "unit_price": values.get("unit_price", 0),
+                    "quantities": [values.get("project_count", values.get("quantities", 0))] * 5,
+                    "unit_cost": values.get("unit_cost", 0),
+                }
+            ]
+        }
+        if "headcount" in values:
+            config["headcount"] = [values["headcount"]] * 5
+        if "max_projects_per_head" in engine.constraints:
+            config["max_projects_per_head"] = engine.constraints["max_projects_per_head"]
+        return config
+    if engine.engine_type == "progression":
+        return {
+            "tiers": [
+                {
+                    "price": values.get("price", values.get("tuition", 0)),
+                    "students": [values.get("students", values.get("entrants", 0))] * 5,
+                    "variable_cost_per_student": values.get("variable_cost_per_student", 0),
+                }
+            ]
+        }
+    if engine.engine_type == "unit_economics":
+        return {
+            "skus": [
+                {
+                    "price": values.get("price", values.get("price_per_item", 0)),
+                    "items_per_txn": values.get("items_per_txn", values.get("items_per_meal", 1)),
+                    "txns_per_person": values.get("txns_per_person", 1),
+                    "annual_purchases": values.get("annual_purchases", 12),
+                    "customers": [values.get("customers", values.get("unit_count", 0))] * 5,
+                    "unit_cost": values.get("unit_cost", 0),
+                }
+            ]
+        }
+    return {}
+
+
+def _canonical_to_recalc_inputs(
+    model: CanonicalBusinessModel,
+    planner_result: Optional[PlannerResult] = None,
+) -> Dict[str, Any]:
+    segments: List[Dict[str, Any]] = []
+    revenue_model_configs: List[Dict[str, Any]] = []
+
+    for segment in model.segments:
+        engine = segment.engines[0] if segment.engines else None
+        if engine is None:
+            continue
+        config = _canonical_engine_config(engine, planner_result)
+        engine_output = _compute_archetype_output(config, engine.engine_type)
+        revenue_fy1 = engine_output.revenue[0] if engine_output else 0
+        cogs_fy1 = engine_output.variable_cost[0] if engine_output else 0
+        cogs_rate = round(cogs_fy1 / revenue_fy1, 4) if revenue_fy1 else 0.0
+        segments.append(
+            {
+                "name": segment.name,
+                "revenue_fy1": revenue_fy1,
+                "growth_rate": 0.0,
+                "cogs_rate": cogs_rate,
+            }
+        )
+        revenue_model_configs.append(
+            {
+                "segment_name": segment.name,
+                "archetype": engine.engine_type,
+                "config": config,
+            }
+        )
+
+    return {
+        "parameters": {"segments": segments},
+        "revenue_model_configs": revenue_model_configs,
+    }
 
 
 def _compute_segments(
