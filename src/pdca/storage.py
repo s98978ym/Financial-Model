@@ -40,6 +40,21 @@ def create_campaign(artifact_root: Path, campaign: Campaign) -> Path:
     return target
 
 
+def load_campaign(artifact_root: Path, campaign_id: str) -> Campaign:
+    path = campaign_dir(artifact_root, campaign_id) / "campaign.json"
+    return Campaign.model_validate_json(path.read_text(encoding="utf-8"))
+
+
+def list_campaigns(artifact_root: Path) -> list[Campaign]:
+    results: list[Campaign] = []
+    root = campaigns_root(artifact_root)
+    if not root.exists():
+        return results
+    for campaign_path in sorted(root.glob("*/campaign.json")):
+        results.append(Campaign.model_validate_json(campaign_path.read_text(encoding="utf-8")))
+    return results
+
+
 def create_experiment(
     artifact_root: Path,
     manifest: ExperimentManifest,
@@ -57,6 +72,15 @@ def create_experiment(
 def load_experiment_manifest(artifact_root: Path, experiment_id: str) -> ExperimentManifest:
     path = experiment_dir(artifact_root, experiment_id) / "manifest.json"
     return ExperimentManifest.model_validate_json(path.read_text(encoding="utf-8"))
+
+
+def save_experiment_manifest(
+    artifact_root: Path,
+    manifest: ExperimentManifest,
+) -> Path:
+    path = experiment_dir(artifact_root, manifest.experiment_id) / "manifest.json"
+    _write_json(path, manifest.model_dump())
+    return path
 
 
 def list_experiments(
