@@ -33,6 +33,8 @@ from openpyxl.utils import get_column_letter
 from openpyxl.workbook.defined_name import DefinedName
 from openpyxl.worksheet.datavalidation import DataValidation
 
+from src.domain.canonical_model import CanonicalBusinessModel
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -213,6 +215,24 @@ def compute_rd_rows(themes: Optional[List[Dict]] = None) -> Dict:
 
 # Module-level default (backward compatibility with export.py imports)
 RD_ROWS: Dict = compute_rd_rows()
+
+
+def _single_engine_type_for_segment(segment) -> str:
+    if not segment.engines:
+        return "subscription"
+    if len(segment.engines) > 1:
+        raise ValueError(
+            f"Segment '{segment.segment_id}' has multiple engines; workbook adapters currently support exactly one engine per segment."
+        )
+    return segment.engines[0].engine_type
+
+
+def segment_model_types_from_canonical(model: CanonicalBusinessModel) -> List[str]:
+    """Return workbook segment model type labels from canonical segment engines."""
+    model_types: List[str] = []
+    for segment in model.segments:
+        model_types.append(_single_engine_type_for_segment(segment))
+    return model_types
 
 # Simulation sheet row positions
 SIM_ROWS = {

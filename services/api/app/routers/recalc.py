@@ -16,10 +16,27 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter
 
+from src.domain.canonical_model import BusinessSegment, CanonicalBusinessModel, Driver, RevenueEngine
+from src.engines.base import EngineInput, EngineOutput
+from src.engines.progression import ProgressionEngine
+from src.engines.project_capacity import ProjectCapacityEngine
+from src.engines.subscription import SubscriptionEngine
+from src.engines.unit_economics import UnitEconomicsEngine
+from src.solver.planner import PlannerResult
+
 from .. import db
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+_ENGINE_PLUGINS = {
+    "subscription": SubscriptionEngine(),
+    "consulting": ProjectCapacityEngine(),
+    "project_capacity": ProjectCapacityEngine(),
+    "academy": ProgressionEngine(),
+    "progression": ProgressionEngine(),
+    "unit_economics": UnitEconomicsEngine(),
+}
 
 
 # ---------------------------------------------------------------------------
@@ -451,6 +468,10 @@ def _compute_archetype_revenue(config: Dict[str, Any], archetype: str) -> Option
     Returns list of 5 annual revenue values, or None if config is insufficient.
     """
     try:
+        engine_output = _compute_archetype_output(config, archetype)
+        if engine_output and _should_use_engine_output(engine_output):
+            return engine_output.revenue
+
         if archetype == "subscription":
             plans = config.get("plans", [])
             if not plans:
@@ -626,6 +647,160 @@ def _compute_archetype_revenue(config: Dict[str, Any], archetype: str) -> Option
     return None
 
 
+def _compute_archetype_output(config: Dict[str, Any], archetype: str) -> Optional[EngineOutput]:
+    plugin = _ENGINE_PLUGINS.get(archetype)
+    if not plugin:
+        return None
+    return plugin.compute(EngineInput(config=config))
+
+
+def _should_use_engine_output(engine_output: EngineOutput) -> bool:
+    return (
+        any(engine_output.revenue)
+        or any(engine_output.variable_cost)
+        or not engine_output.warnings
+    )
+
+
+def _canonical_driver_value(
+    driver: Driver,
+    planner_result: Optional[PlannerResult] = None,
+) -> float:
+    if planner_result:
+        solved = planner_result.solved_driver_values.get(driver.driver_id)
+        if solved and solved.fy1 is not None:
+            return float(solved.fy1)
+    if driver.series.fy1 is not None:
+        return float(driver.series.fy1)
+    return 0.0
+
+
+def _canonical_driver_series(
+    driver: Driver,
+    planner_result: Optional[PlannerResult] = None,
+) -> List[float]:
+    series = planner_result.solved_driver_values.get(driver.driver_id) if planner_result else None
+    if series is None:
+        series = driver.series
+
+    raw = [series.fy1, series.fy2, series.fy3, series.fy4, series.fy5]
+    filled: List[float] = []
+    last = 0.0
+    for value in raw:
+        if value is not None:
+            last = float(value)
+        filled.append(last)
+    return filled
+
+
+def _canonical_engine_config(
+    engine: RevenueEngine,
+    planner_result: Optional[PlannerResult] = None,
+) -> Dict[str, Any]:
+    values = {
+        driver.driver_id: _canonical_driver_series(driver, planner_result)
+        for driver in engine.drivers
+    }
+
+    if engine.engine_type == "subscription":
+        return {
+            "plans": [
+                {
+                    "monthly_price": values.get("monthly_price", [0])[0],
+                    "subscribers": values.get("subscribers", [0] * 5),
+                    "monthly_cost_per_subscriber": values.get("monthly_cost_per_subscriber", [0])[0],
+                }
+            ]
+        }
+    if engine.engine_type == "project_capacity":
+        config: Dict[str, Any] = {
+            "skus": [
+                {
+                    "unit_price": values.get("unit_price", [0])[0],
+                    "quantities": values.get("project_count", values.get("quantities", [0] * 5)),
+                    "unit_cost": values.get("unit_cost", [0])[0],
+                }
+            ]
+        }
+        if "headcount" in values:
+            config["headcount"] = values["headcount"]
+        if "max_projects_per_head" in engine.constraints:
+            config["max_projects_per_head"] = engine.constraints["max_projects_per_head"]
+        return config
+    if engine.engine_type == "progression":
+        return {
+            "tiers": [
+                {
+                    "price": values.get("price", values.get("tuition", [0]))[0],
+                    "students": values.get("students", values.get("entrants", [0] * 5)),
+                    "variable_cost_per_student": values.get("variable_cost_per_student", [0])[0],
+                }
+            ]
+        }
+    if engine.engine_type == "unit_economics":
+        return {
+            "skus": [
+                {
+                    "price": values.get("price", values.get("price_per_item", [0]))[0],
+                    "items_per_txn": values.get("items_per_txn", values.get("items_per_meal", [1]))[0],
+                    "txns_per_person": values.get("txns_per_person", [1])[0],
+                    "annual_purchases": values.get("annual_purchases", values.get("meals_per_year", [1]))[0],
+                    "customers": values.get("customers", values.get("unit_count", [0] * 5)),
+                    "unit_cost": values.get("unit_cost", [0])[0],
+                }
+            ]
+        }
+    return {}
+
+
+def _single_engine_for_segment(segment: BusinessSegment) -> Optional[RevenueEngine]:
+    if not segment.engines:
+        return None
+    if len(segment.engines) > 1:
+        raise ValueError(
+            f"Segment '{segment.segment_id}' has multiple engines; recalc adapters currently support exactly one engine per segment."
+        )
+    return segment.engines[0]
+
+
+def _canonical_to_recalc_inputs(
+    model: CanonicalBusinessModel,
+    planner_result: Optional[PlannerResult] = None,
+) -> Dict[str, Any]:
+    segments: List[Dict[str, Any]] = []
+    revenue_model_configs: List[Dict[str, Any]] = []
+
+    for segment in model.segments:
+        engine = _single_engine_for_segment(segment)
+        if engine is None:
+            continue
+        config = _canonical_engine_config(engine, planner_result)
+        engine_output = _compute_archetype_output(config, engine.engine_type)
+        revenue_fy1 = engine_output.revenue[0] if engine_output else 0
+        cogs_fy1 = engine_output.variable_cost[0] if engine_output else 0
+        cogs_rate = round(cogs_fy1 / revenue_fy1, 4) if revenue_fy1 else 0.0
+        segments.append(
+            {
+                "name": segment.name,
+                "revenue_fy1": revenue_fy1,
+                "growth_rate": 0.0,
+                "cogs_rate": cogs_rate,
+            }
+        )
+        revenue_model_configs.append(
+            {
+                "segment_name": segment.name,
+                "archetype": engine.engine_type,
+                "config": config,
+            }
+        )
+
+    return {
+        "parameters": {"segments": segments},
+        "revenue_model_configs": revenue_model_configs,
+    }
+
+
 def _compute_segments(
     parameters: Dict[str, Any],
     revenue_model_configs: Optional[List[Dict[str, Any]]] = None,
@@ -697,8 +872,12 @@ def _compute_segments(
 
         # Try archetype-specific revenue first
         arch_revenue = None
+        arch_output = None
         arch_info = archetype_lookup.get(name)
         if arch_info:
+            arch_output = _compute_archetype_output(
+                arch_info["config"], arch_info["archetype"],
+            )
             arch_revenue = _compute_archetype_revenue(
                 arch_info["config"], arch_info["archetype"],
             )
@@ -711,8 +890,12 @@ def _compute_segments(
             # Use archetype-computed revenue
             for year in range(5):
                 rev = arch_revenue[year] if year < len(arch_revenue) else 0
-                cost = round(rev * cogs_rate)
-                gp = rev - cost
+                if arch_output and _should_use_engine_output(arch_output) and any(arch_output.variable_cost):
+                    cost = arch_output.variable_cost[year] if year < len(arch_output.variable_cost) else 0
+                    gp = arch_output.gross_profit[year] if year < len(arch_output.gross_profit) else rev - cost
+                else:
+                    cost = round(rev * cogs_rate)
+                    gp = rev - cost
                 revenue.append(rev)
                 cogs.append(cost)
                 gross_profit.append(gp)

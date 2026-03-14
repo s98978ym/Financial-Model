@@ -8,6 +8,9 @@ from typing import List, Dict, Any, Optional, Tuple
 from copy import deepcopy
 from dataclasses import dataclass, field
 
+from src.domain.canonical_model import CanonicalBusinessModel
+from src.domain.evidence_ledger import AssumptionLedger
+
 logger = logging.getLogger(__name__)
 
 
@@ -44,6 +47,32 @@ class FullSimulationReport:
     parameter_distributions: Dict[str, Dict[str, float]]
     raw_results: List[SimulationResult] = field(default_factory=list)
     warnings: List[str] = field(default_factory=list)
+
+
+def build_parameter_ranges_from_canonical(
+    model: CanonicalBusinessModel,
+    ledger: AssumptionLedger,
+) -> Dict[str, Tuple[float, float]]:
+    """Build simulation parameter ranges from canonical drivers and ledger ranges."""
+    ledger_map = {record.object_id: record for record in ledger.records}
+    ranges: Dict[str, Tuple[float, float]] = {}
+
+    for segment in model.segments:
+        for engine in segment.engines:
+            for driver in engine.drivers:
+                record = ledger_map.get(driver.driver_id)
+                if record and record.allowed_range.min is not None and record.allowed_range.max is not None:
+                    ranges[driver.driver_id] = (record.allowed_range.min, record.allowed_range.max)
+                    continue
+
+                base_value = driver.series.fy1 if driver.series.fy1 is not None else (record.value if record else None)
+                if base_value is None:
+                    continue
+
+                base = float(base_value)
+                ranges[driver.driver_id] = (base * 0.8, base * 1.2)
+
+    return ranges
 
 
 class SimulationEngine:
