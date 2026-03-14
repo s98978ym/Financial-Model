@@ -25,6 +25,33 @@ export interface QASettings {
   count: number
 }
 
+export interface QAAssumptionLedgerSummary {
+  totalRecords: number
+  groundedRecords: number
+  boardReadyRecords: number
+}
+
+export interface QAPlannerSummary {
+  feasibility?: 'solved' | 'partially_feasible' | 'infeasible'
+  explanation?: string
+  constraintCount?: number
+}
+
+export interface QATopDriverSummary {
+  driverId: string
+  name: string
+  summary: string
+}
+
+export interface QAExplanationPack {
+  headline: string
+  boardReady: boolean
+  topDrivers: QATopDriverSummary[]
+  constraintSummary: string[]
+  sensitivityHints: string[]
+  evidenceSummary: string[]
+}
+
 export var CATEGORY_INFO: Record<QACategory, { label: string; color: string; bgColor: string; borderColor: string; icon: string }> = {
   revenue: { label: '収益', color: 'text-blue-700', bgColor: 'bg-blue-50', borderColor: 'border-blue-200', icon: '📈' },
   cost: { label: 'コスト', color: 'text-red-700', bgColor: 'bg-red-50', borderColor: 'border-red-200', icon: '💰' },
@@ -74,6 +101,9 @@ function fmtYear(i: number): string {
 
 export interface PLContext {
   parameters: Record<string, number>
+  assumptionLedger?: QAAssumptionLedgerSummary
+  plannerSummary?: QAPlannerSummary
+  explanationPack?: QAExplanationPack
   kpis?: {
     break_even_year?: string | null
     cumulative_break_even_year?: string | null
