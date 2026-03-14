@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 from dataclasses import asdict, dataclass
 from datetime import datetime
@@ -12,6 +13,7 @@ from typing import Any, Dict, Iterable
 from src.ingest.reader import read_document
 
 from .candidate_profiles import CandidateProfile, fixture_path, fixture_profiles, live_profiles
+from .external_analysis import build_external_analysis_candidate
 from .pdf_signals import extract_academy_signals, extract_meal_signals, extract_pl_signals
 from .reference_workbook import ReferenceWorkbook, extract_reference_workbook
 from .scoring import ScoreResult, score_candidate
@@ -50,15 +52,23 @@ def run_reference_pdca(
     reference_workbook: Path,
     artifact_root: Path,
     runner: str = "fixture",
+    profiles: Iterable[CandidateProfile] | None = None,
+    baseline_mode: str | None = None,
 ) -> PDCAEvalResult:
     reference = extract_reference_workbook(reference_workbook)
-    profiles = list(_profiles_for_runner(runner))
+    profiles = list(profiles) if profiles is not None else list(_profiles_for_runner(runner))
     run_id = datetime.utcnow().strftime("run-%Y%m%d-%H%M%S")
     run_root = artifact_root / run_id
     (run_root / "candidates").mkdir(parents=True, exist_ok=True)
     document_text = read_document(str(plan_pdf)).full_text if runner == "live" else None
 
-    baseline_payload = _baseline_payload(plan_pdf, reference, runner, document_text=document_text)
+    baseline_payload = _baseline_payload(
+        plan_pdf,
+        reference,
+        runner,
+        document_text=document_text,
+        baseline_mode=baseline_mode,
+    )
     baseline_score = score_candidate(reference, baseline_payload)
     candidates: Dict[str, Dict[str, Any]] = {}
     candidate_scores: Dict[str, ScoreResult] = {}
@@ -118,11 +128,13 @@ def _baseline_payload(
     reference: ReferenceWorkbook,
     runner: str,
     document_text: str | None = None,
+    baseline_mode: str | None = None,
 ) -> Dict[str, Any]:
     if runner == "fixture":
-        return _load_fixture_payload("baseline_result.json")
+        fixture_name = baseline_mode or "baseline_result.json"
+        return _load_fixture_payload(fixture_name)
     if runner == "live":
-        return _build_live_payload(plan_pdf, reference, mode="baseline", document_text=document_text)
+        return _build_live_payload(plan_pdf, reference, mode=baseline_mode or "baseline", document_text=document_text)
     raise ValueError(f"Unsupported runner: {runner}")
 
 
@@ -224,6 +236,73 @@ def _build_live_payload(
             + _benchmark_model_assumptions("コンサル", consulting_signals),
         }
 
+    if mode in {
+        "industry_analysis",
+        "competitor_analysis",
+        "trend_analysis",
+        "public_market_analysis",
+        "industry_price_portion",
+        "industry_meal_frequency",
+        "industry_retention",
+        "combined_industry_public_market",
+        "combined_industry_trend",
+        "combined_industry_trend_public_market",
+        "workforce_development_cost_analysis",
+        "marketing_cost_analysis",
+        "operating_model_analysis",
+        "workforce_internal_unit_cost",
+        "workforce_external_unit_cost",
+        "workforce_effort_mix",
+        "combined_cost_workforce_marketing",
+        "combined_cost_workforce_operating",
+        "combined_cost_operating_model",
+        "branding_lift_analysis",
+        "marketing_efficiency_analysis",
+        "sales_efficiency_analysis",
+        "partner_strategy_analysis",
+        "staged_acceleration_analysis",
+        "validation_period_analysis",
+        "acceleration_period_analysis",
+        "gated_acceleration_analysis",
+        "combined_staged_sales",
+        "combined_staged_partner",
+        "combined_staged_branding",
+    }:
+        base_mode = "integrated_derived"
+        if mode in {
+            "workforce_development_cost_analysis",
+            "marketing_cost_analysis",
+            "operating_model_analysis",
+            "workforce_internal_unit_cost",
+            "workforce_external_unit_cost",
+            "workforce_effort_mix",
+            "combined_cost_workforce_marketing",
+            "combined_cost_workforce_operating",
+            "combined_cost_operating_model",
+        }:
+            base_mode = "combined_industry_trend_public_market"
+        if mode in {
+            "branding_lift_analysis",
+            "marketing_efficiency_analysis",
+            "sales_efficiency_analysis",
+            "partner_strategy_analysis",
+            "staged_acceleration_analysis",
+            "validation_period_analysis",
+            "acceleration_period_analysis",
+            "gated_acceleration_analysis",
+            "combined_staged_sales",
+            "combined_staged_partner",
+            "combined_staged_branding",
+        }:
+            base_mode = "combined_cost_operating_model"
+        analysis_payload = _build_live_payload(plan_pdf, reference, mode=base_mode, document_text=text)
+        return build_external_analysis_candidate(
+            analysis_id=mode,
+            base_candidate=analysis_payload,
+            reference=reference,
+            enrich_live_sources=_live_source_fetch_enabled(),
+        )
+
     if mode == "reference_seeded":
         return {
             "segments": [{"name": name, "engine_type": _expected_engine(name)} for name in detected_segments],
@@ -246,6 +325,10 @@ def _detect_segments(text: str) -> list[str]:
         if any(re.search(pattern, text) for pattern in segment_patterns):
             detected.append(segment_name)
     return detected
+
+
+def _live_source_fetch_enabled() -> bool:
+    return os.getenv("FAM_FETCH_LIVE_SOURCES", "").lower() in {"1", "true", "yes"}
 
 
 def _expected_engine(segment_name: str) -> str:
@@ -578,6 +661,66 @@ def _candidate_hypothesis(profile: CandidateProfile, runner: str) -> str:
             return "PDF で拾える meal/academy の断片と、欠損が大きい consulting の benchmark 補完を組み合わせると、`model_sheets` がさらに改善するはず。"
         if profile.candidate_id == "candidate-reference-seeded":
             return "参照 workbook のモデルシートと PL を seed にすると、現時点の上限再現度を測れるはず。"
+        if profile.candidate_id == "candidate-analysis-industry":
+            return "業界分析で meal の運用前提を補うと、model_sheets の改善幅が大きいはず。"
+        if profile.candidate_id == "candidate-analysis-competitor":
+            return "競合分析で consulting の価格と継続前提を補うと、model_sheets が部分的に改善するはず。"
+        if profile.candidate_id == "candidate-analysis-trend":
+            return "トレンド分析で academy の成長系列を補うと、model_sheets と explainability が改善するはず。"
+        if profile.candidate_id == "candidate-analysis-public-market":
+            return "公開企業/株式市場分析で PL 比率を補うと、pl の改善幅が見えるはず。"
+        if profile.candidate_id == "candidate-industry-price-portion":
+            return "industry 分析の中では、meal の価格/構成要素だけでも大きな lift を作るはず。"
+        if profile.candidate_id == "candidate-industry-meal-frequency":
+            return "industry 分析の中では、meal の食事頻度が model_sheets 改善の主要因になっているはず。"
+        if profile.candidate_id == "candidate-industry-retention":
+            return "industry 分析の中では、継続率だけでも一定の lift を作るはず。"
+        if profile.candidate_id == "candidate-combined-industry-public-market":
+            return "meal 前提の industry 分析に公開企業/株式市場の PL 比率を重ねると、model_sheets と pl の両方が改善するはず。"
+        if profile.candidate_id == "candidate-combined-industry-trend":
+            return "industry で meal を固めた上で trend で academy 成長を補うと、model_sheets の改善がさらに伸びるはず。"
+        if profile.candidate_id == "candidate-combined-industry-trend-public-market":
+            return "industry + trend + public-market を同時投入すると、model_sheets と pl をまとめて押し上げられるはず。"
+        if profile.candidate_id == "candidate-cost-workforce-development":
+            return "人件費・開発費を内部/外部の単価と工数で分解すると、OPEX の再現度がもっと上がるはず。"
+        if profile.candidate_id == "candidate-cost-marketing":
+            return "マーケ費を人件費とメディア/インセンティブに分けると、OPEX の説明力が上がるはず。"
+        if profile.candidate_id == "candidate-cost-operating-purpose":
+            return "業務内容と目的まで費用にひも付けると、OPEX の説明責任がさらに上がるはず。"
+        if profile.candidate_id == "candidate-cost-internal-unit":
+            return "人件費・開発費の中では、内部人材の単価が最も大きく効くはず。"
+        if profile.candidate_id == "candidate-cost-external-unit":
+            return "人件費・開発費の中では、外部人材の単価が大きく効くはず。"
+        if profile.candidate_id == "candidate-cost-effort-mix":
+            return "人件費・開発費の中では、工数配分が最も大きく効くはず。"
+        if profile.candidate_id == "candidate-cost-workforce-marketing":
+            return "人件費・開発費とマーケ費を重ねると、OPEX の再現度が一段上がるはず。"
+        if profile.candidate_id == "candidate-cost-workforce-operating":
+            return "人件費・開発費と業務内容/目的の紐付けを重ねると、説明責任が一段上がるはず。"
+        if profile.candidate_id == "candidate-cost-combined":
+            return "人件費・開発費・マーケ費・業務内容/目的をまとめて入れると、費用面の PL 再現が最も改善するはず。"
+        if profile.candidate_id == "candidate-revenue-branding-lift":
+            return "ブランディングの間接効果で直販施策の効率が上がると、PL の売上・粗利系列が改善するはず。"
+        if profile.candidate_id == "candidate-revenue-marketing-efficiency":
+            return "マーケの CAC と ROAS を明示すると、売上成長の PL 再現が改善するはず。"
+        if profile.candidate_id == "candidate-revenue-sales-efficiency":
+            return "営業の CAC と生産性を明示すると、consulting の driver と売上系列が改善するはず。"
+        if profile.candidate_id == "candidate-revenue-partner-strategy":
+            return "パートナー戦略の寄与を織り込むと、consulting の継続と売上系列が改善するはず。"
+        if profile.candidate_id == "candidate-revenue-staged-acceleration":
+            return "3年間の検証期間の後に投資アクセルを踏む構造を入れると、計画全体の売上系列が最も参照に近づくはず。"
+        if profile.candidate_id == "candidate-revenue-validation-period":
+            return "検証期間の設計だけでも、前半3年の売上・粗利系列がかなり改善するはず。"
+        if profile.candidate_id == "candidate-revenue-acceleration-period":
+            return "検証後の営業・マーケ投資アクセルだけでも、後半の売上系列に大きく効くはず。"
+        if profile.candidate_id == "candidate-revenue-gated-acceleration":
+            return "検証後に条件付きで投資を開放する gate を入れると、無理な前倒しを避けつつ売上系列が改善するはず。"
+        if profile.candidate_id == "candidate-revenue-staged-sales":
+            return "検証後アクセルに営業効率の改善を重ねると、売上と model_sheets がさらに伸びるはず。"
+        if profile.candidate_id == "candidate-revenue-staged-partner":
+            return "検証後アクセルにパートナー戦略を重ねると、売上系列と継続性がさらに改善するはず。"
+        if profile.candidate_id == "candidate-revenue-staged-branding":
+            return "検証後アクセルにブランド波及を重ねると、直接施策の効率がさらに上がるはず。"
     return f"{profile.label} が baseline より高いスコアを取れるかを確認する。"
 
 
@@ -637,6 +780,66 @@ def _improvements(profiles: Iterable[CandidateProfile], runner: str) -> list[str
                 improvements.append("meal の unit economics を PDF 断片から導出し、consulting は benchmark で欠損を補完する統合候補を追加しました。")
             elif profile.candidate_id == "candidate-reference-seeded":
                 improvements.append("参照 workbook の model_sheets と PL を seed して、現時点の理論上限を測る候補を追加しました。")
+            elif profile.candidate_id == "candidate-analysis-industry":
+                improvements.append("業界分析レイヤーをオンにして、meal のドライバー前提を外部知識で補う候補を追加しました。")
+            elif profile.candidate_id == "candidate-analysis-competitor":
+                improvements.append("競合分析レイヤーをオンにして、consulting の価格・継続・工数前提を競合比較で補う候補を追加しました。")
+            elif profile.candidate_id == "candidate-analysis-trend":
+                improvements.append("トレンド分析レイヤーをオンにして、academy の人数・認証・売上の成長系列を補う候補を追加しました。")
+            elif profile.candidate_id == "candidate-analysis-public-market":
+                improvements.append("公開企業/株式市場レイヤーをオンにして、PL 比率の補完がどこまで効くかを見る候補を追加しました。")
+            elif profile.candidate_id == "candidate-industry-price-portion":
+                improvements.append("industry 分析を価格/構成要素だけに分解し、meal の単価・品数がどこまで効くかを見る候補を追加しました。")
+            elif profile.candidate_id == "candidate-industry-meal-frequency":
+                improvements.append("industry 分析を食事頻度だけに分解し、meal の利用頻度がどこまで効くかを見る候補を追加しました。")
+            elif profile.candidate_id == "candidate-industry-retention":
+                improvements.append("industry 分析を継続率だけに分解し、retention 単独の効き方を見る候補を追加しました。")
+            elif profile.candidate_id == "candidate-combined-industry-public-market":
+                improvements.append("industry の meal 前提と public-market の PL 比率を重ねた複合候補を追加しました。")
+            elif profile.candidate_id == "candidate-combined-industry-trend":
+                improvements.append("industry の meal 前提と trend の academy 成長系列を重ねた複合候補を追加しました。")
+            elif profile.candidate_id == "candidate-combined-industry-trend-public-market":
+                improvements.append("industry・trend・public-market をまとめてオンにした総合候補を追加しました。")
+            elif profile.candidate_id == "candidate-cost-workforce-development":
+                improvements.append("人件費・開発費を内部/外部の単価と工数に分解して、OPEX の改善候補を追加しました。")
+            elif profile.candidate_id == "candidate-cost-marketing":
+                improvements.append("マーケ費を人件費・メディア費・インセンティブ費に分解して、OPEX の改善候補を追加しました。")
+            elif profile.candidate_id == "candidate-cost-operating-purpose":
+                improvements.append("費用を業務内容と目的に紐付けて、説明責任を強める候補を追加しました。")
+            elif profile.candidate_id == "candidate-cost-internal-unit":
+                improvements.append("人件費・開発費のうち内部人材単価だけを動かす候補を追加しました。")
+            elif profile.candidate_id == "candidate-cost-external-unit":
+                improvements.append("人件費・開発費のうち外部人材単価だけを動かす候補を追加しました。")
+            elif profile.candidate_id == "candidate-cost-effort-mix":
+                improvements.append("人件費・開発費のうち工数配分だけを動かす候補を追加しました。")
+            elif profile.candidate_id == "candidate-cost-workforce-marketing":
+                improvements.append("人件費・開発費とマーケ費を組み合わせた費用候補を追加しました。")
+            elif profile.candidate_id == "candidate-cost-workforce-operating":
+                improvements.append("人件費・開発費と業務内容/目的の整理を組み合わせた費用候補を追加しました。")
+            elif profile.candidate_id == "candidate-cost-combined":
+                improvements.append("人件費・開発費・マーケ費・業務内容/目的を全部乗せした費用候補を追加しました。")
+            elif profile.candidate_id == "candidate-revenue-branding-lift":
+                improvements.append("ブランド施策の間接効果で direct 施策効率が上がる前提を、売上系列に重ねた候補を追加しました。")
+            elif profile.candidate_id == "candidate-revenue-marketing-efficiency":
+                improvements.append("マーケの CAC・ROAS 改善が売上系列にどう効くかを見る候補を追加しました。")
+            elif profile.candidate_id == "candidate-revenue-sales-efficiency":
+                improvements.append("営業の CAC・成約効率・担当生産性を consulting driver に反映する候補を追加しました。")
+            elif profile.candidate_id == "candidate-revenue-partner-strategy":
+                improvements.append("パートナー経由の獲得・継続寄与を consulting と売上系列に反映する候補を追加しました。")
+            elif profile.candidate_id == "candidate-revenue-staged-acceleration":
+                improvements.append("3年間の検証期間の後に営業/マーケ投資を加速させる段階投資候補を追加しました。")
+            elif profile.candidate_id == "candidate-revenue-validation-period":
+                improvements.append("前半のユニットエコノミクス検証期間だけを切り出した候補を追加しました。")
+            elif profile.candidate_id == "candidate-revenue-acceleration-period":
+                improvements.append("検証後の営業/マーケ投資アクセル期間だけを切り出した候補を追加しました。")
+            elif profile.candidate_id == "candidate-revenue-gated-acceleration":
+                improvements.append("検証 KPI を満たしたときだけ投資を解放する gate 付き候補を追加しました。")
+            elif profile.candidate_id == "candidate-revenue-staged-sales":
+                improvements.append("段階投資に営業効率の改善を重ねた複合候補を追加しました。")
+            elif profile.candidate_id == "candidate-revenue-staged-partner":
+                improvements.append("段階投資にパートナー戦略を重ねた複合候補を追加しました。")
+            elif profile.candidate_id == "candidate-revenue-staged-branding":
+                improvements.append("段階投資にブランド波及を重ねた複合候補を追加しました。")
         return improvements
 
     improvements.append("fixture データで baseline と candidate の差を比較し、評価器と summary 生成の整合性を確認しました。")
@@ -646,6 +849,14 @@ def _improvements(profiles: Iterable[CandidateProfile], runner: str) -> list[str
 def _next_directions(candidate_scores: Dict[str, ScoreResult], runner: str) -> list[str]:
     directions: list[str] = []
     if runner == "live":
+        revenue_candidates = [candidate_id for candidate_id in candidate_scores if candidate_id.startswith("candidate-revenue-")]
+        if revenue_candidates:
+            directions.append("次はブランド・マーケ・営業・パートナーの仮説を、実際の外部ソース取込に置き換えて再評価します。")
+            directions.append("特に `staged acceleration` で効いた後半の売上跳ねを、営業投資・マーケ投資・パートナー寄与に分解して PL へ接続します。")
+            directions.append("consulting の driver を revenue line に結び付ける中間ロジックを足して、`pl` をさらに押し上げます。")
+            if any(_is_upper_bound_candidate(candidate_id) for candidate_id in candidate_scores):
+                directions.append("`candidate-reference-seeded` は上限比較のまま維持し、採用判断は revenue overlay 候補だけで続けます。")
+            return directions
         directions.append("次は PDF からモデルシートの driver 候補を直接抽出し、`model_sheets` スコアを先に引き上げます。")
         directions.append("その driver を canonical model と engine 計算に通して、`pl` スコアが上がるかを確認します。")
         directions.append("重要前提ごとに evidence と review_status を増やして、`explainability` を board-ready 寄りに改善します。")
@@ -711,6 +922,36 @@ def _short_measure(profile: CandidateProfile) -> str:
         "candidate-structure-pl-extracted": "PDF から PL 系列を直接抽出",
         "candidate-structure-model-pl-extracted": "PDF から academy モデル系列も抽出",
         "candidate-integrated-derived": "meal 抽出 + consulting 補完を統合",
+        "candidate-analysis-industry": "業界分析で meal 前提を補完",
+        "candidate-analysis-competitor": "競合分析で consulting 前提を補完",
+        "candidate-analysis-trend": "トレンド分析で academy 成長系列を補完",
+        "candidate-analysis-public-market": "公開企業分析で PL 比率を補完",
+        "candidate-industry-price-portion": "industry を価格/構成だけに分解",
+        "candidate-industry-meal-frequency": "industry を食事頻度だけに分解",
+        "candidate-industry-retention": "industry を継続率だけに分解",
+        "candidate-combined-industry-public-market": "industry + public-market を重ねる",
+        "candidate-combined-industry-trend": "industry + trend を重ねる",
+        "candidate-combined-industry-trend-public-market": "industry + trend + public-market を重ねる",
+        "candidate-cost-workforce-development": "人件費/開発費を単価×工数で分解",
+        "candidate-cost-marketing": "マーケ費を人件費+実費に分解",
+        "candidate-cost-operating-purpose": "費用を業務内容/目的に紐付け",
+        "candidate-cost-internal-unit": "内部人材単価だけを調整",
+        "candidate-cost-external-unit": "外部人材単価だけを調整",
+        "candidate-cost-effort-mix": "工数配分だけを調整",
+        "candidate-cost-workforce-marketing": "人件費/開発費 + マーケ費",
+        "candidate-cost-workforce-operating": "人件費/開発費 + 業務内容/目的",
+        "candidate-cost-combined": "費用3要素を全部統合",
+        "candidate-revenue-branding-lift": "ブランド波及で direct 効率を補正",
+        "candidate-revenue-marketing-efficiency": "マーケ CAC/ROAS を補正",
+        "candidate-revenue-sales-efficiency": "営業 CAC/生産性を補正",
+        "candidate-revenue-partner-strategy": "パートナー戦略効果を補正",
+        "candidate-revenue-staged-acceleration": "検証後アクセルの段階投資を反映",
+        "candidate-revenue-validation-period": "前半の検証期間だけを反映",
+        "candidate-revenue-acceleration-period": "後半の投資アクセルだけを反映",
+        "candidate-revenue-gated-acceleration": "条件付きアクセル gate を反映",
+        "candidate-revenue-staged-sales": "段階投資 + 営業効率を重ねる",
+        "candidate-revenue-staged-partner": "段階投資 + パートナー戦略を重ねる",
+        "candidate-revenue-staged-branding": "段階投資 + ブランド波及を重ねる",
         "candidate-reference-seeded": "参照 workbook の model/pl を seed",
     }
     return mapping.get(profile.candidate_id, profile.label)

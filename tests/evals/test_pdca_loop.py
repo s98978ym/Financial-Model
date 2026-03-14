@@ -3,6 +3,7 @@ from pathlib import Path
 import subprocess
 import sys
 
+from src.evals.candidate_profiles import CandidateProfile
 from src.evals.pdca_loop import run_reference_pdca
 
 
@@ -69,3 +70,42 @@ def test_fam_reference_cli_writes_artifacts(tmp_path) -> None:
 
     assert result.returncode == 0
     assert "best_candidate_id" in result.stdout
+
+
+def test_run_reference_pdca_uses_explicit_profiles_when_provided(tmp_path) -> None:
+    result = run_reference_pdca(
+        plan_pdf=Path("/tmp/fake.pdf"),
+        reference_workbook=Path("tests/fixtures/evals/reference_workbook_minimal.xlsx"),
+        artifact_root=tmp_path,
+        runner="fixture",
+        profiles=[
+            CandidateProfile(
+                candidate_id="candidate-baseline-like",
+                label="Fixture baseline-like candidate",
+                runner="fixture",
+                config={"fixture_name": "baseline_result.json"},
+            )
+        ],
+    )
+
+    assert result.best_candidate_id == "candidate-baseline-like"
+
+
+def test_run_reference_pdca_uses_explicit_baseline_mode_when_provided(tmp_path) -> None:
+    result = run_reference_pdca(
+        plan_pdf=Path("/tmp/fake.pdf"),
+        reference_workbook=Path("tests/fixtures/evals/reference_workbook_minimal.xlsx"),
+        artifact_root=tmp_path,
+        runner="fixture",
+        baseline_mode="candidate_result.json",
+        profiles=[
+            CandidateProfile(
+                candidate_id="candidate-baseline-like",
+                label="Fixture baseline-like candidate",
+                runner="fixture",
+                config={"fixture_name": "baseline_result.json"},
+            )
+        ],
+    )
+
+    assert result.best_candidate_score < result.baseline_score
