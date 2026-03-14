@@ -1,0 +1,31 @@
+{
+  "segments": [
+    {"name": "ミール", "engine_type": "unit_economics"},
+    {"name": "コンサル", "engine_type": "project_capacity"}
+  ],
+  "model_sheets": {
+    "ミール": {
+      "price_per_item": [450],
+      "items_per_meal": [2],
+      "meals_per_year": [3600],
+      "retention_rate": [0.5]
+    },
+    "コンサル": {
+      "sku_unit_price": [12000000],
+      "sku_retention": [0.4],
+      "sku_standard_hours": [400]
+    }
+  },
+  "pl_lines": {
+    "売上": [8000000],
+    "粗利": [5000000],
+    "事業運営費（OPEX）": [2800000]
+  },
+  "assumptions": [
+    {
+      "source_type": "document",
+      "evidence_refs": [],
+      "review_status": "needs_review"
+    }
+  ]
+}

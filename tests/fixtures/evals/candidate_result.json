@@ -1,0 +1,47 @@
+{
+  "segments": [
+    {"name": "ミール", "engine_type": "unit_economics"},
+    {"name": "アカデミー", "engine_type": "progression"},
+    {"name": "コンサル", "engine_type": "project_capacity"}
+  ],
+  "model_sheets": {
+    "ミール": {
+      "price_per_item": [500],
+      "items_per_meal": [3],
+      "meals_per_year": [4800],
+      "retention_rate": [0.6]
+    },
+    "アカデミー": {
+      "academy_price": [70000],
+      "academy_students": [127],
+      "academy_certified": [90]
+    },
+    "コンサル": {
+      "sku_unit_price": [15000000],
+      "sku_retention": [0.6],
+      "sku_standard_hours": [480]
+    }
+  },
+  "pl_lines": {
+    "売上": [9700000],
+    "粗利": [6500000],
+    "事業運営費（OPEX）": [3000000]
+  },
+  "assumptions": [
+    {
+      "source_type": "document",
+      "evidence_refs": [
+        {"source_id": "pdf:1"},
+        {"source_id": "xls:meal"}
+      ],
+      "review_status": "approved"
+    },
+    {
+      "source_type": "benchmark",
+      "evidence_refs": [
+        {"source_id": "benchmark:academy"}
+      ],
+      "review_status": "approved"
+    }
+  ]
+}
