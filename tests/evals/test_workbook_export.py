@@ -61,7 +61,7 @@ def test_export_candidate_workbook_writes_expected_sheets(tmp_path) -> None:
         if review_sheet.cell(row=row_index, column=1).value
     }
     assert "今回の結論" in pdca_labels
-    assert "イテレーション別要約" in pdca_labels
+    assert "PDCA全体推移" in pdca_labels
     assert "評価スコア" in pdca_labels
     assert "根拠と前提" in pdca_labels
     assert "関連ファイル" in pdca_labels

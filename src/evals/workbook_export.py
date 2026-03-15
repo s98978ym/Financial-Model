@@ -280,8 +280,8 @@ def _write_pdca_check_sheet(
     row = _write_labeled_values(sheet, row, hypothesis_rows)
 
     row += 1
-    row = _write_section_title(sheet, row, "イテレーション別要約")
-    row = _write_iteration_summary_table(
+    row = _write_section_title(sheet, row, "PDCA全体推移")
+    row = _write_iteration_trend_table(
         sheet,
         row,
         iteration_summaries
@@ -289,10 +289,11 @@ def _write_pdca_check_sheet(
             {
                 "iteration": 1,
                 "candidate_id": candidate_id,
+                "hypothesis": hypothesis.get("title", ""),
+                "result": verdict.get("reason", ""),
                 "total_score": score.get("total", 0.0),
                 "delta_vs_baseline": score.get("delta_vs_baseline", round(score.get("total", 0.0) - baseline_total, 4)),
-                "verdict": verdict.get("status", ""),
-                "summary": f"{candidate_id} の確認用 workbook です。",
+                "next_action": (diagnosis.get("next_actions") or [""])[0],
             }
         ],
     )
@@ -324,11 +325,13 @@ def _write_pdca_check_sheet(
     row = _write_bullet_list(sheet, row, next_actions)
 
     sheet.freeze_panes = "B2"
-    _set_column_widths(sheet, {"A": 24, "B": 18, "C": 16, "D": 52})
+    _set_column_widths(sheet, {"A": 24, "B": 24, "C": 28, "D": 34, "E": 12, "F": 12, "G": 30})
     _set_row_heights(sheet, {1: 24})
     _align_range(sheet, start_row=1, end_row=sheet.max_row, start_col=1, end_col=1, alignment=LEFT_ALIGN)
-    _align_range(sheet, start_row=1, end_row=sheet.max_row, start_col=2, end_col=3, alignment=RIGHT_ALIGN)
-    _align_range(sheet, start_row=1, end_row=sheet.max_row, start_col=4, end_col=4, alignment=WRAP_LEFT_ALIGN)
+    _align_range(sheet, start_row=1, end_row=sheet.max_row, start_col=2, end_col=2, alignment=LEFT_ALIGN)
+    _align_range(sheet, start_row=1, end_row=sheet.max_row, start_col=3, end_col=4, alignment=WRAP_LEFT_ALIGN)
+    _align_range(sheet, start_row=1, end_row=sheet.max_row, start_col=5, end_col=6, alignment=RIGHT_ALIGN)
+    _align_range(sheet, start_row=1, end_row=sheet.max_row, start_col=7, end_col=7, alignment=WRAP_LEFT_ALIGN)
 
 
 def _write_pl_sheet(sheet) -> None:
@@ -1121,23 +1124,22 @@ def _write_bullet_list(sheet, row_index: int, lines: list[str]) -> int:
     return row_index
 
 
-def _write_iteration_summary_table(sheet, row_index: int, iteration_summaries: list[dict[str, Any]]) -> int:
-    headers = ["回", "総合", "差分", "要約"]
+def _write_iteration_trend_table(sheet, row_index: int, iteration_summaries: list[dict[str, Any]]) -> int:
+    headers = ["回", "候補", "仮説", "検証結果", "総合", "差分", "次の施策"]
     for column_index, header in enumerate(headers, start=1):
         sheet.cell(row=row_index, column=column_index, value=header)
         sheet.cell(row=row_index, column=column_index).font = BOLD_FONT
     row_index += 1
     for item in iteration_summaries:
-        verdict = item.get("verdict", "")
-        candidate_id = item.get("candidate_id", "")
-        title = item.get("title", "")
-        summary = item.get("summary") or f"{candidate_id} | {title} | {verdict}"
         sheet.cell(row=row_index, column=1, value=item.get("iteration"))
-        sheet.cell(row=row_index, column=2, value=item.get("total_score", 0.0))
-        sheet.cell(row=row_index, column=3, value=item.get("delta_vs_baseline", 0.0))
-        sheet.cell(row=row_index, column=4, value=summary)
-        sheet.cell(row=row_index, column=2).number_format = "0.0000"
-        sheet.cell(row=row_index, column=3).number_format = "+0.0000;-0.0000;0.0000"
+        sheet.cell(row=row_index, column=2, value=item.get("candidate_id", ""))
+        sheet.cell(row=row_index, column=3, value=item.get("hypothesis", ""))
+        sheet.cell(row=row_index, column=4, value=item.get("result", ""))
+        sheet.cell(row=row_index, column=5, value=item.get("total_score", 0.0))
+        sheet.cell(row=row_index, column=6, value=item.get("delta_vs_baseline", 0.0))
+        sheet.cell(row=row_index, column=7, value=item.get("next_action", ""))
+        sheet.cell(row=row_index, column=5).number_format = "0.0000"
+        sheet.cell(row=row_index, column=6).number_format = "+0.0000;-0.0000;0.0000"
         row_index += 1
     return row_index
 

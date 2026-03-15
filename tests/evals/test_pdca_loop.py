@@ -88,13 +88,11 @@ def test_run_reference_pdca_writes_workbook_exports(tmp_path) -> None:
         for row_index in range(1, pdca_sheet.max_row + 1)
         if pdca_sheet.cell(row=row_index, column=1).value
     }
-    assert "イテレーション別要約" in pdca_labels
-    sheet_values = {
-        str(pdca_sheet.cell(row=row_index, column=4).value)
-        for row_index in range(1, pdca_sheet.max_row + 1)
-        if pdca_sheet.cell(row=row_index, column=4).value is not None
-    }
-    assert "candidate-better" in sheet_values
+    assert "PDCA全体推移" in pdca_labels
+    trend_header = [pdca_sheet.cell(row=17, column=column_index).value for column_index in range(1, 8)]
+    assert trend_header == ["回", "候補", "仮説", "検証結果", "総合", "差分", "次の施策"]
+    assert pdca_sheet["B19"].value == "candidate-better"
+    assert "fixture 改善候補の検証" in str(pdca_sheet["C19"].value)
 
 
 def test_summary_contains_hypothesis_logic_evidence_and_next_actions(tmp_path) -> None:

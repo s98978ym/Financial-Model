@@ -868,11 +868,11 @@ def _iteration_summaries(
         {
             "iteration": 0,
             "candidate_id": "baseline",
-            "title": "baseline",
+            "hypothesis": "baseline",
+            "result": "比較の基準候補",
             "total_score": baseline_score.total_score,
             "delta_vs_baseline": 0.0,
-            "verdict": "baseline",
-            "summary": f"baseline | 総合 {baseline_score.total_score:.4f} | 比較の基準候補",
+            "next_action": "以降の候補を比較する",
         }
     ]
     for idx, candidate_id in enumerate(candidate_order, start=1):
@@ -881,18 +881,16 @@ def _iteration_summaries(
         verdict = diagnosis.get("verdict", {}).get("status", "")
         title = diagnosis.get("hypothesis", {}).get("title", candidate_id)
         delta = round(score.total_score - baseline_score.total_score, 4)
+        next_action = (diagnosis.get("next_actions") or [""])[0]
         items.append(
             {
                 "iteration": idx,
                 "candidate_id": candidate_id,
-                "title": title,
+                "hypothesis": title,
+                "result": f"判定 {verdict or '-'} / {diagnosis.get('verdict', {}).get('reason', '')}",
                 "total_score": score.total_score,
                 "delta_vs_baseline": delta,
-                "verdict": verdict,
-                "summary": (
-                    f"{candidate_id} | {title} | 総合 {score.total_score:.4f} "
-                    f"({delta:+.4f}) | 判定 {verdict or '-'}"
-                ),
+                "next_action": next_action,
             }
         )
     return items
