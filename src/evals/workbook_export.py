@@ -8,6 +8,8 @@ from typing import Any
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 
+from .source_registry import analysis_source_refs
+
 
 YEAR_HEADERS = ["FY1", "FY2", "FY3", "FY4", "FY5"]
 
@@ -2033,30 +2035,32 @@ def _build_qa_support_buckets(
     category = spec["category"]
     question = spec["question"]
     tags = spec["tags"]
+    external_refs = _external_refs_for_tags(tags)
+    external_detail = (
+        " / ".join(f"{ref['publisher']}: {ref['quote']}" for ref in external_refs[:2])
+        if external_refs
+        else "該当する外部ベンチマークは未登録です。"
+    )
+    external_source = (
+        "\n".join(f"{ref['publisher']} | {ref['title']} | {ref['url']}" for ref in external_refs[:2])
+        if external_refs
+        else "source cache 未登録"
+    )
 
-    fact_detail = pdf_facts[0] if pdf_facts else "事業計画本文から直接確認できる明示方針は限定的です。"
-    if "価格・数量・継続率" in question:
-        fact_detail = "売上はミール・アカデミー・コンサルの3構造に分け、数量と継続率を主軸に検討しています。"
-    elif "市場成長ではなく" in question:
-        fact_detail = "市場の追い風そのものではなく、検証後に営業効率の高いチャネルへ投資を寄せる方針です。"
-    elif "先行指標" in question:
-        fact_detail = "現状のモデルで直接追える先行指標は、受講人数・食数・コンサル構成比です。"
+    fact_detail = "内部実績・PoC・営業実測など、計画の前提を直接裏づける一次ファクトは現行 workbook では未格納です。"
+    fact_source = "内部実績 / PoC結果 / CRM実測 / 運用ログ（未連携）"
+    if "先行指標" in question:
+        fact_detail = "現状のモデルで直接追える先行指標は、受講人数・食数・コンサル構成比までです。パイプラインや受注残は未連携です。"
+        fact_source = "アカデミーモデル / ミールモデル / コンサルモデル"
     elif "営業体制と採用計画" in question:
-        fact_detail = "営業容量と採用計画は、現時点では仮説が先行しており実測根拠が薄い状態です。"
+        fact_detail = "営業容量と採用計画を直接裏づける headcount・生産性・立ち上がり実測は未格納です。"
+        fact_source = "営業計画原票 / 採用計画 / CRM生産性データ（未連携）"
     elif "下振れした場合" in question:
-        fact_detail = "下振れ時はまず獲得効率が崩れ、その後に PL に波及する前提で見ています。"
-    elif "追加資金が必要になる条件" in question:
-        fact_detail = "営業投資だけが先行して売上がついてこないケースを最も警戒しています。"
-    elif "投資回収" in question:
-        fact_detail = "投資回収は営業利益率と OPEX のバランスで見る設計ですが、回収期間の詳細指標は未実装です。"
-    elif "検証期間" in question or "解放条件" in question or "追加投資" in question:
-        fact_detail = "3年間はユニットエコノミクスを磨き、確認後に営業とマーケ費を投入する方針です。"
-    elif "sales efficiency" in question:
-        fact_detail = "比較候補の中で sales efficiency を重ねた案が最良候補でした。"
-    elif "partner" in question or "branding" in question:
-        fact_detail = "partner と branding は比較したものの、主軸ではなく補助レバーとして残っています。"
+        fact_detail = "下振れ時の壊れ方を裏づける実際の感応度ログは未取得で、現状はモデル比較から推定しています。"
+        fact_source = "シナリオ比較 / 実績感応度ログ（未整備）"
     elif "役割分担" in question:
-        fact_detail = "事業はミール・アカデミー・コンサルの3本柱として整理しています。"
+        fact_detail = "ミール・アカデミー・コンサルの3本柱に分ける事業構造自体は、現行計画で明示的に整理済みです。"
+        fact_source = "事業計画PDF / モデル構造整理"
 
     if category == "収益":
         data_detail = (
@@ -2088,16 +2092,18 @@ def _build_qa_support_buckets(
             f"次アクション {next_actions[0]}"
         )
 
-    plan_detail = spec["evidence_to_check"]
-    other_detail = external_label if external_label != "pdf" else current_summary.get("improved_points", "-")
+    plan_detail = _plan_assumption_for_question(spec, current_summary, next_actions, pl_delta, total_delta)
+    plan_source = spec["evidence_to_check"]
+    other_detail = external_detail if external_refs else (external_label if external_label != "pdf" else current_summary.get("improved_points", "-"))
     if not other_detail:
         other_detail = next_actions[0]
+    other_source = external_source if external_refs else f"外部比較 / PDCA全体推移 / 次の改善施策 / tags={', '.join(tags) or '-'}"
 
     return [
         {
             "category": "ファクト",
             "detail": fact_detail,
-            "source": "事業計画PDF / PDF抽出ファクト",
+            "source": fact_source,
         },
         {
             "category": "データ",
@@ -2107,12 +2113,12 @@ def _build_qa_support_buckets(
         {
             "category": "事業計画",
             "detail": plan_detail,
-            "source": "PL設計 / モデルシート / 費用計画 / （全Ver）前提条件",
+            "source": plan_source,
         },
         {
             "category": "その他",
             "detail": other_detail,
-            "source": f"外部比較 / PDCA全体推移 / 次の改善施策 / tags={', '.join(tags) or '-'}",
+            "source": other_source,
         },
     ]
 
@@ -2172,6 +2178,65 @@ def _select_qa_support_categories(spec: dict[str, Any]) -> list[str]:
         if label in selected and label not in ordered:
             ordered.append(label)
     return ordered
+
+
+def _external_refs_for_tags(tags: list[str]) -> list[dict[str, str]]:
+    tag_to_source_type = {
+        "sales": "sales_efficiency_analysis",
+        "partner": "partner_strategy_analysis",
+        "staged": "staged_acceleration_analysis",
+        "branding": "branding_lift_analysis",
+    }
+    refs: list[dict[str, str]] = []
+    seen_urls: set[str] = set()
+    for tag in tags:
+        source_type = tag_to_source_type.get(tag)
+        if not source_type:
+            continue
+        for ref in analysis_source_refs(source_type):
+            url = ref.get("url", "")
+            if url and url in seen_urls:
+                continue
+            if url:
+                seen_urls.add(url)
+            refs.append(ref)
+    return refs
+
+
+def _plan_assumption_for_question(
+    spec: dict[str, Any],
+    current_summary: dict[str, Any],
+    next_actions: list[str],
+    pl_delta: float,
+    total_delta: float,
+) -> str:
+    question = spec["question"]
+    tags = spec["tags"]
+    if "価格・数量・継続率" in question:
+        return "計画上は、価格改定より数量増と継続率維持で売上を伸ばす前提を採用しています。"
+    if "市場成長ではなく" in question:
+        return "計画上は、市場追い風ではなく営業効率の高い顧客獲得チャネルへ投資を寄せる前提です。"
+    if "先行指標" in question:
+        return "計画上は、受講人数・食数・コンサル構成比を先行管理指標として扱っています。"
+    if "営業体制と採用計画" in question:
+        return "計画上は sales overlay が効く前提ですが、営業容量の詳細前提はまだ薄い状態です。"
+    if "営業投資を強める前提条件" in question or "検証期間" in question or "解放条件" in question:
+        return "計画上は、検証期間で筋を確認した後に sales 投資を加速する段階設計を採用しています。"
+    if "sales efficiency" in question:
+        return f"計画上は、sales efficiency を重ねた候補が総合 {total_delta:+.4f} / PL {pl_delta:+.4f} と最良だったため主軸採用です。"
+    if "partner" in question or "branding" in question:
+        return "計画上は、partner / branding は補助レバーとして位置づけ、主軸採用はしていません。"
+    if "償却" in question:
+        return "計画上は、開発投資を cash と P/L で分けて説明するため、償却表示を採用しています。"
+    if "役割分担" in question:
+        return "計画上は、ミール・アカデミー・コンサルを別の収益エンジンとして管理する設計です。"
+    if "最も説明が弱い" in question or "追加で確認すべきファクト" in question:
+        return f"計画上の未解決論点は {next_actions[0]} で、ここを次の改善対象としています。"
+    if "感応度" in question:
+        return "計画上は、sales efficiency・partner・継続率・consulting 数量を主要感応度レバーとして扱います。"
+    if tags:
+        return f"計画上は、{', '.join(tags)} に関する前提を採用し、比較候補の中で最良のものを選んでいます。"
+    return current_summary.get("summary", "計画上の採用前提は current run の summary に従います。")
 
 
 def _current_iteration(iteration_summaries: list[dict[str, Any]], candidate_id: str) -> int:
