@@ -47,10 +47,14 @@ def fam_reference_eval(
         "baseline_score": result.baseline_score,
         "best_candidate_id": result.best_candidate_id,
         "best_candidate_score": result.best_candidate_score,
+        "best_practical_candidate_id": result.best_practical_candidate_id,
         "summary_path": str(run_root / "summary.md"),
         "scores_path": str(run_root / "scores.json"),
         "baseline_workbook_path": str(run_root / "exports" / "baseline.xlsx"),
         "best_practical_workbook_path": str(run_root / "exports" / "best-practical.xlsx"),
+        "best_practical_labeled_workbook_path": str(
+            run_root / "exports" / f"best-practical-{result.best_practical_candidate_id}.xlsx"
+        ),
     }
 
 

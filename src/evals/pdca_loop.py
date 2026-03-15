@@ -27,6 +27,7 @@ class PDCAEvalResult:
     baseline_score: float | None
     best_candidate_id: str | None
     best_candidate_score: float | None
+    best_practical_candidate_id: str | None
 
 
 LAYER_DEFINITIONS = {
@@ -133,6 +134,7 @@ def run_reference_pdca(
         baseline_score=baseline_score.total_score,
         best_candidate_id=best_candidate_id,
         best_candidate_score=best_candidate_score,
+        best_practical_candidate_id=export_paths["best_practical_candidate_id"],
     )
 
 
@@ -755,7 +757,7 @@ def _write_workbook_exports(
     candidates: Dict[str, Dict[str, Any]],
     diagnoses: Dict[str, Dict[str, Any]],
     best_candidate_id: str,
-) -> Dict[str, Path]:
+) -> Dict[str, Any]:
     exports_dir = run_root / "exports"
     exports_dir.mkdir(parents=True, exist_ok=True)
 
@@ -763,6 +765,7 @@ def _write_workbook_exports(
     best_practical_id, _ = _select_practical_best(candidate_scores)
     best_practical_id = best_practical_id or best_candidate_id
     best_practical_path = exports_dir / "best-practical.xlsx"
+    best_practical_labeled_path = exports_dir / f"best-practical-{best_practical_id}.xlsx"
 
     export_candidate_workbook(
         output_path=baseline_path,
@@ -780,10 +783,20 @@ def _write_workbook_exports(
         baseline_total=baseline_score.total_score,
         run_root=run_root,
     )
+    export_candidate_workbook(
+        output_path=best_practical_labeled_path,
+        candidate_id=best_practical_id,
+        candidate_payload=candidates[best_practical_id],
+        diagnosis=diagnoses[best_practical_id],
+        baseline_total=baseline_score.total_score,
+        run_root=run_root,
+    )
 
     return {
         "baseline": baseline_path,
         "best_practical": best_practical_path,
+        "best_practical_labeled": best_practical_labeled_path,
+        "best_practical_candidate_id": best_practical_id,
     }
 
 

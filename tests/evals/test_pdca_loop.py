@@ -76,6 +76,8 @@ def test_run_reference_pdca_writes_workbook_exports(tmp_path) -> None:
     run_root = tmp_path / result.run_id
     assert (run_root / "exports" / "baseline.xlsx").exists()
     assert (run_root / "exports" / "best-practical.xlsx").exists()
+    assert result.best_practical_candidate_id == "candidate-better"
+    assert (run_root / "exports" / "best-practical-candidate-better.xlsx").exists()
 
 
 def test_summary_contains_hypothesis_logic_evidence_and_next_actions(tmp_path) -> None:
@@ -134,8 +136,10 @@ def test_fam_reference_cli_writes_artifacts(tmp_path) -> None:
 
     assert result.returncode == 0
     assert "best_candidate_id" in result.stdout
+    assert "best_practical_candidate_id" in result.stdout
     assert "baseline_workbook_path" in result.stdout
     assert "best_practical_workbook_path" in result.stdout
+    assert "best_practical_labeled_workbook_path" in result.stdout
 
 
 def test_run_reference_pdca_uses_explicit_profiles_when_provided(tmp_path) -> None:
