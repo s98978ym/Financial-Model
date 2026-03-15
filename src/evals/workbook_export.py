@@ -846,8 +846,6 @@ def _write_qa_sheet(
         "カテゴリ",
         "想定質問",
         "回答",
-        "見る数値",
-        "見る根拠",
         "頻度",
         "精度",
         "初回追加Iteration",
@@ -879,25 +877,23 @@ def _write_qa_sheet(
         sheet.cell(row=row_index, column=2, value=item["category"])
         sheet.cell(row=row_index, column=3, value=item["question"])
         sheet.cell(row=row_index, column=4, value=item["answer"])
-        sheet.cell(row=row_index, column=5, value=item["metrics_to_check"])
-        sheet.cell(row=row_index, column=6, value=item["evidence_to_check"])
-        sheet.cell(row=row_index, column=7, value=item["frequency"])
-        sheet.cell(row=row_index, column=8, value=item["accuracy"])
-        sheet.cell(row=row_index, column=9, value=item["first_added_iteration"])
-        sheet.cell(row=row_index, column=10, value=item["last_updated_iteration"])
-        sheet.cell(row=row_index, column=11, value=item["status"])
-        sheet.cell(row=row_index, column=12, value=item["adoption"])
-        sheet.cell(row=row_index, column=13, value=item["support_categories"])
-        sheet.cell(row=row_index, column=14, value=item["support_details"])
-        sheet.cell(row=row_index, column=15, value=item["support_sources"])
+        sheet.cell(row=row_index, column=5, value=item["frequency"])
+        sheet.cell(row=row_index, column=6, value=item["accuracy"])
+        sheet.cell(row=row_index, column=7, value=item["first_added_iteration"])
+        sheet.cell(row=row_index, column=8, value=item["last_updated_iteration"])
+        sheet.cell(row=row_index, column=9, value=item["status"])
+        sheet.cell(row=row_index, column=10, value=item["adoption"])
+        sheet.cell(row=row_index, column=11, value=item["support_categories"])
+        sheet.cell(row=row_index, column=12, value=item["support_details"])
+        sheet.cell(row=row_index, column=13, value=item["support_sources"])
         if item["status"] == "新規":
-            sheet.cell(row=row_index, column=11).fill = FORMULA_FILL
+            sheet.cell(row=row_index, column=9).fill = FORMULA_FILL
         elif item["status"] == "更新":
-            sheet.cell(row=row_index, column=11).fill = UPDATED_FILL
+            sheet.cell(row=row_index, column=9).fill = UPDATED_FILL
         if item["adoption"] == "今回採用":
-            sheet.cell(row=row_index, column=12).fill = INPUT_FILL
+            sheet.cell(row=row_index, column=10).fill = INPUT_FILL
         elif item["adoption"] == "比較のみ":
-            sheet.cell(row=row_index, column=12).fill = SUBTOTAL_FILL
+            sheet.cell(row=row_index, column=10).fill = SUBTOTAL_FILL
 
     sheet.freeze_panes = "A2"
     _set_column_widths(
@@ -907,25 +903,23 @@ def _write_qa_sheet(
             "B": 12,
             "C": 30,
             "D": 52,
-            "E": 24,
-            "F": 30,
-            "G": 8,
-            "H": 8,
-            "I": 14,
-            "J": 14,
-            "K": 10,
-            "L": 12,
-            "M": 14,
-            "N": 42,
-            "O": 34,
+            "E": 8,
+            "F": 8,
+            "G": 14,
+            "H": 14,
+            "I": 10,
+            "J": 12,
+            "K": 16,
+            "L": 42,
+            "M": 34,
         },
     )
     _align_range(sheet, start_row=1, end_row=sheet.max_row, start_col=1, end_col=2, alignment=CENTER_ALIGN)
-    _align_range(sheet, start_row=1, end_row=sheet.max_row, start_col=3, end_col=6, alignment=WRAP_LEFT_ALIGN)
-    _align_range(sheet, start_row=1, end_row=sheet.max_row, start_col=7, end_col=8, alignment=CENTER_ALIGN)
-    _align_range(sheet, start_row=1, end_row=sheet.max_row, start_col=9, end_col=10, alignment=RIGHT_ALIGN)
-    _align_range(sheet, start_row=1, end_row=sheet.max_row, start_col=11, end_col=13, alignment=CENTER_ALIGN)
-    _align_range(sheet, start_row=1, end_row=sheet.max_row, start_col=14, end_col=15, alignment=WRAP_LEFT_ALIGN)
+    _align_range(sheet, start_row=1, end_row=sheet.max_row, start_col=3, end_col=4, alignment=WRAP_LEFT_ALIGN)
+    _align_range(sheet, start_row=1, end_row=sheet.max_row, start_col=5, end_col=6, alignment=CENTER_ALIGN)
+    _align_range(sheet, start_row=1, end_row=sheet.max_row, start_col=7, end_col=8, alignment=RIGHT_ALIGN)
+    _align_range(sheet, start_row=1, end_row=sheet.max_row, start_col=9, end_col=11, alignment=CENTER_ALIGN)
+    _align_range(sheet, start_row=1, end_row=sheet.max_row, start_col=12, end_col=13, alignment=WRAP_LEFT_ALIGN)
 
 
 def _write_plan_assumptions_sheet(sheet, assumptions: dict[str, list[float]]) -> None:
@@ -1992,10 +1986,9 @@ def _build_workbook_qa_items(
             pl_delta=pl_delta,
             total_delta=total_delta,
         )
-        answer = (
-            f"{spec['answer']} "
-            f"確認ポイント: 見る数値={spec['metrics_to_check']} / 見る根拠={spec['evidence_to_check']}"
-        )
+        support_categories = _select_qa_support_categories(spec)
+        filtered_buckets = [bucket for bucket in support_buckets if bucket["category"] in support_categories]
+        answer = spec["answer"]
         items.append(
             {
                 "scope": spec["scope"],
@@ -2010,9 +2003,9 @@ def _build_workbook_qa_items(
                 "last_updated_iteration": last_updated,
                 "status": status,
                 "adoption": adoption,
-                "support_categories": " / ".join(bucket["category"] for bucket in support_buckets),
-                "support_details": "\n".join(f"{bucket['category']}: {bucket['detail']}" for bucket in support_buckets),
-                "support_sources": "\n".join(f"{bucket['category']}: {bucket['source']}" for bucket in support_buckets),
+                "support_categories": " / ".join(bucket["category"] for bucket in filtered_buckets),
+                "support_details": "\n".join(f"{bucket['category']}: {bucket['detail']}" for bucket in filtered_buckets),
+                "support_sources": "\n".join(f"{bucket['category']}: {bucket['source']}" for bucket in filtered_buckets),
             }
         )
     return items
@@ -2122,6 +2115,63 @@ def _build_qa_support_buckets(
             "source": f"外部比較 / PDCA全体推移 / 次の改善施策 / tags={', '.join(tags) or '-'}",
         },
     ]
+
+
+def _select_qa_support_categories(spec: dict[str, Any]) -> list[str]:
+    question = spec["question"]
+    category = spec["category"]
+    tags = spec["tags"]
+
+    selected: list[str] = ["事業計画"]
+
+    if any(
+        token in question
+        for token in [
+            "価格",
+            "数量",
+            "継続率",
+            "粗利率",
+            "黒字化",
+            "費用",
+            "下振れ",
+            "追加資金",
+            "投資回収",
+            "受講人数",
+            "数量ロジック",
+            "KPI",
+        ]
+    ) or category in {"収益性", "コスト", "資金"}:
+        selected.append("データ")
+
+    if any(
+        token in question
+        for token in [
+            "検証期間",
+            "役割分担",
+            "償却",
+            "主軸",
+            "市場成長ではなく",
+            "営業投資",
+            "顧客獲得仮説",
+            "ミール",
+            "アカデミー",
+            "コンサル",
+            "先行指標",
+            "営業体制",
+        ]
+    ):
+        selected.append("ファクト")
+
+    if any(tag in {"partner", "branding"} for tag in tags) or any(
+        token in question for token in ["市場成長ではなく", "主軸にしなかった", "sales efficiency", "外部"]
+    ):
+        selected.append("その他")
+
+    ordered = []
+    for label in ["ファクト", "データ", "事業計画", "その他"]:
+        if label in selected and label not in ordered:
+            ordered.append(label)
+    return ordered
 
 
 def _current_iteration(iteration_summaries: list[dict[str, Any]], candidate_id: str) -> int:

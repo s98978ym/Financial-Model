@@ -247,14 +247,12 @@ def test_export_candidate_workbook_adds_qa_sheet_with_iteration_tracking(tmp_pat
     workbook = load_workbook(output_path, data_only=False)
     qa_sheet = workbook["想定Q&A"]
     assert qa_sheet.freeze_panes == "A2"
-    headers = [qa_sheet.cell(row=1, column=column_index).value for column_index in range(1, 16)]
+    headers = [qa_sheet.cell(row=1, column=column_index).value for column_index in range(1, 14)]
     assert headers == [
         "区分",
         "カテゴリ",
         "想定質問",
         "回答",
-        "見る数値",
-        "見る根拠",
         "頻度",
         "精度",
         "初回追加Iteration",
@@ -279,28 +277,28 @@ def test_export_candidate_workbook_adds_qa_sheet_with_iteration_tracking(tmp_pat
     assert {"収益", "コスト", "収益性", "成長性", "リスク", "市場", "オペレーション", "資金"}.issubset(categories)
     assert qa_sheet.max_row >= 21
     frequencies = {
-        qa_sheet.cell(row=row_index, column=7).value
+        qa_sheet.cell(row=row_index, column=5).value
         for row_index in range(2, qa_sheet.max_row + 1)
-        if qa_sheet.cell(row=row_index, column=7).value
+        if qa_sheet.cell(row=row_index, column=5).value
     }
     assert {"高", "中", "低"}.issubset(frequencies)
     accuracies = {
-        qa_sheet.cell(row=row_index, column=8).value
+        qa_sheet.cell(row=row_index, column=6).value
         for row_index in range(2, qa_sheet.max_row + 1)
-        if qa_sheet.cell(row=row_index, column=8).value
+        if qa_sheet.cell(row=row_index, column=6).value
     }
     assert {"高", "中"}.issubset(accuracies)
     statuses = {
-        qa_sheet.cell(row=row_index, column=11).value
+        qa_sheet.cell(row=row_index, column=9).value
         for row_index in range(2, qa_sheet.max_row + 1)
-        if qa_sheet.cell(row=row_index, column=11).value
+        if qa_sheet.cell(row=row_index, column=9).value
     }
     assert "新規" in statuses
     assert "継続" in statuses
     adoption = {
-        qa_sheet.cell(row=row_index, column=12).value
+        qa_sheet.cell(row=row_index, column=10).value
         for row_index in range(2, qa_sheet.max_row + 1)
-        if qa_sheet.cell(row=row_index, column=12).value
+        if qa_sheet.cell(row=row_index, column=10).value
     }
     assert "今回採用" in adoption
     assert "比較のみ" in adoption
@@ -311,17 +309,15 @@ def test_export_candidate_workbook_adds_qa_sheet_with_iteration_tracking(tmp_pat
     ]
     assert revenue_rows
     first_revenue_row = revenue_rows[0]
-    assert qa_sheet.cell(row=first_revenue_row, column=9).value == 1
-    assert qa_sheet.cell(row=first_revenue_row, column=10).value == 1
-    assert qa_sheet.cell(row=first_revenue_row, column=5).value
-    assert qa_sheet.cell(row=first_revenue_row, column=6).value
+    assert qa_sheet.cell(row=first_revenue_row, column=7).value == 1
+    assert qa_sheet.cell(row=first_revenue_row, column=8).value == 1
+    assert qa_sheet.cell(row=first_revenue_row, column=11).value
+    assert qa_sheet.cell(row=first_revenue_row, column=12).value
     assert qa_sheet.cell(row=first_revenue_row, column=13).value
-    assert qa_sheet.cell(row=first_revenue_row, column=14).value
-    assert qa_sheet.cell(row=first_revenue_row, column=15).value
 
     revenue_plan_sheet = workbook["収益計画Q&A"]
     assert revenue_plan_sheet.freeze_panes == "A2"
-    plan_headers = [revenue_plan_sheet.cell(row=1, column=column_index).value for column_index in range(1, 16)]
+    plan_headers = [revenue_plan_sheet.cell(row=1, column=column_index).value for column_index in range(1, 14)]
     assert plan_headers == headers
     plan_sections = {
         revenue_plan_sheet.cell(row=row_index, column=1).value
@@ -342,13 +338,16 @@ def test_export_candidate_workbook_adds_qa_sheet_with_iteration_tracking(tmp_pat
     assert any("追加資金が必要になる条件" in question for question in plan_questions)
     assert any("なぜ3年間は検証期間" in question for question in plan_questions)
     support_categories = [
-        revenue_plan_sheet.cell(row=row_index, column=13).value
+        revenue_plan_sheet.cell(row=row_index, column=11).value
         for row_index in range(2, revenue_plan_sheet.max_row + 1)
-        if revenue_plan_sheet.cell(row=row_index, column=13).value
+        if revenue_plan_sheet.cell(row=row_index, column=11).value
     ]
     assert any("ファクト" in value for value in support_categories)
     assert any("データ" in value for value in support_categories)
     assert any("事業計画" in value for value in support_categories)
+    assert len(set(support_categories)) >= 3
+    assert revenue_plan_sheet.cell(row=2, column=12).value
+    assert revenue_plan_sheet.cell(row=2, column=13).value
 
 
 def test_export_candidate_workbook_expands_academy_and_consulting_structure(tmp_path) -> None:
