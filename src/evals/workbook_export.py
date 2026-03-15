@@ -11,6 +11,59 @@ from openpyxl.styles import Font
 
 YEAR_HEADERS = ["FY1", "FY2", "FY3", "FY4", "FY5"]
 
+ACADEMY_LEVELS = [
+    {
+        "code": "c",
+        "label": "C級課程",
+        "share_default": [1.00, 0.65, 0.45, 0.35, 0.25],
+        "price_multiplier": 1.0,
+        "completion": 0.90,
+        "certification": 1.00,
+        "progression_to_next": 0.60,
+    },
+    {
+        "code": "b",
+        "label": "B級課程",
+        "share_default": [0.00, 0.20, 0.20, 0.18, 0.15],
+        "price_multiplier": 100000 / 70000,
+        "completion": 0.90,
+        "certification": 0.50,
+        "progression_to_next": 0.30,
+    },
+    {
+        "code": "a",
+        "label": "A級課程",
+        "share_default": [0.00, 0.10, 0.18, 0.22, 0.25],
+        "price_multiplier": 300000 / 70000,
+        "completion": 0.80,
+        "certification": 0.50,
+        "progression_to_next": 0.90,
+    },
+    {
+        "code": "s",
+        "label": "S級課程",
+        "share_default": [0.00, 0.05, 0.17, 0.25, 0.35],
+        "price_multiplier": 0.0,
+        "completion": 0.90,
+        "certification": 0.75,
+        "progression_to_next": 0.00,
+    },
+]
+
+CONSULT_SKUS = [
+    {"sku": "P1", "service_name": "S総合（年契）", "unit": "契約/年", "base_price": 15000000, "retention_multiplier": 1.00, "standard_hours": 480, "share_default": [0.18, 0.20, 0.22, 0.24, 0.25]},
+    {"sku": "P2", "service_name": "A総合（年契）", "unit": "契約/年", "base_price": 10000000, "retention_multiplier": 0.83, "standard_hours": 360, "share_default": [0.20, 0.22, 0.22, 0.22, 0.23]},
+    {"sku": "P3", "service_name": "Sチーム年契", "unit": "契約/年", "base_price": 5000000, "retention_multiplier": 0.83, "standard_hours": 240, "share_default": [0.10, 0.10, 0.10, 0.10, 0.10]},
+    {"sku": "P4", "service_name": "Aチーム年契", "unit": "契約/年", "base_price": 1500000, "retention_multiplier": 0.83, "standard_hours": 120, "share_default": [0.10, 0.12, 0.13, 0.14, 0.15]},
+    {"sku": "P5", "service_name": "セミナー（単発）", "unit": "回", "base_price": 300000, "retention_multiplier": 0.00, "standard_hours": 10, "share_default": [0.10, 0.08, 0.07, 0.06, 0.05]},
+    {"sku": "P6", "service_name": "ライトセミナー", "unit": "回", "base_price": 60000, "retention_multiplier": 0.00, "standard_hours": 6, "share_default": [0.06, 0.05, 0.04, 0.03, 0.03]},
+    {"sku": "P8", "service_name": "S個別（年契）", "unit": "人/年", "base_price": 500000, "retention_multiplier": 0.83, "standard_hours": 30, "share_default": [0.07, 0.07, 0.08, 0.08, 0.08]},
+    {"sku": "P9", "service_name": "A個別（年契）", "unit": "人/年", "base_price": 500000, "retention_multiplier": 0.83, "standard_hours": 30, "share_default": [0.07, 0.06, 0.06, 0.05, 0.05]},
+    {"sku": "P10", "service_name": "S個別（単発）", "unit": "回", "base_price": 50000, "retention_multiplier": 0.00, "standard_hours": 3, "share_default": [0.05, 0.04, 0.03, 0.03, 0.03]},
+    {"sku": "P11", "service_name": "A個別（単発）", "unit": "回", "base_price": 50000, "retention_multiplier": 0.00, "standard_hours": 3, "share_default": [0.05, 0.04, 0.03, 0.03, 0.02]},
+    {"sku": "P12", "service_name": "OJT", "unit": "回", "base_price": 0, "retention_multiplier": 0.00, "standard_hours": 3, "share_default": [0.02, 0.02, 0.02, 0.02, 0.01]},
+]
+
 ASSUMPTION_ROWS = {
     "revenue_target": 2,
     "gross_profit_target": 3,
@@ -37,6 +90,37 @@ ASSUMPTION_ROWS = {
     "marketing_ratio": 29,
     "development_ratio": 30,
     "other_ratio": 31,
+    "academy_c_share": 33,
+    "academy_b_share": 34,
+    "academy_a_share": 35,
+    "academy_s_share": 36,
+    "academy_c_to_b": 38,
+    "academy_b_to_a": 39,
+    "academy_a_to_s": 40,
+    "academy_c_price_multiplier": 42,
+    "academy_b_price_multiplier": 43,
+    "academy_a_price_multiplier": 44,
+    "academy_s_price_multiplier": 45,
+    "academy_c_completion": 47,
+    "academy_c_certification": 48,
+    "academy_b_completion": 49,
+    "academy_b_certification": 50,
+    "academy_a_completion": 51,
+    "academy_a_certification": 52,
+    "academy_s_completion": 53,
+    "academy_s_certification": 54,
+    "blended_hourly_rate": 56,
+    "consult_p1_share": 58,
+    "consult_p2_share": 59,
+    "consult_p3_share": 60,
+    "consult_p4_share": 61,
+    "consult_p5_share": 62,
+    "consult_p6_share": 63,
+    "consult_p8_share": 64,
+    "consult_p9_share": 65,
+    "consult_p10_share": 66,
+    "consult_p11_share": 67,
+    "consult_p12_share": 68,
 }
 
 PL_ROWS = {
@@ -76,6 +160,20 @@ COST_LIST_ROWS = [
     ("内部開発費", "開発費", 0.40, "development_cost"),
     ("その他固定費", "その他OPEX", 1.00, "other_opex"),
 ]
+
+ACADEMY_ROW_LAYOUT = {
+    "c": {"label": 2, "price": 3, "students": 4, "certified": 5, "revenue": 6},
+    "b": {"label": 7, "price": 8, "students": 9, "certified": 10, "revenue": 11},
+    "a": {"label": 12, "price": 13, "students": 14, "certified": 15, "revenue": 16},
+    "s": {"label": 17, "price": 18, "students": 19, "certified": 20, "revenue": 21},
+    "total_students": 23,
+    "total_revenue": 24,
+}
+
+CONSULT_DETAIL_START_ROW = 3
+CONSULT_TOTAL_REVENUE_ROW = 15
+CONSULT_TOTAL_DELIVERY_ROW = 16
+CONSULT_TOTAL_GROSS_PROFIT_ROW = 17
 
 
 def export_candidate_workbook(
@@ -159,8 +257,10 @@ def _write_pl_sheet(sheet) -> None:
         marketing_ref = _sheet_ref("費用まとめ", f"{model_col}{COST_SUMMARY_ROWS['marketing_cost']}")
         development_ref = _sheet_ref("費用まとめ", f"{model_col}{COST_SUMMARY_ROWS['development_cost']}")
         other_opex_ref = _sheet_ref("費用まとめ", f"{model_col}{COST_SUMMARY_ROWS['other_opex']}")
-        sheet[f"{model_col}{PL_ROWS['academy_revenue']}"] = f"={_sheet_ref('アカデミーモデル', f'{model_col}6')}"
-        sheet[f"{model_col}{PL_ROWS['consult_revenue']}"] = f"={_sheet_ref('コンサルモデル', f'{model_col}6')}"
+        academy_total_row = ACADEMY_ROW_LAYOUT["total_revenue"]
+        consult_total_col = excel_col(column_index)
+        sheet[f"{model_col}{PL_ROWS['academy_revenue']}"] = f"={_sheet_ref('アカデミーモデル', f'{model_col}{academy_total_row}')}"
+        sheet[f"{model_col}{PL_ROWS['consult_revenue']}"] = f"={_sheet_ref('コンサルモデル', f'{consult_total_col}{CONSULT_TOTAL_REVENUE_ROW}')}"
         sheet[f"{model_col}{PL_ROWS['meal_revenue']}"] = f"={_sheet_ref('ミールモデル', f'{model_col}7')}"
         sheet[f"{model_col}{PL_ROWS['revenue_total']}"] = (
             f"=SUM({model_col}{PL_ROWS['academy_revenue']}:{model_col}{PL_ROWS['meal_revenue']})"
@@ -218,54 +318,126 @@ def _write_meal_sheet(sheet) -> None:
 
 def _write_academy_sheet(sheet) -> None:
     _write_header_row(sheet)
-    labels = [
-        "公開単価",
-        "実効単価",
-        "受講人数",
-        "認証人数(期末)",
-        "認証率",
-        "売上",
-    ]
-    for row_index, label in enumerate(labels, start=2):
-        sheet.cell(row=row_index, column=1, value=label)
+    for level in ACADEMY_LEVELS:
+        rows = ACADEMY_ROW_LAYOUT[level["code"]]
+        sheet.cell(row=rows["label"], column=1, value=level["label"])
+        sheet.cell(row=rows["price"], column=1, value="単価")
+        sheet.cell(row=rows["students"], column=1, value="受講人数")
+        sheet.cell(row=rows["certified"], column=1, value="認証人数(期末)")
+        sheet.cell(row=rows["revenue"], column=1, value="売上")
+
+    sheet.cell(row=ACADEMY_ROW_LAYOUT["total_students"], column=1, value="アカデミー合計人数")
+    sheet.cell(row=ACADEMY_ROW_LAYOUT["total_revenue"], column=1, value="アカデミー合計売上")
 
     for column_index, assumption_col in enumerate(_year_columns(), start=2):
         model_col = excel_col(column_index)
-        public_price_ref = _sheet_ref("（全Ver）前提条件", f"{assumption_col}{ASSUMPTION_ROWS['academy_public_price']}")
+        total_students_ref = _sheet_ref("（全Ver）前提条件", f"{assumption_col}{ASSUMPTION_ROWS['academy_students']}")
         effective_price_ref = _sheet_ref("（全Ver）前提条件", f"{assumption_col}{ASSUMPTION_ROWS['academy_effective_price']}")
-        students_ref = _sheet_ref("（全Ver）前提条件", f"{assumption_col}{ASSUMPTION_ROWS['academy_students']}")
-        certified_ref = _sheet_ref("（全Ver）前提条件", f"{assumption_col}{ASSUMPTION_ROWS['academy_certified']}")
-        sheet[f"{model_col}2"] = f"={public_price_ref}"
-        sheet[f"{model_col}3"] = f"={effective_price_ref}"
-        sheet[f"{model_col}4"] = f"={students_ref}"
-        sheet[f"{model_col}5"] = f"={certified_ref}"
-        sheet[f"{model_col}6"] = f"={model_col}3*{model_col}4"
-        sheet[f"{model_col}7"] = f"=IF({model_col}4<>0,{model_col}5/{model_col}4,0)"
+        raw_students = {
+            "c": _academy_raw_student_expr("c", assumption_col, None),
+            "b": _academy_raw_student_expr("b", assumption_col, excel_col(column_index - 1) if column_index > 2 else None),
+            "a": _academy_raw_student_expr("a", assumption_col, excel_col(column_index - 1) if column_index > 2 else None),
+            "s": _academy_raw_student_expr("s", assumption_col, excel_col(column_index - 1) if column_index > 2 else None),
+        }
+        raw_total = "+".join(f"({expr})" for expr in raw_students.values())
+
+        for level in ACADEMY_LEVELS:
+            code = level["code"]
+            rows = ACADEMY_ROW_LAYOUT[code]
+            students_cell = f"{model_col}{rows['students']}"
+            price_cell = f"{model_col}{rows['price']}"
+            certified_cell = f"{model_col}{rows['certified']}"
+            revenue_cell = f"{model_col}{rows['revenue']}"
+
+            sheet[students_cell] = (
+                f"=IF(({raw_total})<>0,{total_students_ref}*({raw_students[code]})/({raw_total}),0)"
+            )
+            completion_ref = _sheet_ref("（全Ver）前提条件", f"{assumption_col}{ASSUMPTION_ROWS[f'academy_{code}_completion']}")
+            certification_ref = _sheet_ref("（全Ver）前提条件", f"{assumption_col}{ASSUMPTION_ROWS[f'academy_{code}_certification']}")
+            multiplier_ref = _sheet_ref("（全Ver）前提条件", f"{assumption_col}{ASSUMPTION_ROWS[f'academy_{code}_price_multiplier']}")
+
+            weighted_terms: list[str] = []
+            for other in ACADEMY_LEVELS:
+                other_code = other["code"]
+                other_multiplier_ref = _sheet_ref(
+                    "（全Ver）前提条件",
+                    f"{assumption_col}{ASSUMPTION_ROWS[f'academy_{other_code}_price_multiplier']}",
+                )
+                other_students_cell = f"{model_col}{ACADEMY_ROW_LAYOUT[other_code]['students']}"
+                weighted_terms.append(f"{other_multiplier_ref}*{other_students_cell}")
+            weighted_multiplier = "+".join(weighted_terms)
+            sheet[price_cell] = (
+                f"=IF(({weighted_multiplier})<>0,{effective_price_ref}*{multiplier_ref}*{total_students_ref}/({weighted_multiplier}),0)"
+            )
+            sheet[certified_cell] = f"={students_cell}*{completion_ref}*{certification_ref}"
+            sheet[revenue_cell] = f"={price_cell}*{students_cell}"
+
+        sheet[f"{model_col}{ACADEMY_ROW_LAYOUT['total_students']}"] = (
+            f"=SUM({model_col}{ACADEMY_ROW_LAYOUT['c']['students']},{model_col}{ACADEMY_ROW_LAYOUT['b']['students']},"
+            f"{model_col}{ACADEMY_ROW_LAYOUT['a']['students']},{model_col}{ACADEMY_ROW_LAYOUT['s']['students']})"
+        )
+        sheet[f"{model_col}{ACADEMY_ROW_LAYOUT['total_revenue']}"] = (
+            f"=SUM({model_col}{ACADEMY_ROW_LAYOUT['c']['revenue']},{model_col}{ACADEMY_ROW_LAYOUT['b']['revenue']},"
+            f"{model_col}{ACADEMY_ROW_LAYOUT['a']['revenue']},{model_col}{ACADEMY_ROW_LAYOUT['s']['revenue']})"
+        )
 
 
 def _write_consulting_sheet(sheet) -> None:
-    _write_header_row(sheet)
-    labels = [
-        "SKU単価",
-        "SKU継続率",
-        "標準工数",
-        "推定案件数",
-        "売上",
-    ]
-    for row_index, label in enumerate(labels, start=2):
-        sheet.cell(row=row_index, column=1, value=label)
+    year_count_columns = [excel_col(column_index) for column_index in range(8, 13)]
+    year_revenue_columns = [excel_col(column_index) for column_index in range(13, 18)]
+    year_cost_columns = [excel_col(column_index) for column_index in range(18, 23)]
 
-    for column_index, assumption_col in enumerate(_year_columns(), start=2):
-        model_col = excel_col(column_index)
-        unit_price_ref = _sheet_ref("（全Ver）前提条件", f"{assumption_col}{ASSUMPTION_ROWS['consult_unit_price']}")
-        retention_ref = _sheet_ref("（全Ver）前提条件", f"{assumption_col}{ASSUMPTION_ROWS['consult_retention']}")
-        standard_hours_ref = _sheet_ref("（全Ver）前提条件", f"{assumption_col}{ASSUMPTION_ROWS['consult_standard_hours']}")
-        project_count_ref = _sheet_ref("（全Ver）前提条件", f"{assumption_col}{ASSUMPTION_ROWS['consult_project_count']}")
-        sheet[f"{model_col}2"] = f"={unit_price_ref}"
-        sheet[f"{model_col}3"] = f"={retention_ref}"
-        sheet[f"{model_col}4"] = f"={standard_hours_ref}"
-        sheet[f"{model_col}5"] = f"={project_count_ref}"
-        sheet[f"{model_col}6"] = f"={model_col}2*{model_col}5"
+    for column_index, header in enumerate(["SKU", "サービス名", "単位", "単価（円）", "継続率", "デリバリー原価単価", "標準時間"], start=1):
+        sheet.cell(row=2, column=column_index, value=header)
+        sheet.cell(row=2, column=column_index).font = Font(bold=True)
+
+    for idx, year in enumerate(YEAR_HEADERS):
+        sheet.cell(row=1, column=8 + idx, value=f"{year} 件数")
+        sheet.cell(row=1, column=13 + idx, value=f"{year} 売上")
+        sheet.cell(row=1, column=18 + idx, value=f"{year} 原価")
+        sheet.cell(row=1, column=8 + idx).font = Font(bold=True)
+        sheet.cell(row=1, column=13 + idx).font = Font(bold=True)
+        sheet.cell(row=1, column=18 + idx).font = Font(bold=True)
+
+    unit_price_scale_ref = _sheet_ref("（全Ver）前提条件", f"B{ASSUMPTION_ROWS['consult_unit_price']}")
+    retention_ref = _sheet_ref("（全Ver）前提条件", f"B{ASSUMPTION_ROWS['consult_retention']}")
+    blended_hourly_rate_ref = _sheet_ref("（全Ver）前提条件", f"B{ASSUMPTION_ROWS['blended_hourly_rate']}")
+
+    for offset, sku in enumerate(CONSULT_SKUS):
+        row_index = CONSULT_DETAIL_START_ROW + offset
+        sheet.cell(row=row_index, column=1, value=sku["sku"])
+        sheet.cell(row=row_index, column=2, value=sku["service_name"])
+        sheet.cell(row=row_index, column=3, value=sku["unit"])
+        price_multiplier = sku["base_price"] / CONSULT_SKUS[0]["base_price"] if CONSULT_SKUS[0]["base_price"] else 0
+        sheet.cell(row=row_index, column=4, value=f"={unit_price_scale_ref}*{price_multiplier}")
+        sheet.cell(row=row_index, column=5, value=f"=MIN(1,{retention_ref}*{sku['retention_multiplier']})")
+        sheet.cell(row=row_index, column=7, value=sku["standard_hours"])
+        sheet.cell(row=row_index, column=6, value=f"=G{row_index}*{blended_hourly_rate_ref}")
+
+        for year_idx, year_col in enumerate(_year_columns()):
+            share_row = ASSUMPTION_ROWS[f"consult_{sku['sku'].lower()}_share"]
+            share_ref = _sheet_ref(
+                "（全Ver）前提条件",
+                f"{year_col}{share_row}",
+            )
+            target_revenue_ref = _sheet_ref("（全Ver）前提条件", f"{year_col}{ASSUMPTION_ROWS['consult_revenue']}")
+            count_col = year_count_columns[year_idx]
+            revenue_col = year_revenue_columns[year_idx]
+            cost_col = year_cost_columns[year_idx]
+            sheet[f"{count_col}{row_index}"] = f"=IF($D{row_index}<>0,({target_revenue_ref}*{share_ref})/$D{row_index},0)"
+            sheet[f"{revenue_col}{row_index}"] = f"={count_col}{row_index}*$D{row_index}"
+            sheet[f"{cost_col}{row_index}"] = f"={count_col}{row_index}*$F{row_index}"
+
+    sheet.cell(row=CONSULT_TOTAL_REVENUE_ROW, column=1, value="コンサル売上合計")
+    sheet.cell(row=CONSULT_TOTAL_DELIVERY_ROW, column=1, value="デリバリー原価合計")
+    sheet.cell(row=CONSULT_TOTAL_GROSS_PROFIT_ROW, column=1, value="コンサル粗利")
+    for column_index, model_col in enumerate(_year_columns(), start=13):
+        summary_col = excel_col(column_index - 11)
+        cost_col = excel_col(column_index + 5)
+        revenue_col = excel_col(column_index)
+        sheet[f"{summary_col}{CONSULT_TOTAL_REVENUE_ROW}"] = f"=SUM({revenue_col}{CONSULT_DETAIL_START_ROW}:{revenue_col}{CONSULT_DETAIL_START_ROW + len(CONSULT_SKUS) - 1})"
+        sheet[f"{summary_col}{CONSULT_TOTAL_DELIVERY_ROW}"] = f"=SUM({cost_col}{CONSULT_DETAIL_START_ROW}:{cost_col}{CONSULT_DETAIL_START_ROW + len(CONSULT_SKUS) - 1})"
+        sheet[f"{summary_col}{CONSULT_TOTAL_GROSS_PROFIT_ROW}"] = f"={summary_col}{CONSULT_TOTAL_REVENUE_ROW}-{summary_col}{CONSULT_TOTAL_DELIVERY_ROW}"
 
 
 def _write_cost_summary_sheet(sheet) -> None:
@@ -360,6 +532,37 @@ def _write_plan_assumptions_sheet(sheet, assumptions: dict[str, list[float]]) ->
         ("marketing_ratio", "マーケ費比率", "OPEX のうちマーケ費の比率"),
         ("development_ratio", "開発費比率", "OPEX のうち開発費の比率"),
         ("other_ratio", "その他費用比率", "OPEX のうちその他費用の比率"),
+        ("academy_c_share", "C級新規構成比", "アカデミー総受講人数のうち C級に配分する比率"),
+        ("academy_b_share", "B級新規構成比", "アカデミー総受講人数のうち B級に配分する比率"),
+        ("academy_a_share", "A級新規構成比", "アカデミー総受講人数のうち A級に配分する比率"),
+        ("academy_s_share", "S級新規構成比", "アカデミー総受講人数のうち S級に配分する比率"),
+        ("academy_c_to_b", "C→B進級率", "前年度のC級認証者がB級へ進む比率"),
+        ("academy_b_to_a", "B→A進級率", "前年度のB級認証者がA級へ進む比率"),
+        ("academy_a_to_s", "A→S進級率", "前年度のA級認証者がS級へ進む比率"),
+        ("academy_c_price_multiplier", "C級価格倍率", "アカデミー実効単価に対する C級倍率"),
+        ("academy_b_price_multiplier", "B級価格倍率", "アカデミー実効単価に対する B級倍率"),
+        ("academy_a_price_multiplier", "A級価格倍率", "アカデミー実効単価に対する A級倍率"),
+        ("academy_s_price_multiplier", "S級価格倍率", "アカデミー実効単価に対する S級倍率"),
+        ("academy_c_completion", "C級修了率", "C級の修了率仮定"),
+        ("academy_c_certification", "C級認証率", "C級の認証率仮定"),
+        ("academy_b_completion", "B級修了率", "B級の修了率仮定"),
+        ("academy_b_certification", "B級認証率", "B級の認証率仮定"),
+        ("academy_a_completion", "A級修了率", "A級の修了率仮定"),
+        ("academy_a_certification", "A級認証率", "A級の認証率仮定"),
+        ("academy_s_completion", "S級修了率", "S級の修了率仮定"),
+        ("academy_s_certification", "S級認証率", "S級の認証率仮定"),
+        ("blended_hourly_rate", "ブレンド時給", "コンサルのデリバリー原価に使う透明な時給仮定"),
+        ("consult_p1_share", "P1売上構成比", "コンサル売上のうち P1 に配分する比率"),
+        ("consult_p2_share", "P2売上構成比", "コンサル売上のうち P2 に配分する比率"),
+        ("consult_p3_share", "P3売上構成比", "コンサル売上のうち P3 に配分する比率"),
+        ("consult_p4_share", "P4売上構成比", "コンサル売上のうち P4 に配分する比率"),
+        ("consult_p5_share", "P5売上構成比", "コンサル売上のうち P5 に配分する比率"),
+        ("consult_p6_share", "P6売上構成比", "コンサル売上のうち P6 に配分する比率"),
+        ("consult_p8_share", "P8売上構成比", "コンサル売上のうち P8 に配分する比率"),
+        ("consult_p9_share", "P9売上構成比", "コンサル売上のうち P9 に配分する比率"),
+        ("consult_p10_share", "P10売上構成比", "コンサル売上のうち P10 に配分する比率"),
+        ("consult_p11_share", "P11売上構成比", "コンサル売上のうち P11 に配分する比率"),
+        ("consult_p12_share", "P12売上構成比", "コンサル売上のうち P12 に配分する比率"),
     ]
 
     for key, label, description in row_specs:
@@ -395,6 +598,28 @@ def _write_plan_assumptions_sheet(sheet, assumptions: dict[str, list[float]]) ->
         sheet[f"{col}{ASSUMPTION_ROWS['gross_margin_ratio']}"] = (
             f"=IF({col}{ASSUMPTION_ROWS['revenue_target']}<>0,{col}{ASSUMPTION_ROWS['gross_profit_target']}/{col}{ASSUMPTION_ROWS['revenue_target']},0)"
         )
+
+
+def _academy_raw_student_expr(code: str, assumption_col: str, previous_model_col: str | None) -> str:
+    total_students_ref = _sheet_ref("（全Ver）前提条件", f"{assumption_col}{ASSUMPTION_ROWS['academy_students']}")
+    share_ref = _sheet_ref("（全Ver）前提条件", f"{assumption_col}{ASSUMPTION_ROWS[f'academy_{code}_share']}")
+    base_expr = f"{total_students_ref}*{share_ref}"
+    if previous_model_col is None:
+        return base_expr
+
+    if code == "b":
+        previous_ref = f"{previous_model_col}{ACADEMY_ROW_LAYOUT['c']['certified']}"
+        progression_ref = _sheet_ref("（全Ver）前提条件", f"{assumption_col}{ASSUMPTION_ROWS['academy_c_to_b']}")
+        return f"{base_expr}+{previous_ref}*{progression_ref}"
+    if code == "a":
+        previous_ref = f"{previous_model_col}{ACADEMY_ROW_LAYOUT['b']['certified']}"
+        progression_ref = _sheet_ref("（全Ver）前提条件", f"{assumption_col}{ASSUMPTION_ROWS['academy_b_to_a']}")
+        return f"{base_expr}+{previous_ref}*{progression_ref}"
+    if code == "s":
+        previous_ref = f"{previous_model_col}{ACADEMY_ROW_LAYOUT['a']['certified']}"
+        progression_ref = _sheet_ref("（全Ver）前提条件", f"{assumption_col}{ASSUMPTION_ROWS['academy_a_to_s']}")
+        return f"{base_expr}+{previous_ref}*{progression_ref}"
+    return base_expr
 
 
 def _write_assumptions_sheet(sheet, assumptions: list[dict[str, Any]]) -> None:
@@ -461,8 +686,7 @@ def _build_workbook_assumptions(candidate_payload: dict[str, Any]) -> dict[str, 
     consult_price = _normalize_series(consult.get("sku_unit_price", []), default=0.0)
     consult_retention = _normalize_series(consult.get("sku_retention", []), default=0.0)
     consult_standard_hours = _normalize_series(consult.get("sku_standard_hours", []), default=0.0)
-
-    return {
+    assumptions = {
         "revenue_target": revenue_target,
         "gross_profit_target": gross_profit_target,
         "opex_target": opex_target,
@@ -483,6 +707,18 @@ def _build_workbook_assumptions(candidate_payload: dict[str, Any]) -> dict[str, 
         "development_ratio": [0.20] * len(YEAR_HEADERS),
         "other_ratio": [0.10] * len(YEAR_HEADERS),
     }
+    for level in ACADEMY_LEVELS:
+        code = level["code"]
+        assumptions[f"academy_{code}_share"] = list(level["share_default"])
+        assumptions[f"academy_{code}_price_multiplier"] = [level["price_multiplier"]] * len(YEAR_HEADERS)
+        assumptions[f"academy_{code}_completion"] = [level["completion"]] * len(YEAR_HEADERS)
+        assumptions[f"academy_{code}_certification"] = [level["certification"]] * len(YEAR_HEADERS)
+        if code != "s":
+            assumptions[f"academy_{code}_to_{ACADEMY_LEVELS[ACADEMY_LEVELS.index(level)+1]['code']}"] = [level["progression_to_next"]] * len(YEAR_HEADERS)
+    assumptions["blended_hourly_rate"] = [3150.0] * len(YEAR_HEADERS)
+    for sku in CONSULT_SKUS:
+        assumptions[f"consult_{sku['sku'].lower()}_share"] = list(sku["share_default"])
+    return assumptions
 
 
 def _normalize_series(

@@ -76,3 +76,79 @@ def test_export_candidate_workbook_writes_expected_sheets(tmp_path) -> None:
         if cost_sheet.cell(row=row_index, column=1).value
     }
     assert "OPEX合計" in cost_labels
+
+
+def test_export_candidate_workbook_expands_academy_and_consulting_structure(tmp_path) -> None:
+    fixture_dir = Path("tests/fixtures/evals")
+    candidate = json.loads((fixture_dir / "candidate_result.json").read_text(encoding="utf-8"))
+    baseline = json.loads((fixture_dir / "baseline_result.json").read_text(encoding="utf-8"))
+    reference = extract_reference_workbook(fixture_dir / "reference_workbook_minimal.xlsx")
+    candidate_score = score_candidate(reference, candidate)
+    baseline_score = score_candidate(reference, baseline)
+    profile = next(profile for profile in fixture_profiles() if profile.candidate_id == "candidate-better")
+    diagnosis = build_candidate_diagnosis(
+        profile,
+        candidate_score,
+        baseline_score,
+        evidence_summary={"pdf_facts": [], "external_sources": [], "benchmark_fills": [], "seed_notes": []},
+    )
+
+    output_path = tmp_path / "candidate.xlsx"
+    export_candidate_workbook(
+        output_path=output_path,
+        candidate_id=profile.candidate_id,
+        candidate_payload=candidate,
+        diagnosis=diagnosis,
+        baseline_total=baseline_score.total_score,
+        run_root=tmp_path,
+    )
+
+    workbook = load_workbook(output_path, data_only=False)
+
+    academy_sheet = workbook["アカデミーモデル"]
+    academy_labels = {
+        academy_sheet.cell(row=row_index, column=1).value
+        for row_index in range(1, academy_sheet.max_row + 1)
+        if academy_sheet.cell(row=row_index, column=1).value
+    }
+    assert {"C級課程", "B級課程", "A級課程", "S級課程"}.issubset(academy_labels)
+
+    academy_formula_cells = [
+        academy_sheet["B5"].value,
+        academy_sheet["B10"].value,
+        academy_sheet["B15"].value,
+        academy_sheet["B20"].value,
+    ]
+    assert all(isinstance(value, str) and value.startswith("=") for value in academy_formula_cells)
+
+    consult_sheet = workbook["コンサルモデル"]
+    consult_headers = [consult_sheet.cell(row=2, column=column_index).value for column_index in range(1, 8)]
+    assert consult_headers == [
+        "SKU",
+        "サービス名",
+        "単位",
+        "単価（円）",
+        "継続率",
+        "デリバリー原価単価",
+        "標準時間",
+    ]
+
+    sku_rows = {
+        consult_sheet.cell(row=row_index, column=1).value: row_index
+        for row_index in range(1, consult_sheet.max_row + 1)
+        if consult_sheet.cell(row=row_index, column=1).value
+    }
+    assert {"P1", "P2", "P3", "P4", "P5", "P6", "P8", "P9", "P10", "P11", "P12"}.issubset(sku_rows)
+    assert isinstance(consult_sheet["H3"].value, str) and consult_sheet["H3"].value.startswith("=")
+    assert isinstance(consult_sheet["I3"].value, str) and consult_sheet["I3"].value.startswith("=")
+
+    assumptions_sheet = workbook["（全Ver）前提条件"]
+    assumption_labels = {
+        assumptions_sheet.cell(row=row_index, column=1).value
+        for row_index in range(1, assumptions_sheet.max_row + 1)
+        if assumptions_sheet.cell(row=row_index, column=1).value
+    }
+    assert "C級新規構成比" in assumption_labels
+    assert "C→B進級率" in assumption_labels
+    assert "P1売上構成比" in assumption_labels
+    assert "ブレンド時給" in assumption_labels
