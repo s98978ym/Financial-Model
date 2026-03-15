@@ -121,6 +121,10 @@ ASSUMPTION_ROWS = {
     "consult_p10_share": 66,
     "consult_p11_share": 67,
     "consult_p12_share": 68,
+    "development_investment": 70,
+    "development_amortization_years": 71,
+    "development_amortization_expense": 72,
+    "development_unamortized_balance": 73,
 }
 
 PL_ROWS = {
@@ -156,17 +160,19 @@ COST_LIST_ROWS = [
     ("メディア費", "マーケ費", 0.50, "marketing_cost"),
     ("イベント・販促費", "マーケ費", 0.30, "marketing_cost"),
     ("パートナーインセンティブ", "マーケ費", 0.20, "marketing_cost"),
-    ("外部開発費", "開発費", 0.60, "development_cost"),
-    ("内部開発費", "開発費", 0.40, "development_cost"),
+    ("外部開発償却費", "開発費（償却）", 0.60, "development_cost"),
+    ("内部開発償却費", "開発費（償却）", 0.40, "development_cost"),
     ("その他固定費", "その他OPEX", 1.00, "other_opex"),
 ]
 
 COST_PLAN_ROWS = {
     "summary_title": 1,
     "summary_header": 2,
-    "detail_title": 9,
-    "detail_header": 10,
-    "detail_start": 11,
+    "amortization_title": 9,
+    "amortization_start": 10,
+    "detail_title": 16,
+    "detail_header": 17,
+    "detail_start": 18,
 }
 
 ACADEMY_ROW_LAYOUT = {
@@ -227,7 +233,7 @@ def export_candidate_workbook(
     _write_meal_sheet(workbook.create_sheet("ミールモデル"))
     _write_academy_sheet(workbook.create_sheet("アカデミーモデル"))
     _write_consulting_sheet(workbook.create_sheet("コンサルモデル"))
-    _write_cost_plan_sheet(workbook.create_sheet("費用計画"))
+    _write_cost_plan_sheet(workbook.create_sheet("費用計画"), assumptions)
     _write_plan_assumptions_sheet(workbook.create_sheet("（全Ver）前提条件"), assumptions)
     workbook.save(output_path)
 
@@ -316,7 +322,7 @@ def _write_pl_sheet(sheet) -> None:
         ("gross_margin_ratio", "粗利率"),
         ("personnel_cost", "人件費"),
         ("marketing_cost", "マーケ費"),
-        ("development_cost", "開発費"),
+        ("development_cost", "開発費（償却）"),
         ("other_opex", "その他OPEX"),
         ("opex_total", "事業運営費（OPEX）"),
         ("operating_profit", "営業利益"),
@@ -614,7 +620,7 @@ def _write_consulting_sheet(sheet) -> None:
     _align_range(sheet, start_row=1, end_row=sheet.max_row, start_col=3, end_col=22, alignment=RIGHT_ALIGN)
 
 
-def _write_cost_plan_sheet(sheet) -> None:
+def _write_cost_plan_sheet(sheet, assumptions: dict[str, list[float]]) -> None:
     sheet.cell(row=COST_PLAN_ROWS["summary_title"], column=1, value="費用サマリー")
     _apply_row_style(sheet, COST_PLAN_ROWS["summary_title"], 1, 6, fill=SUBTOTAL_FILL, font=BOLD_FONT)
     sheet.cell(row=COST_PLAN_ROWS["summary_header"], column=1, value="項目")
@@ -625,7 +631,7 @@ def _write_cost_plan_sheet(sheet) -> None:
     labels = {
         COST_SUMMARY_ROWS["personnel_cost"]: "人件費",
         COST_SUMMARY_ROWS["marketing_cost"]: "マーケ費",
-        COST_SUMMARY_ROWS["development_cost"]: "開発費",
+        COST_SUMMARY_ROWS["development_cost"]: "開発費（PL計上・償却）",
         COST_SUMMARY_ROWS["other_opex"]: "その他OPEX",
         COST_SUMMARY_ROWS["opex_total"]: "OPEX合計",
     }
@@ -643,16 +649,22 @@ def _write_cost_plan_sheet(sheet) -> None:
         opex_ref = _sheet_ref("（全Ver）前提条件", f"{assumption_col}{ASSUMPTION_ROWS['opex_target']}")
         personnel_ratio_ref = _sheet_ref("（全Ver）前提条件", f"{assumption_col}{ASSUMPTION_ROWS['personnel_ratio']}")
         marketing_ratio_ref = _sheet_ref("（全Ver）前提条件", f"{assumption_col}{ASSUMPTION_ROWS['marketing_ratio']}")
-        development_ratio_ref = _sheet_ref("（全Ver）前提条件", f"{assumption_col}{ASSUMPTION_ROWS['development_ratio']}")
         other_ratio_ref = _sheet_ref("（全Ver）前提条件", f"{assumption_col}{ASSUMPTION_ROWS['other_ratio']}")
+        development_amortization_ref = _sheet_ref(
+            "（全Ver）前提条件",
+            f"{assumption_col}{ASSUMPTION_ROWS['development_amortization_expense']}",
+        )
         for row_index, ratio_key in ratio_map.items():
             ratio_ref = {
                 "personnel_ratio": personnel_ratio_ref,
                 "marketing_ratio": marketing_ratio_ref,
-                "development_ratio": development_ratio_ref,
+                "development_ratio": development_amortization_ref,
                 "other_ratio": other_ratio_ref,
             }[ratio_key]
-            sheet[f"{model_col}{row_index}"] = f"={opex_ref}*{ratio_ref}"
+            if ratio_key == "development_ratio":
+                sheet[f"{model_col}{row_index}"] = f"={ratio_ref}"
+            else:
+                sheet[f"{model_col}{row_index}"] = f"={opex_ref}*{ratio_ref}"
         sheet[f"{model_col}{COST_SUMMARY_ROWS['opex_total']}"] = (
             f"=SUM({model_col}{COST_SUMMARY_ROWS['personnel_cost']}:{model_col}{COST_SUMMARY_ROWS['other_opex']})"
         )
@@ -677,6 +689,51 @@ def _write_cost_plan_sheet(sheet) -> None:
         ],
         number_format=NUMBER_FORMAT,
     )
+    sheet.cell(row=COST_PLAN_ROWS["amortization_title"], column=1, value="開発償却ブロック")
+    _apply_row_style(sheet, COST_PLAN_ROWS["amortization_title"], 1, 7, fill=SUBTOTAL_FILL, font=BOLD_FONT)
+    amortization_labels = {
+        COST_PLAN_ROWS["amortization_start"]: "開発投資（キャッシュ）",
+        COST_PLAN_ROWS["amortization_start"] + 1: "償却方法",
+        COST_PLAN_ROWS["amortization_start"] + 2: "償却期間（年）",
+        COST_PLAN_ROWS["amortization_start"] + 3: "当期償却額（PL計上）",
+        COST_PLAN_ROWS["amortization_start"] + 4: "当期投資の期末未償却残高",
+    }
+    for row_index, label in amortization_labels.items():
+        sheet.cell(row=row_index, column=1, value=label)
+    for column_index, assumption_col in enumerate(_year_columns(), start=2):
+        model_col = excel_col(column_index)
+        development_investment_ref = _sheet_ref(
+            "（全Ver）前提条件",
+            f"{assumption_col}{ASSUMPTION_ROWS['development_investment']}",
+        )
+        development_expense_ref = _sheet_ref(
+            "（全Ver）前提条件",
+            f"{assumption_col}{ASSUMPTION_ROWS['development_amortization_expense']}",
+        )
+        development_unamortized_ref = _sheet_ref(
+            "（全Ver）前提条件",
+            f"{assumption_col}{ASSUMPTION_ROWS['development_unamortized_balance']}",
+        )
+        sheet[f"{model_col}{COST_PLAN_ROWS['amortization_start'] + 1}"] = "定額法"
+        sheet[f"{model_col}{COST_PLAN_ROWS['amortization_start']}"] = f"={development_investment_ref}"
+        sheet[f"{model_col}{COST_PLAN_ROWS['amortization_start'] + 2}"] = assumptions["development_amortization_years"][column_index - 2]
+        sheet[f"{model_col}{COST_PLAN_ROWS['amortization_start'] + 3}"] = f"={development_expense_ref}"
+        sheet[f"{model_col}{COST_PLAN_ROWS['amortization_start'] + 4}"] = f"={development_unamortized_ref}"
+    _style_formula_rows(
+        sheet,
+        [
+            COST_PLAN_ROWS["amortization_start"],
+            COST_PLAN_ROWS["amortization_start"] + 3,
+            COST_PLAN_ROWS["amortization_start"] + 4,
+        ],
+    )
+    _style_input_rows(sheet, [COST_PLAN_ROWS["amortization_start"] + 2])
+    _set_number_format_rows(
+        sheet,
+        [COST_PLAN_ROWS["amortization_start"], COST_PLAN_ROWS["amortization_start"] + 3, COST_PLAN_ROWS["amortization_start"] + 4],
+        number_format=NUMBER_FORMAT,
+    )
+    _set_number_format_rows(sheet, [COST_PLAN_ROWS["amortization_start"] + 2], number_format=NUMBER_FORMAT)
     sheet.cell(row=COST_PLAN_ROWS["detail_title"], column=1, value="費用明細")
     _apply_row_style(sheet, COST_PLAN_ROWS["detail_title"], 1, 7, fill=SUBTOTAL_FILL, font=BOLD_FONT)
     detail_header_row = COST_PLAN_ROWS["detail_header"]
@@ -701,7 +758,15 @@ def _write_cost_plan_sheet(sheet) -> None:
         _set_number_format_rows(sheet, [row_index], number_format=NUMBER_FORMAT, start_col=2, end_col=6)
     _apply_standard_layout(sheet, freeze_panes="B2", label_width=22, year_width=12)
     _set_column_widths(sheet, {"A": 24, "B": 12, "C": 12, "D": 12, "E": 12, "F": 12, "G": 14})
-    _set_row_heights(sheet, {COST_SUMMARY_ROWS["opex_total"]: 24, COST_PLAN_ROWS["summary_title"]: 24, COST_PLAN_ROWS["detail_title"]: 24})
+    _set_row_heights(
+        sheet,
+        {
+            COST_SUMMARY_ROWS["opex_total"]: 24,
+            COST_PLAN_ROWS["summary_title"]: 24,
+            COST_PLAN_ROWS["amortization_title"]: 24,
+            COST_PLAN_ROWS["detail_title"]: 24,
+        },
+    )
     _align_range(sheet, start_row=1, end_row=sheet.max_row, start_col=1, end_col=1, alignment=LEFT_ALIGN)
     _align_range(sheet, start_row=1, end_row=sheet.max_row, start_col=2, end_col=6, alignment=RIGHT_ALIGN)
     _align_range(sheet, start_row=1, end_row=sheet.max_row, start_col=7, end_col=7, alignment=LEFT_ALIGN)
@@ -741,6 +806,10 @@ def _write_plan_assumptions_sheet(sheet, assumptions: dict[str, list[float]]) ->
         ("marketing_ratio", "マーケ費比率", "OPEX のうちマーケ費の比率"),
         ("development_ratio", "開発費比率", "OPEX のうち開発費の比率"),
         ("other_ratio", "その他費用比率", "OPEX のうちその他費用の比率"),
+        ("development_investment", "開発投資額（キャッシュ）", "PL計上する開発償却費と償却年数から逆算した投資額"),
+        ("development_amortization_years", "開発償却期間（年）", "開発投資の初期値。定額法で5年償却"),
+        ("development_amortization_expense", "PL計上開発費（償却）", "OPEX比率から計算した当期の償却費"),
+        ("development_unamortized_balance", "開発投資の期末未償却残高", "当期投資額から当期償却額を差し引いた残高"),
         ("academy_c_share", "C級新規構成比", "アカデミー総受講人数のうち C級に配分する比率"),
         ("academy_b_share", "B級新規構成比", "アカデミー総受講人数のうち B級に配分する比率"),
         ("academy_a_share", "A級新規構成比", "アカデミー総受講人数のうち A級に配分する比率"),
@@ -807,6 +876,15 @@ def _write_plan_assumptions_sheet(sheet, assumptions: dict[str, list[float]]) ->
         sheet[f"{col}{ASSUMPTION_ROWS['gross_margin_ratio']}"] = (
             f"=IF({col}{ASSUMPTION_ROWS['revenue_target']}<>0,{col}{ASSUMPTION_ROWS['gross_profit_target']}/{col}{ASSUMPTION_ROWS['revenue_target']},0)"
         )
+        sheet[f"{col}{ASSUMPTION_ROWS['development_amortization_expense']}"] = (
+            f"={col}{ASSUMPTION_ROWS['opex_target']}*{col}{ASSUMPTION_ROWS['development_ratio']}"
+        )
+        sheet[f"{col}{ASSUMPTION_ROWS['development_investment']}"] = (
+            f"={col}{ASSUMPTION_ROWS['development_amortization_expense']}*{col}{ASSUMPTION_ROWS['development_amortization_years']}"
+        )
+        sheet[f"{col}{ASSUMPTION_ROWS['development_unamortized_balance']}"] = (
+            f"=MAX(0,{col}{ASSUMPTION_ROWS['development_investment']}-{col}{ASSUMPTION_ROWS['development_amortization_expense']})"
+        )
     derived_rows = [
         ASSUMPTION_ROWS["academy_effective_price"],
         ASSUMPTION_ROWS["meal_unit_count"],
@@ -814,11 +892,25 @@ def _write_plan_assumptions_sheet(sheet, assumptions: dict[str, list[float]]) ->
         ASSUMPTION_ROWS["consult_revenue"],
         ASSUMPTION_ROWS["consult_project_count"],
         ASSUMPTION_ROWS["gross_margin_ratio"],
+        ASSUMPTION_ROWS["development_investment"],
+        ASSUMPTION_ROWS["development_amortization_expense"],
+        ASSUMPTION_ROWS["development_unamortized_balance"],
     ]
     input_rows = [
         row_index
         for row_key, row_index in ASSUMPTION_ROWS.items()
-        if row_key not in {"academy_effective_price", "meal_unit_count", "meal_revenue", "consult_revenue", "consult_project_count", "gross_margin_ratio"}
+        if row_key
+        not in {
+            "academy_effective_price",
+            "meal_unit_count",
+            "meal_revenue",
+            "consult_revenue",
+            "consult_project_count",
+            "gross_margin_ratio",
+            "development_investment",
+            "development_amortization_expense",
+            "development_unamortized_balance",
+        }
     ]
     _style_input_rows(sheet, input_rows)
     _style_formula_rows(sheet, derived_rows)
@@ -847,10 +939,13 @@ def _write_plan_assumptions_sheet(sheet, assumptions: dict[str, list[float]]) ->
         ASSUMPTION_ROWS["academy_s_certification"],
     ]
     decimal_count_rows = [ASSUMPTION_ROWS["consult_project_count"]]
+    integer_input_rows = [ASSUMPTION_ROWS["development_amortization_years"]]
     for row_index in input_rows + derived_rows:
         fmt = PERCENT_FORMAT if row_index in percentage_rows else NUMBER_FORMAT
         if row_index in decimal_count_rows:
             fmt = COUNT_DECIMAL_FORMAT
+        if row_index in integer_input_rows:
+            fmt = NUMBER_FORMAT
         _set_number_format_rows(sheet, [row_index], number_format=fmt)
     sheet.freeze_panes = "B2"
     _set_column_widths(
@@ -1053,6 +1148,7 @@ def _build_workbook_assumptions(candidate_payload: dict[str, Any]) -> dict[str, 
         "marketing_ratio": [0.25] * len(YEAR_HEADERS),
         "development_ratio": [0.20] * len(YEAR_HEADERS),
         "other_ratio": [0.10] * len(YEAR_HEADERS),
+        "development_amortization_years": [5] * len(YEAR_HEADERS),
     }
     for level in ACADEMY_LEVELS:
         code = level["code"]

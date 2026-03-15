@@ -77,6 +77,7 @@ def test_export_candidate_workbook_writes_expected_sheets(tmp_path) -> None:
         if pl_sheet.cell(row=row_index, column=1).value
     }
     assert "営業利益" in pl_rows
+    assert "開発費（償却）" in pl_rows
     assert isinstance(pl_sheet.cell(row=pl_rows["営業利益"], column=2).value, str)
     assert pl_sheet.cell(row=pl_rows["営業利益"], column=2).value.startswith("=")
 
@@ -91,6 +92,9 @@ def test_export_candidate_workbook_writes_expected_sheets(tmp_path) -> None:
     }
     assert "売上目標" in assumption_labels
     assert "人件費比率" in assumption_labels
+    assert "開発投資額（キャッシュ）" in assumption_labels
+    assert "開発償却期間（年）" in assumption_labels
+    assert "PL計上開発費（償却）" in assumption_labels
     assert assumptions_sheet["B2"].fill.fill_type == "solid"
     assert _rgb_suffix(assumptions_sheet["B2"]) == "DDEBF7"
     assert assumptions_sheet["B2"].number_format == "#,##0"
@@ -108,19 +112,31 @@ def test_export_candidate_workbook_writes_expected_sheets(tmp_path) -> None:
         if cost_sheet.cell(row=row_index, column=1).value
     }
     assert "費用サマリー" in cost_labels
+    assert "開発償却ブロック" in cost_labels
     assert "費用明細" in cost_labels
     assert "OPEX合計" in cost_labels
-    assert cost_sheet["B10"].value == "FY1"
-    assert cost_sheet["F10"].value == "FY5"
-    assert cost_sheet["G10"].value == "カテゴリ"
+    assert "開発投資（キャッシュ）" in cost_labels
+    assert "償却方法" in cost_labels
+    assert "償却期間（年）" in cost_labels
+    assert "当期償却額（PL計上）" in cost_labels
+    assert "当期投資の期末未償却残高" in cost_labels
+    assert cost_sheet["B17"].value == "FY1"
+    assert cost_sheet["F17"].value == "FY5"
+    assert cost_sheet["G17"].value == "カテゴリ"
     assert cost_sheet["A7"].fill.fill_type == "solid"
     assert _rgb_suffix(cost_sheet["A7"]) == "A6A6A6"
     assert cost_sheet["B7"].fill.fill_type == "solid"
     assert _rgb_suffix(cost_sheet["B7"]) == "A6A6A6"
     assert cost_sheet["B7"].number_format == "#,##0"
-    assert isinstance(cost_sheet["C11"].value, str)
-    assert cost_sheet["B11"].value.startswith("=")
-    assert cost_sheet["G11"].value == "人件費"
+    assert cost_sheet["B11"].value == "定額法"
+    assert cost_sheet["B12"].value == 5
+    assert isinstance(cost_sheet["B10"].value, str)
+    assert cost_sheet["B10"].value.startswith("=")
+    assert isinstance(cost_sheet["B13"].value, str)
+    assert cost_sheet["B13"].value.startswith("=")
+    assert isinstance(cost_sheet["B18"].value, str)
+    assert cost_sheet["B18"].value.startswith("=")
+    assert cost_sheet["G18"].value == "人件費"
 
 
 def test_export_candidate_workbook_expands_academy_and_consulting_structure(tmp_path) -> None:
