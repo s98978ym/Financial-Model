@@ -212,6 +212,7 @@ def export_candidate_workbook(
     diagnosis: dict[str, Any],
     baseline_total: float,
     run_root: Path,
+    iteration_summaries: list[dict[str, Any]] | None = None,
 ) -> None:
     """Export one candidate workbook for human review."""
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -228,6 +229,7 @@ def export_candidate_workbook(
         baseline_total=baseline_total,
         candidate_payload=candidate_payload,
         run_root=run_root,
+        iteration_summaries=iteration_summaries or [],
     )
     _write_pl_sheet(workbook.create_sheet("PL設計"))
     _write_meal_sheet(workbook.create_sheet("ミールモデル"))
@@ -246,6 +248,7 @@ def _write_pdca_check_sheet(
     baseline_total: float,
     candidate_payload: dict[str, Any],
     run_root: Path,
+    iteration_summaries: list[dict[str, Any]],
 ) -> None:
     hypothesis = diagnosis.get("hypothesis", {})
     verdict = diagnosis.get("verdict", {})
@@ -275,6 +278,24 @@ def _write_pdca_check_sheet(
         ("ロジック", "\n".join(logic.get("steps", [])) or "-"),
     ]
     row = _write_labeled_values(sheet, row, hypothesis_rows)
+
+    row += 1
+    row = _write_section_title(sheet, row, "イテレーション別要約")
+    row = _write_iteration_summary_table(
+        sheet,
+        row,
+        iteration_summaries
+        or [
+            {
+                "iteration": 1,
+                "candidate_id": candidate_id,
+                "total_score": score.get("total", 0.0),
+                "delta_vs_baseline": score.get("delta_vs_baseline", round(score.get("total", 0.0) - baseline_total, 4)),
+                "verdict": verdict.get("status", ""),
+                "summary": f"{candidate_id} の確認用 workbook です。",
+            }
+        ],
+    )
 
     row += 1
     row = _write_section_title(sheet, row, "評価スコア")
@@ -1096,6 +1117,27 @@ def _write_bullet_list(sheet, row_index: int, lines: list[str]) -> int:
     for line in lines:
         sheet.cell(row=row_index, column=1, value="・")
         sheet.cell(row=row_index, column=4, value=line)
+        row_index += 1
+    return row_index
+
+
+def _write_iteration_summary_table(sheet, row_index: int, iteration_summaries: list[dict[str, Any]]) -> int:
+    headers = ["回", "総合", "差分", "要約"]
+    for column_index, header in enumerate(headers, start=1):
+        sheet.cell(row=row_index, column=column_index, value=header)
+        sheet.cell(row=row_index, column=column_index).font = BOLD_FONT
+    row_index += 1
+    for item in iteration_summaries:
+        verdict = item.get("verdict", "")
+        candidate_id = item.get("candidate_id", "")
+        title = item.get("title", "")
+        summary = item.get("summary") or f"{candidate_id} | {title} | {verdict}"
+        sheet.cell(row=row_index, column=1, value=item.get("iteration"))
+        sheet.cell(row=row_index, column=2, value=item.get("total_score", 0.0))
+        sheet.cell(row=row_index, column=3, value=item.get("delta_vs_baseline", 0.0))
+        sheet.cell(row=row_index, column=4, value=summary)
+        sheet.cell(row=row_index, column=2).number_format = "0.0000"
+        sheet.cell(row=row_index, column=3).number_format = "+0.0000;-0.0000;0.0000"
         row_index += 1
     return row_index
 

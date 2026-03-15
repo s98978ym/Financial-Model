@@ -774,6 +774,12 @@ def _write_workbook_exports(
         diagnosis=_baseline_diagnosis(baseline_score),
         baseline_total=baseline_score.total_score,
         run_root=run_root,
+        iteration_summaries=_iteration_summaries(
+            baseline_score=baseline_score,
+            candidate_scores=candidate_scores,
+            diagnoses=diagnoses,
+            candidate_order=list(candidate_scores.keys()),
+        ),
     )
     export_candidate_workbook(
         output_path=best_practical_path,
@@ -782,6 +788,12 @@ def _write_workbook_exports(
         diagnosis=diagnoses[best_practical_id],
         baseline_total=baseline_score.total_score,
         run_root=run_root,
+        iteration_summaries=_iteration_summaries(
+            baseline_score=baseline_score,
+            candidate_scores=candidate_scores,
+            diagnoses=diagnoses,
+            candidate_order=list(candidate_scores.keys()),
+        ),
     )
     export_candidate_workbook(
         output_path=best_practical_labeled_path,
@@ -790,6 +802,12 @@ def _write_workbook_exports(
         diagnosis=diagnoses[best_practical_id],
         baseline_total=baseline_score.total_score,
         run_root=run_root,
+        iteration_summaries=_iteration_summaries(
+            baseline_score=baseline_score,
+            candidate_scores=candidate_scores,
+            diagnoses=diagnoses,
+            candidate_order=list(candidate_scores.keys()),
+        ),
     )
 
     return {
@@ -837,6 +855,47 @@ def _baseline_diagnosis(baseline_score: ScoreResult) -> Dict[str, Any]:
         },
         "next_actions": [],
     }
+
+
+def _iteration_summaries(
+    *,
+    baseline_score: ScoreResult,
+    candidate_scores: Dict[str, ScoreResult],
+    diagnoses: Dict[str, Dict[str, Any]],
+    candidate_order: list[str],
+) -> list[Dict[str, Any]]:
+    items: list[Dict[str, Any]] = [
+        {
+            "iteration": 0,
+            "candidate_id": "baseline",
+            "title": "baseline",
+            "total_score": baseline_score.total_score,
+            "delta_vs_baseline": 0.0,
+            "verdict": "baseline",
+            "summary": f"baseline | 総合 {baseline_score.total_score:.4f} | 比較の基準候補",
+        }
+    ]
+    for idx, candidate_id in enumerate(candidate_order, start=1):
+        score = candidate_scores[candidate_id]
+        diagnosis = diagnoses.get(candidate_id, {})
+        verdict = diagnosis.get("verdict", {}).get("status", "")
+        title = diagnosis.get("hypothesis", {}).get("title", candidate_id)
+        delta = round(score.total_score - baseline_score.total_score, 4)
+        items.append(
+            {
+                "iteration": idx,
+                "candidate_id": candidate_id,
+                "title": title,
+                "total_score": score.total_score,
+                "delta_vs_baseline": delta,
+                "verdict": verdict,
+                "summary": (
+                    f"{candidate_id} | {title} | 総合 {score.total_score:.4f} "
+                    f"({delta:+.4f}) | 判定 {verdict or '-'}"
+                ),
+            }
+        )
+    return items
 
 
 def _layer_detail_lines(score: ScoreResult) -> list[str]:

@@ -4,6 +4,8 @@ from pathlib import Path
 import subprocess
 import sys
 
+from openpyxl import load_workbook
+
 from src.evals.candidate_profiles import CandidateProfile
 from src.evals.pdca_loop import run_reference_pdca
 
@@ -78,6 +80,21 @@ def test_run_reference_pdca_writes_workbook_exports(tmp_path) -> None:
     assert (run_root / "exports" / "best-practical.xlsx").exists()
     assert result.best_practical_candidate_id == "candidate-better"
     assert (run_root / "exports" / "best-practical-candidate-better.xlsx").exists()
+
+    workbook = load_workbook(run_root / "exports" / "best-practical.xlsx", data_only=False)
+    pdca_sheet = workbook["PDCAチェックシート"]
+    pdca_labels = {
+        pdca_sheet.cell(row=row_index, column=1).value
+        for row_index in range(1, pdca_sheet.max_row + 1)
+        if pdca_sheet.cell(row=row_index, column=1).value
+    }
+    assert "イテレーション別要約" in pdca_labels
+    sheet_values = {
+        str(pdca_sheet.cell(row=row_index, column=4).value)
+        for row_index in range(1, pdca_sheet.max_row + 1)
+        if pdca_sheet.cell(row=row_index, column=4).value is not None
+    }
+    assert "candidate-better" in sheet_values
 
 
 def test_summary_contains_hypothesis_logic_evidence_and_next_actions(tmp_path) -> None:
