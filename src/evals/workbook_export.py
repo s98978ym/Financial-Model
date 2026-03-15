@@ -260,8 +260,6 @@ def _write_pdca_check_sheet(
     row = _write_section_title(sheet, row, "今回の結論")
     conclusion_rows = [
         ("候補ID", candidate_id),
-        ("仮説タイトル", hypothesis.get("title", "")),
-        ("仮説の要点", hypothesis.get("detail", "")),
         ("判定", verdict.get("status", "")),
         ("判定理由", verdict.get("reason", "")),
         ("総合スコア", score.get("total", 0.0)),
