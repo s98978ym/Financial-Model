@@ -43,6 +43,36 @@ def test_export_candidate_workbook_writes_expected_sheets(tmp_path) -> None:
         "ミールモデル",
         "アカデミーモデル",
         "コンサルモデル",
+        "費用まとめ",
+        "費用リスト",
+        "（全Ver）前提条件",
         "Assumptions",
         "Artifacts",
     ]
+
+    pl_sheet = workbook["PL設計"]
+    pl_rows = {
+        pl_sheet.cell(row=row_index, column=1).value: row_index
+        for row_index in range(1, pl_sheet.max_row + 1)
+        if pl_sheet.cell(row=row_index, column=1).value
+    }
+    assert "営業利益" in pl_rows
+    assert isinstance(pl_sheet.cell(row=pl_rows["営業利益"], column=2).value, str)
+    assert pl_sheet.cell(row=pl_rows["営業利益"], column=2).value.startswith("=")
+
+    assumptions_sheet = workbook["（全Ver）前提条件"]
+    assumption_labels = {
+        assumptions_sheet.cell(row=row_index, column=1).value
+        for row_index in range(1, assumptions_sheet.max_row + 1)
+        if assumptions_sheet.cell(row=row_index, column=1).value
+    }
+    assert "売上目標" in assumption_labels
+    assert "人件費比率" in assumption_labels
+
+    cost_sheet = workbook["費用まとめ"]
+    cost_labels = {
+        cost_sheet.cell(row=row_index, column=1).value
+        for row_index in range(1, cost_sheet.max_row + 1)
+        if cost_sheet.cell(row=row_index, column=1).value
+    }
+    assert "OPEX合計" in cost_labels
