@@ -65,6 +65,19 @@ def test_run_reference_pdca_writes_diagnosis_and_score_deltas(tmp_path) -> None:
     assert diagnosis["candidates"]
 
 
+def test_run_reference_pdca_writes_workbook_exports(tmp_path) -> None:
+    result = run_reference_pdca(
+        plan_pdf=Path("/tmp/fake.pdf"),
+        reference_workbook=Path("tests/fixtures/evals/reference_workbook_minimal.xlsx"),
+        artifact_root=tmp_path,
+        runner="fixture",
+    )
+
+    run_root = tmp_path / result.run_id
+    assert (run_root / "exports" / "baseline.xlsx").exists()
+    assert (run_root / "exports" / "best-practical.xlsx").exists()
+
+
 def test_summary_contains_hypothesis_logic_evidence_and_next_actions(tmp_path) -> None:
     result = run_reference_pdca(
         plan_pdf=Path("/tmp/fake.pdf"),
@@ -80,6 +93,21 @@ def test_summary_contains_hypothesis_logic_evidence_and_next_actions(tmp_path) -
     assert "## ロジック" in summary
     assert "## 根拠ファクトとデータ" in summary
     assert "## 次の改善施策" in summary
+
+
+def test_summary_mentions_workbook_exports(tmp_path) -> None:
+    result = run_reference_pdca(
+        plan_pdf=Path("/tmp/fake.pdf"),
+        reference_workbook=Path("tests/fixtures/evals/reference_workbook_minimal.xlsx"),
+        artifact_root=tmp_path,
+        runner="fixture",
+    )
+
+    summary = (tmp_path / result.run_id / "summary.md").read_text(encoding="utf-8")
+
+    assert "## Workbook Artifacts" in summary
+    assert "baseline.xlsx" in summary
+    assert "best-practical.xlsx" in summary
 
 
 def test_fam_reference_cli_writes_artifacts(tmp_path) -> None:
@@ -106,6 +134,8 @@ def test_fam_reference_cli_writes_artifacts(tmp_path) -> None:
 
     assert result.returncode == 0
     assert "best_candidate_id" in result.stdout
+    assert "baseline_workbook_path" in result.stdout
+    assert "best_practical_workbook_path" in result.stdout
 
 
 def test_run_reference_pdca_uses_explicit_profiles_when_provided(tmp_path) -> None:

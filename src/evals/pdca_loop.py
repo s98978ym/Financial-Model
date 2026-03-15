@@ -18,6 +18,7 @@ from .external_analysis import build_external_analysis_candidate
 from .pdf_signals import extract_academy_signals, extract_meal_signals, extract_pl_signals
 from .reference_workbook import ReferenceWorkbook, extract_reference_workbook
 from .scoring import ScoreResult, score_candidate
+from .workbook_export import export_candidate_workbook
 
 
 @dataclass
@@ -87,6 +88,12 @@ def run_reference_pdca(
 
     best_candidate_id = max(candidate_scores, key=lambda candidate_id: candidate_scores[candidate_id].total_score)
     best_candidate_score = candidate_scores[best_candidate_id].total_score
+    diagnoses = _candidate_diagnoses(
+        baseline_score=baseline_score,
+        candidate_scores=candidate_scores,
+        profiles=profiles,
+        candidates=candidates,
+    )
 
     _write_reference(run_root / "reference.json", reference)
     _write_json(run_root / "baseline.json", baseline_payload)
@@ -96,9 +103,16 @@ def run_reference_pdca(
     _write_diagnosis(
         run_root / "diagnosis.json",
         baseline_score=baseline_score,
+        diagnoses=diagnoses,
+    )
+    export_paths = _write_workbook_exports(
+        run_root=run_root,
+        baseline_payload=baseline_payload,
+        baseline_score=baseline_score,
         candidate_scores=candidate_scores,
-        profiles=profiles,
         candidates=candidates,
+        diagnoses=diagnoses,
+        best_candidate_id=best_candidate_id,
     )
     _write_summary(
         run_root / "summary.md",
@@ -110,6 +124,8 @@ def run_reference_pdca(
         runner=runner,
         profiles=profiles,
         candidates=candidates,
+        diagnoses=diagnoses,
+        export_paths=export_paths,
     )
 
     return PDCAEvalResult(
@@ -459,28 +475,15 @@ def _write_diagnosis(
     path: Path,
     *,
     baseline_score: ScoreResult,
-    candidate_scores: Dict[str, ScoreResult],
-    profiles: Iterable[CandidateProfile],
-    candidates: Dict[str, Dict[str, Any]],
+    diagnoses: Dict[str, Dict[str, Any]],
 ) -> None:
-    profile_map = {profile.candidate_id: profile for profile in profiles}
     payload = {
         "baseline": {
             "total_score": baseline_score.total_score,
             "layer_scores": baseline_score.layer_scores,
         },
-        "candidates": {},
+        "candidates": diagnoses,
     }
-    for candidate_id, score in candidate_scores.items():
-        profile = profile_map.get(candidate_id)
-        if profile is None:
-            continue
-        payload["candidates"][candidate_id] = build_candidate_diagnosis(
-            profile,
-            score,
-            baseline_score,
-            evidence_summary=_evidence_summary(candidates.get(candidate_id, {})),
-        )
     _write_json(path, payload)
 
 
@@ -516,14 +519,10 @@ def _write_summary(
     runner: str,
     profiles: Iterable[CandidateProfile],
     candidates: Dict[str, Dict[str, Any]],
+    diagnoses: Dict[str, Dict[str, Any]],
+    export_paths: Dict[str, Path],
 ) -> None:
     profile_map = {profile.candidate_id: profile for profile in profiles}
-    diagnoses = _candidate_diagnoses(
-        baseline_score=baseline_score,
-        candidate_scores=candidate_scores,
-        profiles=profiles,
-        candidates=candidates,
-    )
     practical_best_id, practical_best_score = _select_practical_best(candidate_scores)
     practical_delta = None
     if practical_best_id and practical_best_score is not None:
@@ -534,6 +533,10 @@ def _write_summary(
         "",
         f"- Plan PDF: `{plan_pdf}`",
         f"- Reference workbook: `{reference_workbook}`",
+        "",
+        "## Workbook Artifacts",
+        f"- baseline workbook: `{export_paths['baseline']}`",
+        f"- best practical workbook: `{export_paths['best_practical']}`",
         "",
         "## 評価項目の説明",
     ]
@@ -741,6 +744,86 @@ def _write_summary(
     lines.extend(f"- {direction}" for direction in _next_directions(candidate_scores, runner))
 
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def _write_workbook_exports(
+    *,
+    run_root: Path,
+    baseline_payload: Dict[str, Any],
+    baseline_score: ScoreResult,
+    candidate_scores: Dict[str, ScoreResult],
+    candidates: Dict[str, Dict[str, Any]],
+    diagnoses: Dict[str, Dict[str, Any]],
+    best_candidate_id: str,
+) -> Dict[str, Path]:
+    exports_dir = run_root / "exports"
+    exports_dir.mkdir(parents=True, exist_ok=True)
+
+    baseline_path = exports_dir / "baseline.xlsx"
+    best_practical_id, _ = _select_practical_best(candidate_scores)
+    best_practical_id = best_practical_id or best_candidate_id
+    best_practical_path = exports_dir / "best-practical.xlsx"
+
+    export_candidate_workbook(
+        output_path=baseline_path,
+        candidate_id="baseline",
+        candidate_payload=baseline_payload,
+        diagnosis=_baseline_diagnosis(baseline_score),
+        baseline_total=baseline_score.total_score,
+        run_root=run_root,
+    )
+    export_candidate_workbook(
+        output_path=best_practical_path,
+        candidate_id=best_practical_id,
+        candidate_payload=candidates[best_practical_id],
+        diagnosis=diagnoses[best_practical_id],
+        baseline_total=baseline_score.total_score,
+        run_root=run_root,
+    )
+
+    return {
+        "baseline": baseline_path,
+        "best_practical": best_practical_path,
+    }
+
+
+def _baseline_diagnosis(baseline_score: ScoreResult) -> Dict[str, Any]:
+    return {
+        "candidate_id": "baseline",
+        "label": "baseline",
+        "hypothesis": {
+            "title": "baseline",
+            "detail": "改善前の基準候補です。",
+        },
+        "logic": {
+            "toggles_on": [],
+            "toggles_off": [],
+            "steps": ["改善前の基準候補として採点した結果です。"],
+        },
+        "evidence": {
+            "source_types": [],
+            "pdf_facts": [],
+            "external_sources": [],
+            "benchmark_fills": [],
+            "seed_notes": [],
+        },
+        "score": {
+            "total": baseline_score.total_score,
+            "delta_vs_baseline": 0.0,
+            "layers": {
+                layer_name: {
+                    "value": layer_value,
+                    "delta": 0.0,
+                }
+                for layer_name, layer_value in baseline_score.layer_scores.items()
+            },
+        },
+        "verdict": {
+            "status": "baseline",
+            "reason": "比較の基準となる候補です。",
+        },
+        "next_actions": [],
+    }
 
 
 def _layer_detail_lines(score: ScoreResult) -> list[str]:

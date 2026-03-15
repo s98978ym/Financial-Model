@@ -49,6 +49,8 @@ def fam_reference_eval(
         "best_candidate_score": result.best_candidate_score,
         "summary_path": str(run_root / "summary.md"),
         "scores_path": str(run_root / "scores.json"),
+        "baseline_workbook_path": str(run_root / "exports" / "baseline.xlsx"),
+        "best_practical_workbook_path": str(run_root / "exports" / "best-practical.xlsx"),
     }
 
 
