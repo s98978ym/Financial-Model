@@ -323,13 +323,17 @@ def test_export_candidate_workbook_adds_qa_sheet_with_iteration_tracking(tmp_pat
         if revenue_plan_sheet.cell(row=row_index, column=1).value
     }
     assert {"一般", "企画書固有"}.issubset(plan_sections)
-    assert revenue_plan_sheet.max_row >= 21
+    assert revenue_plan_sheet.max_row >= 24
     plan_questions = [
         revenue_plan_sheet.cell(row=row_index, column=3).value
         for row_index in range(2, revenue_plan_sheet.max_row + 1)
         if revenue_plan_sheet.cell(row=row_index, column=3).value
     ]
-    assert any("売上成長率の根拠" in question for question in plan_questions)
+    assert any("価格・数量・継続率" in question for question in plan_questions)
+    assert any("市場成長ではなく" in question for question in plan_questions)
+    assert any("営業体制と採用計画" in question for question in plan_questions)
+    assert any("下振れした場合" in question for question in plan_questions)
+    assert any("追加資金が必要になる条件" in question for question in plan_questions)
     assert any("なぜ3年間は検証期間" in question for question in plan_questions)
 
 
