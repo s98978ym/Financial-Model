@@ -89,10 +89,26 @@ def test_run_reference_pdca_writes_workbook_exports(tmp_path) -> None:
         if pdca_sheet.cell(row=row_index, column=1).value
     }
     assert "PDCA全体推移" in pdca_labels
-    trend_header = [pdca_sheet.cell(row=17, column=column_index).value for column_index in range(1, 8)]
-    assert trend_header == ["回", "候補", "仮説", "検証結果", "総合", "差分", "次の施策"]
+    trend_header = [pdca_sheet.cell(row=17, column=column_index).value for column_index in range(1, 14)]
+    assert trend_header == [
+        "回",
+        "候補",
+        "仮説",
+        "変更レバー",
+        "良くなった点",
+        "悪化した点",
+        "structure Δ",
+        "model_sheets Δ",
+        "pl Δ",
+        "explainability Δ",
+        "成果物観点",
+        "判定",
+        "次の施策",
+    ]
     assert pdca_sheet["B19"].value == "candidate-better"
     assert "fixture 改善候補の検証" in str(pdca_sheet["C19"].value)
+    assert "fixture_better" in str(pdca_sheet["D19"].value)
+    assert pdca_sheet["L19"].value == "hit"
 
 
 def test_summary_contains_hypothesis_logic_evidence_and_next_actions(tmp_path) -> None:

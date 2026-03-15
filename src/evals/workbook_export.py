@@ -325,13 +325,30 @@ def _write_pdca_check_sheet(
     row = _write_bullet_list(sheet, row, next_actions)
 
     sheet.freeze_panes = "B2"
-    _set_column_widths(sheet, {"A": 24, "B": 24, "C": 28, "D": 34, "E": 12, "F": 12, "G": 30})
+    _set_column_widths(
+        sheet,
+        {
+            "A": 24,
+            "B": 24,
+            "C": 24,
+            "D": 22,
+            "E": 24,
+            "F": 24,
+            "G": 12,
+            "H": 14,
+            "I": 10,
+            "J": 16,
+            "K": 20,
+            "L": 12,
+            "M": 30,
+        },
+    )
     _set_row_heights(sheet, {1: 24})
     _align_range(sheet, start_row=1, end_row=sheet.max_row, start_col=1, end_col=1, alignment=LEFT_ALIGN)
     _align_range(sheet, start_row=1, end_row=sheet.max_row, start_col=2, end_col=2, alignment=LEFT_ALIGN)
-    _align_range(sheet, start_row=1, end_row=sheet.max_row, start_col=3, end_col=4, alignment=WRAP_LEFT_ALIGN)
-    _align_range(sheet, start_row=1, end_row=sheet.max_row, start_col=5, end_col=6, alignment=RIGHT_ALIGN)
-    _align_range(sheet, start_row=1, end_row=sheet.max_row, start_col=7, end_col=7, alignment=WRAP_LEFT_ALIGN)
+    _align_range(sheet, start_row=1, end_row=sheet.max_row, start_col=3, end_col=6, alignment=WRAP_LEFT_ALIGN)
+    _align_range(sheet, start_row=1, end_row=sheet.max_row, start_col=7, end_col=10, alignment=RIGHT_ALIGN)
+    _align_range(sheet, start_row=1, end_row=sheet.max_row, start_col=11, end_col=13, alignment=WRAP_LEFT_ALIGN)
 
 
 def _write_pl_sheet(sheet) -> None:
@@ -1125,7 +1142,21 @@ def _write_bullet_list(sheet, row_index: int, lines: list[str]) -> int:
 
 
 def _write_iteration_trend_table(sheet, row_index: int, iteration_summaries: list[dict[str, Any]]) -> int:
-    headers = ["回", "候補", "仮説", "検証結果", "総合", "差分", "次の施策"]
+    headers = [
+        "回",
+        "候補",
+        "仮説",
+        "変更レバー",
+        "良くなった点",
+        "悪化した点",
+        "structure Δ",
+        "model_sheets Δ",
+        "pl Δ",
+        "explainability Δ",
+        "成果物観点",
+        "判定",
+        "次の施策",
+    ]
     for column_index, header in enumerate(headers, start=1):
         sheet.cell(row=row_index, column=column_index, value=header)
         sheet.cell(row=row_index, column=column_index).font = BOLD_FONT
@@ -1134,12 +1165,18 @@ def _write_iteration_trend_table(sheet, row_index: int, iteration_summaries: lis
         sheet.cell(row=row_index, column=1, value=item.get("iteration"))
         sheet.cell(row=row_index, column=2, value=item.get("candidate_id", ""))
         sheet.cell(row=row_index, column=3, value=item.get("hypothesis", ""))
-        sheet.cell(row=row_index, column=4, value=item.get("result", ""))
-        sheet.cell(row=row_index, column=5, value=item.get("total_score", 0.0))
-        sheet.cell(row=row_index, column=6, value=item.get("delta_vs_baseline", 0.0))
-        sheet.cell(row=row_index, column=7, value=item.get("next_action", ""))
-        sheet.cell(row=row_index, column=5).number_format = "0.0000"
-        sheet.cell(row=row_index, column=6).number_format = "+0.0000;-0.0000;0.0000"
+        sheet.cell(row=row_index, column=4, value=item.get("changed_levers", ""))
+        sheet.cell(row=row_index, column=5, value=item.get("improved_points", ""))
+        sheet.cell(row=row_index, column=6, value=item.get("worsened_points", ""))
+        sheet.cell(row=row_index, column=7, value=item.get("structure_delta", 0.0))
+        sheet.cell(row=row_index, column=8, value=item.get("model_sheets_delta", 0.0))
+        sheet.cell(row=row_index, column=9, value=item.get("pl_delta", 0.0))
+        sheet.cell(row=row_index, column=10, value=item.get("explainability_delta", 0.0))
+        sheet.cell(row=row_index, column=11, value=item.get("artifact_impact", ""))
+        sheet.cell(row=row_index, column=12, value=item.get("verdict", ""))
+        sheet.cell(row=row_index, column=13, value=item.get("next_action", ""))
+        for numeric_col in (7, 8, 9, 10):
+            sheet.cell(row=row_index, column=numeric_col).number_format = "+0.0000;-0.0000;0.0000"
         row_index += 1
     return row_index
 

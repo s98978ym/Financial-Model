@@ -869,9 +869,15 @@ def _iteration_summaries(
             "iteration": 0,
             "candidate_id": "baseline",
             "hypothesis": "baseline",
-            "result": "比較の基準候補",
-            "total_score": baseline_score.total_score,
-            "delta_vs_baseline": 0.0,
+            "changed_levers": "-",
+            "improved_points": "-",
+            "worsened_points": "-",
+            "structure_delta": 0.0,
+            "model_sheets_delta": 0.0,
+            "pl_delta": 0.0,
+            "explainability_delta": 0.0,
+            "artifact_impact": "比較基準",
+            "verdict": "baseline",
             "next_action": "以降の候補を比較する",
         }
     ]
@@ -879,21 +885,78 @@ def _iteration_summaries(
         score = candidate_scores[candidate_id]
         diagnosis = diagnoses.get(candidate_id, {})
         verdict = diagnosis.get("verdict", {}).get("status", "")
+        layers = diagnosis.get("score", {}).get("layers", {})
+        structure_delta = layers.get("structure", {}).get("delta", 0.0)
+        model_sheets_delta = layers.get("model_sheets", {}).get("delta", 0.0)
+        pl_delta = layers.get("pl", {}).get("delta", 0.0)
+        explainability_delta = layers.get("explainability", {}).get("delta", 0.0)
         title = diagnosis.get("hypothesis", {}).get("title", candidate_id)
-        delta = round(score.total_score - baseline_score.total_score, 4)
         next_action = (diagnosis.get("next_actions") or [""])[0]
         items.append(
             {
                 "iteration": idx,
                 "candidate_id": candidate_id,
                 "hypothesis": title,
-                "result": f"判定 {verdict or '-'} / {diagnosis.get('verdict', {}).get('reason', '')}",
-                "total_score": score.total_score,
-                "delta_vs_baseline": delta,
+                "changed_levers": _changed_levers(diagnosis),
+                "improved_points": _layer_change_summary(layers, positive=True),
+                "worsened_points": _layer_change_summary(layers, positive=False),
+                "structure_delta": structure_delta,
+                "model_sheets_delta": model_sheets_delta,
+                "pl_delta": pl_delta,
+                "explainability_delta": explainability_delta,
+                "artifact_impact": _artifact_impact_summary(
+                    structure_delta=structure_delta,
+                    model_sheets_delta=model_sheets_delta,
+                    pl_delta=pl_delta,
+                    explainability_delta=explainability_delta,
+                ),
+                "verdict": verdict,
                 "next_action": next_action,
             }
         )
     return items
+
+
+def _changed_levers(diagnosis: Dict[str, Any]) -> str:
+    logic = diagnosis.get("logic", {})
+    on = logic.get("toggles_on", []) or []
+    off = logic.get("toggles_off", []) or []
+    parts = []
+    if on:
+        parts.append("ON: " + ", ".join(on))
+    if off:
+        parts.append("OFF: " + ", ".join(off))
+    return " / ".join(parts) or "-"
+
+
+def _layer_change_summary(layers: Dict[str, Dict[str, float]], *, positive: bool) -> str:
+    labels = []
+    for layer_name in ("structure", "model_sheets", "pl", "explainability"):
+        delta = layers.get(layer_name, {}).get("delta", 0.0)
+        if positive and delta > 0:
+            labels.append(f"{layer_name} {delta:+.4f}")
+        if not positive and delta < 0:
+            labels.append(f"{layer_name} {delta:+.4f}")
+    return " / ".join(labels) if labels else "-"
+
+
+def _artifact_impact_summary(
+    *,
+    structure_delta: float,
+    model_sheets_delta: float,
+    pl_delta: float,
+    explainability_delta: float,
+) -> str:
+    impacts: list[str] = []
+    if model_sheets_delta > 0:
+        impacts.append("モデル改善")
+    if pl_delta > 0:
+        impacts.append("PL改善")
+    if explainability_delta > 0:
+        impacts.append("説明強化")
+    if structure_delta < 0 or model_sheets_delta < 0 or pl_delta < 0:
+        impacts.append("一部悪化")
+    return " / ".join(impacts) if impacts else "横ばい"
 
 
 def _layer_detail_lines(score: ScoreResult) -> list[str]:
