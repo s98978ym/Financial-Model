@@ -42,22 +42,29 @@ def test_export_candidate_workbook_writes_expected_sheets(tmp_path) -> None:
     assert output_path.exists()
     workbook = load_workbook(output_path, data_only=False)
     assert workbook.sheetnames == [
-        "Summary",
+        "PDCAチェックシート",
         "PL設計",
         "ミールモデル",
         "アカデミーモデル",
         "コンサルモデル",
-        "費用まとめ",
-        "費用リスト",
+        "費用計画",
         "（全Ver）前提条件",
-        "Assumptions",
-        "Artifacts",
     ]
 
-    summary_sheet = workbook["Summary"]
-    assert summary_sheet.freeze_panes == "B2"
-    assert summary_sheet.column_dimensions["A"].width >= 20
-    assert summary_sheet.column_dimensions["B"].width >= 36
+    review_sheet = workbook["PDCAチェックシート"]
+    assert review_sheet.freeze_panes == "B2"
+    assert review_sheet.column_dimensions["A"].width >= 22
+    assert review_sheet.column_dimensions["B"].width >= 18
+    pdca_labels = {
+        review_sheet.cell(row=row_index, column=1).value
+        for row_index in range(1, review_sheet.max_row + 1)
+        if review_sheet.cell(row=row_index, column=1).value
+    }
+    assert "今回の結論" in pdca_labels
+    assert "評価スコア" in pdca_labels
+    assert "根拠と前提" in pdca_labels
+    assert "関連ファイル" in pdca_labels
+    assert "次の改善施策" in pdca_labels
 
     pl_sheet = workbook["PL設計"]
     assert pl_sheet.freeze_panes == "B2"
@@ -92,20 +99,24 @@ def test_export_candidate_workbook_writes_expected_sheets(tmp_path) -> None:
     assert assumptions_sheet["B10"].number_format == "#,##0"
     assert assumptions_sheet["B28"].number_format == "0.0%"
 
-    cost_sheet = workbook["費用まとめ"]
+    cost_sheet = workbook["費用計画"]
     assert cost_sheet.freeze_panes == "B2"
-    assert cost_sheet.column_dimensions["A"].width >= 18
+    assert cost_sheet.column_dimensions["A"].width >= 20
     cost_labels = {
         cost_sheet.cell(row=row_index, column=1).value
         for row_index in range(1, cost_sheet.max_row + 1)
         if cost_sheet.cell(row=row_index, column=1).value
     }
+    assert "費用サマリー" in cost_labels
+    assert "費用明細" in cost_labels
     assert "OPEX合計" in cost_labels
-    assert cost_sheet["A6"].fill.fill_type == "solid"
-    assert _rgb_suffix(cost_sheet["A6"]) == "A6A6A6"
-    assert cost_sheet["B6"].fill.fill_type == "solid"
-    assert _rgb_suffix(cost_sheet["B6"]) == "A6A6A6"
-    assert cost_sheet["B6"].number_format == "#,##0"
+    assert cost_sheet["A7"].fill.fill_type == "solid"
+    assert _rgb_suffix(cost_sheet["A7"]) == "A6A6A6"
+    assert cost_sheet["B7"].fill.fill_type == "solid"
+    assert _rgb_suffix(cost_sheet["B7"]) == "A6A6A6"
+    assert cost_sheet["B7"].number_format == "#,##0"
+    assert isinstance(cost_sheet["C11"].value, str)
+    assert cost_sheet["C11"].value.startswith("=")
 
 
 def test_export_candidate_workbook_expands_academy_and_consulting_structure(tmp_path) -> None:

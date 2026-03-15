@@ -141,11 +141,11 @@ PL_ROWS = {
 }
 
 COST_SUMMARY_ROWS = {
-    "personnel_cost": 2,
-    "marketing_cost": 3,
-    "development_cost": 4,
-    "other_opex": 5,
-    "opex_total": 6,
+    "personnel_cost": 3,
+    "marketing_cost": 4,
+    "development_cost": 5,
+    "other_opex": 6,
+    "opex_total": 7,
 }
 
 COST_LIST_ROWS = [
@@ -160,6 +160,14 @@ COST_LIST_ROWS = [
     ("内部開発費", "開発費", 0.40, "development_cost"),
     ("その他固定費", "その他OPEX", 1.00, "other_opex"),
 ]
+
+COST_PLAN_ROWS = {
+    "summary_title": 1,
+    "summary_header": 2,
+    "detail_title": 9,
+    "detail_header": 10,
+    "detail_start": 11,
+}
 
 ACADEMY_ROW_LAYOUT = {
     "c": {"label": 2, "price": 3, "students": 4, "certified": 5, "revenue": 6},
@@ -203,49 +211,97 @@ def export_candidate_workbook(
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     workbook = Workbook()
-    summary_sheet = workbook.active
-    summary_sheet.title = "Summary"
+    review_sheet = workbook.active
+    review_sheet.title = "PDCAチェックシート"
 
     assumptions = _build_workbook_assumptions(candidate_payload)
-    _write_summary_sheet(summary_sheet, candidate_id, diagnosis, baseline_total)
+    _write_pdca_check_sheet(
+        review_sheet,
+        candidate_id=candidate_id,
+        diagnosis=diagnosis,
+        baseline_total=baseline_total,
+        candidate_payload=candidate_payload,
+        run_root=run_root,
+    )
     _write_pl_sheet(workbook.create_sheet("PL設計"))
     _write_meal_sheet(workbook.create_sheet("ミールモデル"))
     _write_academy_sheet(workbook.create_sheet("アカデミーモデル"))
     _write_consulting_sheet(workbook.create_sheet("コンサルモデル"))
-    _write_cost_summary_sheet(workbook.create_sheet("費用まとめ"))
-    _write_cost_list_sheet(workbook.create_sheet("費用リスト"))
+    _write_cost_plan_sheet(workbook.create_sheet("費用計画"))
     _write_plan_assumptions_sheet(workbook.create_sheet("（全Ver）前提条件"), assumptions)
-    _write_assumptions_sheet(workbook.create_sheet("Assumptions"), candidate_payload.get("assumptions", []))
-    _write_artifacts_sheet(workbook.create_sheet("Artifacts"), run_root=run_root, candidate_id=candidate_id)
     workbook.save(output_path)
 
 
-def _write_summary_sheet(
+def _write_pdca_check_sheet(
     sheet,
+    *,
     candidate_id: str,
     diagnosis: dict[str, Any],
     baseline_total: float,
+    candidate_payload: dict[str, Any],
+    run_root: Path,
 ) -> None:
     hypothesis = diagnosis.get("hypothesis", {})
     verdict = diagnosis.get("verdict", {})
     score = diagnosis.get("score", {})
+    logic = diagnosis.get("logic", {})
+    evidence = diagnosis.get("evidence", {})
 
-    rows = [
-        ["candidate_id", candidate_id],
-        ["hypothesis_title", hypothesis.get("title", "")],
-        ["hypothesis_detail", hypothesis.get("detail", "")],
-        ["verdict", verdict.get("status", "")],
-        ["verdict_reason", verdict.get("reason", "")],
-        ["total_score", score.get("total", 0.0)],
-        ["delta_vs_baseline", score.get("delta_vs_baseline", round(score.get("total", 0.0) - baseline_total, 4))],
-        ["baseline_total", baseline_total],
+    row = 1
+    row = _write_section_title(sheet, row, "今回の結論")
+    conclusion_rows = [
+        ("候補ID", candidate_id),
+        ("仮説タイトル", hypothesis.get("title", "")),
+        ("仮説の要点", hypothesis.get("detail", "")),
+        ("判定", verdict.get("status", "")),
+        ("判定理由", verdict.get("reason", "")),
+        ("総合スコア", score.get("total", 0.0)),
+        ("baseline比", score.get("delta_vs_baseline", round(score.get("total", 0.0) - baseline_total, 4))),
+        ("baselineスコア", baseline_total),
     ]
-    _write_key_value_rows(sheet, rows)
+    row = _write_labeled_values(sheet, row, conclusion_rows, numeric_labels={"総合スコア", "baseline比", "baselineスコア"})
+
+    row += 1
+    row = _write_section_title(sheet, row, "仮説")
+    hypothesis_rows = [
+        ("ONにした要素", ", ".join(logic.get("toggles_on", [])) or "-"),
+        ("OFFにした要素", ", ".join(logic.get("toggles_off", [])) or "-"),
+        ("ロジック", "\n".join(logic.get("steps", [])) or "-"),
+    ]
+    row = _write_labeled_values(sheet, row, hypothesis_rows)
+
+    row += 1
+    row = _write_section_title(sheet, row, "評価スコア")
+    row = _write_score_table(sheet, row, score, baseline_total)
+
+    row += 1
+    row = _write_section_title(sheet, row, "根拠と前提")
+    row = _write_assumption_table(sheet, row, candidate_payload.get("assumptions", []))
+
+    row += 1
+    row = _write_section_title(sheet, row, "関連ファイル")
+    artifact_rows = [
+        ("summary", str(run_root / "summary.md")),
+        ("scores", str(run_root / "scores.json")),
+        ("diagnosis", str(run_root / "diagnosis.json")),
+        ("candidate_json", str(run_root / "candidates" / f"{candidate_id}.json")),
+        ("reference", str(run_root / "reference.json")),
+        ("baseline", str(run_root / "baseline.json")),
+        ("外部根拠タイプ", ", ".join(evidence.get("source_types", [])) or "-"),
+    ]
+    row = _write_labeled_values(sheet, row, artifact_rows)
+
+    row += 1
+    row = _write_section_title(sheet, row, "次の改善施策")
+    next_actions = diagnosis.get("next_actions", []) or ["次の施策は未設定です。"]
+    row = _write_bullet_list(sheet, row, next_actions)
+
     sheet.freeze_panes = "B2"
-    _set_column_widths(sheet, {"A": 22, "B": 42})
-    _set_row_heights(sheet, {1: 22, 2: 36, 3: 42, 4: 24, 5: 42})
-    _align_range(sheet, start_row=1, end_row=len(rows), start_col=1, end_col=1, alignment=LEFT_ALIGN)
-    _align_range(sheet, start_row=1, end_row=len(rows), start_col=2, end_col=2, alignment=WRAP_LEFT_ALIGN)
+    _set_column_widths(sheet, {"A": 24, "B": 18, "C": 16, "D": 52})
+    _set_row_heights(sheet, {1: 24})
+    _align_range(sheet, start_row=1, end_row=sheet.max_row, start_col=1, end_col=1, alignment=LEFT_ALIGN)
+    _align_range(sheet, start_row=1, end_row=sheet.max_row, start_col=2, end_col=3, alignment=RIGHT_ALIGN)
+    _align_range(sheet, start_row=1, end_row=sheet.max_row, start_col=4, end_col=4, alignment=WRAP_LEFT_ALIGN)
 
 
 def _write_pl_sheet(sheet) -> None:
@@ -272,10 +328,10 @@ def _write_pl_sheet(sheet) -> None:
     for column_index, assumption_col in enumerate(_year_columns(), start=2):
         model_col = excel_col(column_index)
         gross_margin_ref = _sheet_ref("（全Ver）前提条件", f"{assumption_col}{ASSUMPTION_ROWS['gross_margin_ratio']}")
-        personnel_ref = _sheet_ref("費用まとめ", f"{model_col}{COST_SUMMARY_ROWS['personnel_cost']}")
-        marketing_ref = _sheet_ref("費用まとめ", f"{model_col}{COST_SUMMARY_ROWS['marketing_cost']}")
-        development_ref = _sheet_ref("費用まとめ", f"{model_col}{COST_SUMMARY_ROWS['development_cost']}")
-        other_opex_ref = _sheet_ref("費用まとめ", f"{model_col}{COST_SUMMARY_ROWS['other_opex']}")
+        personnel_ref = _sheet_ref("費用計画", f"{model_col}{COST_SUMMARY_ROWS['personnel_cost']}")
+        marketing_ref = _sheet_ref("費用計画", f"{model_col}{COST_SUMMARY_ROWS['marketing_cost']}")
+        development_ref = _sheet_ref("費用計画", f"{model_col}{COST_SUMMARY_ROWS['development_cost']}")
+        other_opex_ref = _sheet_ref("費用計画", f"{model_col}{COST_SUMMARY_ROWS['other_opex']}")
         academy_total_row = ACADEMY_ROW_LAYOUT["total_revenue"]
         consult_total_col = excel_col(column_index)
         sheet[f"{model_col}{PL_ROWS['academy_revenue']}"] = f"={_sheet_ref('アカデミーモデル', f'{model_col}{academy_total_row}')}"
@@ -558,8 +614,14 @@ def _write_consulting_sheet(sheet) -> None:
     _align_range(sheet, start_row=1, end_row=sheet.max_row, start_col=3, end_col=22, alignment=RIGHT_ALIGN)
 
 
-def _write_cost_summary_sheet(sheet) -> None:
-    _write_header_row(sheet)
+def _write_cost_plan_sheet(sheet) -> None:
+    sheet.cell(row=COST_PLAN_ROWS["summary_title"], column=1, value="費用サマリー")
+    _apply_row_style(sheet, COST_PLAN_ROWS["summary_title"], 1, 6, fill=SUBTOTAL_FILL, font=BOLD_FONT)
+    sheet.cell(row=COST_PLAN_ROWS["summary_header"], column=1, value="項目")
+    sheet.cell(row=COST_PLAN_ROWS["summary_header"], column=1).font = BOLD_FONT
+    for column_index, header in enumerate(YEAR_HEADERS, start=2):
+        sheet.cell(row=COST_PLAN_ROWS["summary_header"], column=column_index, value=header)
+        sheet.cell(row=COST_PLAN_ROWS["summary_header"], column=column_index).font = BOLD_FONT
     labels = {
         COST_SUMMARY_ROWS["personnel_cost"]: "人件費",
         COST_SUMMARY_ROWS["marketing_cost"]: "マーケ費",
@@ -594,37 +656,53 @@ def _write_cost_summary_sheet(sheet) -> None:
         sheet[f"{model_col}{COST_SUMMARY_ROWS['opex_total']}"] = (
             f"=SUM({model_col}{COST_SUMMARY_ROWS['personnel_cost']}:{model_col}{COST_SUMMARY_ROWS['other_opex']})"
         )
-    _style_subtotal_rows(sheet, [2, 3, 4, 5])
+    _style_subtotal_rows(
+        sheet,
+        [
+            COST_SUMMARY_ROWS["personnel_cost"],
+            COST_SUMMARY_ROWS["marketing_cost"],
+            COST_SUMMARY_ROWS["development_cost"],
+            COST_SUMMARY_ROWS["other_opex"],
+        ],
+    )
     _style_total_rows(sheet, [COST_SUMMARY_ROWS["opex_total"]])
-    _set_number_format_rows(sheet, [2, 3, 4, 5, COST_SUMMARY_ROWS["opex_total"]], number_format=NUMBER_FORMAT)
-    _apply_standard_layout(sheet, freeze_panes="B2", label_width=18, year_width=12)
-    _set_row_heights(sheet, {COST_SUMMARY_ROWS["opex_total"]: 24})
-
-
-def _write_cost_list_sheet(sheet) -> None:
-    sheet.cell(row=1, column=1, value="アイテム")
-    sheet.cell(row=1, column=2, value="カテゴリ")
+    _set_number_format_rows(
+        sheet,
+        [
+            COST_SUMMARY_ROWS["personnel_cost"],
+            COST_SUMMARY_ROWS["marketing_cost"],
+            COST_SUMMARY_ROWS["development_cost"],
+            COST_SUMMARY_ROWS["other_opex"],
+            COST_SUMMARY_ROWS["opex_total"],
+        ],
+        number_format=NUMBER_FORMAT,
+    )
+    sheet.cell(row=COST_PLAN_ROWS["detail_title"], column=1, value="費用明細")
+    _apply_row_style(sheet, COST_PLAN_ROWS["detail_title"], 1, 7, fill=SUBTOTAL_FILL, font=BOLD_FONT)
+    detail_header_row = COST_PLAN_ROWS["detail_header"]
+    sheet.cell(row=detail_header_row, column=1, value="アイテム")
+    sheet.cell(row=detail_header_row, column=2, value="カテゴリ")
     for column_index, header in enumerate(YEAR_HEADERS, start=3):
-        sheet.cell(row=1, column=column_index, value=header)
-    sheet["A1"].font = Font(bold=True)
-    sheet["B1"].font = Font(bold=True)
+        sheet.cell(row=detail_header_row, column=column_index, value=header)
+    sheet["A10"].font = Font(bold=True)
+    sheet["B10"].font = Font(bold=True)
     for column_index in range(3, 8):
-        sheet.cell(row=1, column=column_index).font = Font(bold=True)
+        sheet.cell(row=detail_header_row, column=column_index).font = Font(bold=True)
 
-    for row_index, (item_name, category_name, share, cost_key) in enumerate(COST_LIST_ROWS, start=2):
+    for row_index, (item_name, category_name, share, cost_key) in enumerate(COST_LIST_ROWS, start=COST_PLAN_ROWS["detail_start"]):
         sheet.cell(row=row_index, column=1, value=item_name)
         sheet.cell(row=row_index, column=2, value=category_name)
         cost_row = COST_SUMMARY_ROWS[cost_key]
         for column_index in range(3, 8):
             model_col = excel_col(column_index)
             summary_col = excel_col(column_index - 1)
-            sheet[f"{model_col}{row_index}"] = f"={_sheet_ref('費用まとめ', f'{summary_col}{cost_row}')}*{share}"
-    for row_index in range(2, 2 + len(COST_LIST_ROWS)):
+            sheet[f"{model_col}{row_index}"] = f"={_sheet_ref('費用計画', f'{summary_col}{cost_row}')}*{share}"
+    for row_index in range(COST_PLAN_ROWS["detail_start"], COST_PLAN_ROWS["detail_start"] + len(COST_LIST_ROWS)):
         _apply_row_style(sheet, row_index, 3, 7, fill=FORMULA_FILL)
         _set_number_format_rows(sheet, [row_index], number_format=NUMBER_FORMAT, start_col=3, end_col=7)
-    sheet.freeze_panes = "C2"
+    _apply_standard_layout(sheet, freeze_panes="B2", label_width=22, year_width=12)
     _set_column_widths(sheet, {"A": 24, "B": 14, "C": 12, "D": 12, "E": 12, "F": 12, "G": 12})
-    _set_row_heights(sheet, {1: 22})
+    _set_row_heights(sheet, {COST_SUMMARY_ROWS["opex_total"]: 24, COST_PLAN_ROWS["summary_title"]: 24, COST_PLAN_ROWS["detail_title"]: 24})
     _align_range(sheet, start_row=1, end_row=sheet.max_row, start_col=1, end_col=2, alignment=LEFT_ALIGN)
     _align_range(sheet, start_row=1, end_row=sheet.max_row, start_col=3, end_col=7, alignment=RIGHT_ALIGN)
 
@@ -849,6 +927,82 @@ def _write_artifacts_sheet(sheet, *, run_root: Path, candidate_id: str) -> None:
         ["baseline", str(run_root / "baseline.json")],
     ]
     _write_key_value_rows(sheet, rows)
+
+
+def _write_section_title(sheet, row_index: int, title: str) -> int:
+    sheet.cell(row=row_index, column=1, value=title)
+    _apply_row_style(sheet, row_index, 1, 4, fill=SUBTOTAL_FILL, font=BOLD_FONT)
+    return row_index + 1
+
+
+def _write_labeled_values(
+    sheet,
+    row_index: int,
+    rows: list[tuple[str, Any]],
+    *,
+    numeric_labels: set[str] | None = None,
+) -> int:
+    numeric_labels = numeric_labels or set()
+    for label, value in rows:
+        sheet.cell(row=row_index, column=1, value=label)
+        target_col = 2 if label in numeric_labels else 4
+        sheet.cell(row=row_index, column=target_col, value=value)
+        row_index += 1
+    return row_index
+
+
+def _write_score_table(sheet, row_index: int, score: dict[str, Any], baseline_total: float) -> int:
+    headers = ["項目", "スコア", "差分", "補足"]
+    for column_index, header in enumerate(headers, start=1):
+        sheet.cell(row=row_index, column=column_index, value=header)
+        sheet.cell(row=row_index, column=column_index).font = BOLD_FONT
+    row_index += 1
+    total = score.get("total", 0.0)
+    total_delta = score.get("delta_vs_baseline", round(total - baseline_total, 4))
+    score_rows = [("total", total, total_delta, "総合評価")]
+    for layer_name, layer_payload in score.get("layers", {}).items():
+        score_rows.append((layer_name, layer_payload.get("value", 0.0), layer_payload.get("delta", 0.0), "個別評価"))
+    for label, value, delta, note in score_rows:
+        sheet.cell(row=row_index, column=1, value=label)
+        sheet.cell(row=row_index, column=2, value=value)
+        sheet.cell(row=row_index, column=3, value=delta)
+        sheet.cell(row=row_index, column=4, value=note)
+        sheet.cell(row=row_index, column=2).number_format = "0.0000"
+        sheet.cell(row=row_index, column=3).number_format = "+0.0000;-0.0000;0.0000"
+        row_index += 1
+    return row_index
+
+
+def _write_assumption_table(sheet, row_index: int, assumptions: list[dict[str, Any]]) -> int:
+    headers = ["source_type", "review_status", "evidence_count", "evidence_ids"]
+    for column_index, header in enumerate(headers, start=1):
+        sheet.cell(row=row_index, column=column_index, value=header)
+        sheet.cell(row=row_index, column=column_index).font = BOLD_FONT
+    row_index += 1
+    if not assumptions:
+        sheet.cell(row=row_index, column=1, value="前提データなし")
+        return row_index + 1
+    for assumption in assumptions:
+        evidence_refs = assumption.get("evidence_refs", [])
+        evidence_ids = ", ".join(
+            ref.get("source_id") or ref.get("title") or ""
+            for ref in evidence_refs
+            if ref.get("source_id") or ref.get("title")
+        )
+        sheet.cell(row=row_index, column=1, value=assumption.get("source_type", ""))
+        sheet.cell(row=row_index, column=2, value=assumption.get("review_status", ""))
+        sheet.cell(row=row_index, column=3, value=len(evidence_refs))
+        sheet.cell(row=row_index, column=4, value=evidence_ids)
+        row_index += 1
+    return row_index
+
+
+def _write_bullet_list(sheet, row_index: int, lines: list[str]) -> int:
+    for line in lines:
+        sheet.cell(row=row_index, column=1, value="・")
+        sheet.cell(row=row_index, column=4, value=line)
+        row_index += 1
+    return row_index
 
 
 def _build_workbook_assumptions(candidate_payload: dict[str, Any]) -> dict[str, list[float]]:
