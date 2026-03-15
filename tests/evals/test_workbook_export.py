@@ -44,6 +44,7 @@ def test_export_candidate_workbook_writes_expected_sheets(tmp_path) -> None:
     assert workbook.sheetnames == [
         "PDCAチェックシート",
         "想定Q&A",
+        "収益計画Q&A",
         "PL設計",
         "ミールモデル",
         "アカデミーモデル",
@@ -311,6 +312,25 @@ def test_export_candidate_workbook_adds_qa_sheet_with_iteration_tracking(tmp_pat
     assert qa_sheet.cell(row=first_revenue_row, column=10).value == 1
     assert qa_sheet.cell(row=first_revenue_row, column=5).value
     assert qa_sheet.cell(row=first_revenue_row, column=6).value
+
+    revenue_plan_sheet = workbook["収益計画Q&A"]
+    assert revenue_plan_sheet.freeze_panes == "A2"
+    plan_headers = [revenue_plan_sheet.cell(row=1, column=column_index).value for column_index in range(1, 13)]
+    assert plan_headers == headers
+    plan_sections = {
+        revenue_plan_sheet.cell(row=row_index, column=1).value
+        for row_index in range(2, revenue_plan_sheet.max_row + 1)
+        if revenue_plan_sheet.cell(row=row_index, column=1).value
+    }
+    assert {"一般", "企画書固有"}.issubset(plan_sections)
+    assert revenue_plan_sheet.max_row >= 21
+    plan_questions = [
+        revenue_plan_sheet.cell(row=row_index, column=3).value
+        for row_index in range(2, revenue_plan_sheet.max_row + 1)
+        if revenue_plan_sheet.cell(row=row_index, column=3).value
+    ]
+    assert any("売上成長率の根拠" in question for question in plan_questions)
+    assert any("なぜ3年間は検証期間" in question for question in plan_questions)
 
 
 def test_export_candidate_workbook_expands_academy_and_consulting_structure(tmp_path) -> None:

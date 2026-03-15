@@ -239,6 +239,16 @@ def export_candidate_workbook(
         diagnosis=diagnosis,
         assumptions=assumptions,
         iteration_summaries=iteration_summaries or [],
+        qa_mode="pdca",
+    )
+    _write_qa_sheet(
+        workbook.create_sheet("収益計画Q&A"),
+        candidate_id=candidate_id,
+        candidate_payload=candidate_payload,
+        diagnosis=diagnosis,
+        assumptions=assumptions,
+        iteration_summaries=iteration_summaries or [],
+        qa_mode="revenue_plan",
     )
     _write_pl_sheet(workbook.create_sheet("PL設計"))
     _write_meal_sheet(workbook.create_sheet("ミールモデル"))
@@ -829,6 +839,7 @@ def _write_qa_sheet(
     diagnosis: dict[str, Any],
     assumptions: dict[str, list[float]],
     iteration_summaries: list[dict[str, Any]],
+    qa_mode: str,
 ) -> None:
     headers = [
         "区分",
@@ -857,6 +868,7 @@ def _write_qa_sheet(
             diagnosis=diagnosis,
             assumptions=assumptions,
             iteration_summaries=iteration_summaries,
+            qa_mode=qa_mode,
         ),
         start=2,
     ):
@@ -1187,6 +1199,7 @@ def _build_workbook_qa_items(
     diagnosis: dict[str, Any],
     assumptions: dict[str, list[float]],
     iteration_summaries: list[dict[str, Any]],
+    qa_mode: str,
 ) -> list[dict[str, Any]]:
     current_iteration = _current_iteration(iteration_summaries, candidate_id)
     current_summary = next(
@@ -1201,11 +1214,337 @@ def _build_workbook_qa_items(
     external_label = ", ".join(source.get("title", "") for source in external_sources if source.get("title")) or source_types
     segments = list(candidate_payload.get("model_sheets", {}).keys())
 
-    qa_specs = [
-        {
-            "scope": "一般",
-            "category": "収益",
-            "question": "売上は誰に何をどう売って伸ばす計画か？",
+    if qa_mode == "revenue_plan":
+        qa_specs = [
+            {
+                "scope": "一般",
+                "category": "収益",
+                "question": "売上成長率の根拠は何か？",
+                "answer": (
+                    f"売上は FY1 {_fmt_int(assumptions['revenue_target'][0])} から FY5 {_fmt_int(assumptions['revenue_target'][-1])} まで伸ばす前提です。"
+                    " 成長は段階投資と営業効率改善を前提に置いています。"
+                ),
+                "metrics_to_check": "売上目標 FY1-FY5 / 営業利益率 / pl Δ",
+                "evidence_to_check": f"PL設計 / PDF方針 / {source_types}",
+                "frequency": "高",
+                "accuracy": "高",
+                "tags": ["sales", "staged"],
+            },
+            {
+                "scope": "一般",
+                "category": "収益",
+                "question": "売上の主要ドライバーは何か？",
+                "answer": (
+                    f"主要ドライバーは {' / '.join(segments) or 'ミール・アカデミー・コンサル'} の各 driver です。"
+                    " 特に営業効率と検証後の投資アクセルが売上再現に効いています。"
+                ),
+                "metrics_to_check": "各モデルシート売上 / PDCA全体推移",
+                "evidence_to_check": "モデルシート / 仮説ロジック",
+                "frequency": "高",
+                "accuracy": "高",
+                "tags": ["sales", "staged"],
+            },
+            {
+                "scope": "一般",
+                "category": "収益",
+                "question": "売上予測は営業・マーケ施策とどう接続しているか？",
+                "answer": (
+                    "営業効率、パートナー、ブランド波及を overlay として比較しています。"
+                    " 現時点では営業効率の改善が最も強い寄与を示しています。"
+                ),
+                "metrics_to_check": "sales / partner / branding の差分",
+                "evidence_to_check": "PDCA全体推移 / 外部根拠",
+                "frequency": "高",
+                "accuracy": "中",
+                "tags": ["sales", "partner", "branding"],
+            },
+            {
+                "scope": "一般",
+                "category": "コスト",
+                "question": "費用は売上成長に対してどうコントロールしているか？",
+                "answer": (
+                    "人件費、マーケ費、開発費、その他OPEXの比率を明示し、費用計画で管理しています。"
+                    " 検証前に固定費を先行させすぎない設計です。"
+                ),
+                "metrics_to_check": "人件費 / マーケ費 / OPEX合計",
+                "evidence_to_check": "費用計画 / 前提条件",
+                "frequency": "高",
+                "accuracy": "高",
+                "tags": ["staged"],
+            },
+            {
+                "scope": "一般",
+                "category": "収益性",
+                "question": "黒字化の条件は何か？",
+                "answer": (
+                    "売上成長だけでなく、PL 側の再現性改善と費用配分の妥当性が条件です。"
+                    " 現状は PL 再現度の改善が黒字化の筋を前進させています。"
+                ),
+                "metrics_to_check": "営業利益 / 営業利益率 / pl Δ",
+                "evidence_to_check": "PL設計 / 評価スコア",
+                "frequency": "高",
+                "accuracy": "中",
+                "tags": ["sales"],
+            },
+            {
+                "scope": "一般",
+                "category": "収益性",
+                "question": "粗利率の妥当性はどう見ているか？",
+                "answer": (
+                    "粗利率は売上原価と各事業の構造を踏まえて見ています。"
+                    " 事業別売上と原価率のバランスを崩さずに PL を改善することが重要です。"
+                ),
+                "metrics_to_check": "粗利 / 粗利率 / 売上原価",
+                "evidence_to_check": "PL設計 / モデルシート",
+                "frequency": "中",
+                "accuracy": "中",
+                "tags": [],
+            },
+            {
+                "scope": "一般",
+                "category": "成長性",
+                "question": "成長投資をいつ強めるのか？",
+                "answer": (
+                    "前半で unit economics を検証し、後半で営業投資を加速する段階設計です。"
+                    " 一律前倒しではなく、検証結果に応じてアクセルを踏む計画です。"
+                ),
+                "metrics_to_check": "staged_acceleration の差分 / 次の施策",
+                "evidence_to_check": "仮説詳細 / PDCA全体推移",
+                "frequency": "高",
+                "accuracy": "高",
+                "tags": ["staged"],
+            },
+            {
+                "scope": "一般",
+                "category": "成長性",
+                "question": "感応度が高い前提は何か？",
+                "answer": (
+                    "現状は sales efficiency、partner 寄与、branding 波及が主要な感応度ポイントです。"
+                    " どのレバーが PL に効くかを比較しながら改善しています。"
+                ),
+                "metrics_to_check": "各候補の pl Δ / explainability Δ",
+                "evidence_to_check": "PDCA全体推移",
+                "frequency": "中",
+                "accuracy": "中",
+                "tags": ["sales", "partner", "branding"],
+            },
+            {
+                "scope": "一般",
+                "category": "リスク",
+                "question": "この計画が外れる最大リスクは何か？",
+                "answer": (
+                    f"最大リスクは {next_actions[0]}"
+                    " 現状は consulting と PL の橋渡しが最大の残課題です。"
+                ),
+                "metrics_to_check": "悪化した点 / 次の改善施策",
+                "evidence_to_check": current_summary.get("worsened_points", "-"),
+                "frequency": "高",
+                "accuracy": "高",
+                "tags": ["sales"],
+            },
+            {
+                "scope": "一般",
+                "category": "市場",
+                "question": "市場性の裏づけは何か？",
+                "answer": (
+                    "市場性は PDF の記載と curated external sources の両方で確認しています。"
+                    " ただし、外部ソースは curated cache ベースなので追加精査余地もあります。"
+                ),
+                "metrics_to_check": "外部根拠タイプ / source cache",
+                "evidence_to_check": external_label,
+                "frequency": "中",
+                "accuracy": "中",
+                "tags": ["partner", "branding"],
+            },
+            {
+                "scope": "一般",
+                "category": "オペレーション",
+                "question": "オペレーション上のボトルネックは何か？",
+                "answer": (
+                    "現時点のボトルネックは consulting driver から PL への橋渡しです。"
+                    " 事業モデルの構造理解より、数式連動の精緻化が今後の焦点です。"
+                ),
+                "metrics_to_check": "次の改善施策 / コンサルモデル",
+                "evidence_to_check": "PDCAチェックシート / コンサルモデル",
+                "frequency": "中",
+                "accuracy": "高",
+                "tags": ["sales"],
+            },
+            {
+                "scope": "一般",
+                "category": "資金",
+                "question": "資金使途の優先順位は何か？",
+                "answer": (
+                    "優先順位は検証を支える運営投資、その後の営業投資、必要な開発投資です。"
+                    " 勝ち筋が見える前に sales を過剰に厚くしない方針です。"
+                ),
+                "metrics_to_check": "人件費 / マーケ費 / 開発費（償却）",
+                "evidence_to_check": "費用計画 / 仮説の詳細",
+                "frequency": "高",
+                "accuracy": "中",
+                "tags": ["staged", "sales"],
+            },
+            {
+                "scope": "企画書固有",
+                "category": "収益",
+                "question": "なぜ3年間は検証期間なのか？",
+                "answer": (
+                    "この計画では先に unit economics を確認してから投資アクセルを踏むためです。"
+                    " 先行投資の失敗リスクを抑えつつ、後半の拡大余地を残す意図があります。"
+                ),
+                "metrics_to_check": "staged_acceleration と acceleration period の差分",
+                "evidence_to_check": "仮説の詳細 / PDCA全体推移",
+                "frequency": "高",
+                "accuracy": "高",
+                "tags": ["staged"],
+            },
+            {
+                "scope": "企画書固有",
+                "category": "収益",
+                "question": "なぜ sales efficiency を一番強く見ているのか？",
+                "answer": (
+                    "比較した候補の中で、sales efficiency を重ねた案が PL と説明責任の両面で最も改善しました。"
+                    " そのため現時点では最優先レバーと判断しています。"
+                ),
+                "metrics_to_check": "candidate-revenue-staged-sales の total / pl Δ",
+                "evidence_to_check": "PDCA全体推移 / diagnosis verdict",
+                "frequency": "高",
+                "accuracy": "高",
+                "tags": ["sales"],
+            },
+            {
+                "scope": "企画書固有",
+                "category": "収益",
+                "question": "partner や branding はなぜ補助レバー扱いなのか？",
+                "answer": (
+                    "比較上は一定の改善がありましたが、今回のベスト候補ほど PL を押し上げませんでした。"
+                    " そのため一次採用ではなく補助レバーとして残しています。"
+                ),
+                "metrics_to_check": "partner / branding 候補との差分",
+                "evidence_to_check": "PDCA全体推移の比較結果",
+                "frequency": "中",
+                "accuracy": "高",
+                "tags": ["partner", "branding"],
+            },
+            {
+                "scope": "企画書固有",
+                "category": "収益性",
+                "question": "今回の収益計画で一番改善した点は何か？",
+                "answer": (
+                    f"一番改善したのは PL 再現度で、差分は {score_layers.get('pl', {}).get('delta', 0.0):+.4f} です。"
+                    " モデルシートを落とさずに PL を押し上げた点が重要です。"
+                ),
+                "metrics_to_check": f"pl Δ={score_layers.get('pl', {}).get('delta', 0.0):+.4f}",
+                "evidence_to_check": current_summary.get("improved_points", "-"),
+                "frequency": "高",
+                "accuracy": "高",
+                "tags": ["sales"],
+            },
+            {
+                "scope": "企画書固有",
+                "category": "リスク",
+                "question": "この収益計画でまだ説明が弱い部分はどこか？",
+                "answer": (
+                    "まだ弱いのは consulting の数量ロジックと PL への橋渡しです。"
+                    " workbook の見やすさは改善しましたが、数式の厳密さは今後の課題です。"
+                ),
+                "metrics_to_check": "次の改善施策 / コンサルモデル",
+                "evidence_to_check": next_actions[0],
+                "frequency": "高",
+                "accuracy": "高",
+                "tags": ["sales"],
+            },
+            {
+                "scope": "企画書固有",
+                "category": "市場",
+                "question": "営業以外に比較した市場浸透施策は何か？",
+                "answer": (
+                    "パートナー戦略とブランド波及を比較しています。"
+                    " 現時点では sales overlay が優位ですが、市場浸透の補助策として継続監視しています。"
+                ),
+                "metrics_to_check": "partner / branding 候補の差分",
+                "evidence_to_check": external_label,
+                "frequency": "中",
+                "accuracy": "中",
+                "tags": ["partner", "branding"],
+            },
+            {
+                "scope": "企画書固有",
+                "category": "オペレーション",
+                "question": "ミール・アカデミー・コンサルの役割分担は何か？",
+                "answer": (
+                    "ミールは unit economics、アカデミーは育成と認証、コンサルは高単価収益の柱です。"
+                    " 3モデルを別シートで管理し、PL設計に統合しています。"
+                ),
+                "metrics_to_check": "各モデルの売上 / PL設計の事業別売上",
+                "evidence_to_check": "ミールモデル / アカデミーモデル / コンサルモデル",
+                "frequency": "高",
+                "accuracy": "高",
+                "tags": [],
+            },
+            {
+                "scope": "企画書固有",
+                "category": "オペレーション",
+                "question": "アカデミーを C/B/A/S に分ける理由は何か？",
+                "answer": (
+                    "単価、人数、進級、認証の構造を分けて説明できるようにするためです。"
+                    " 1本の系列にすると、どこが成長や収益性を作っているか見えにくくなります。"
+                ),
+                "metrics_to_check": "各級売上 / 構成比 / 進級率",
+                "evidence_to_check": "アカデミーモデル / 前提条件",
+                "frequency": "中",
+                "accuracy": "中",
+                "tags": [],
+            },
+            {
+                "scope": "企画書固有",
+                "category": "オペレーション",
+                "question": "コンサル数量はどう作っているか？",
+                "answer": (
+                    "P1〜P12 の売上構成比を置き、総売上から件数を逆算しています。"
+                    " まだ proxy を含むため、今後は実データ寄りに精緻化する計画です。"
+                ),
+                "metrics_to_check": "P1〜P12売上構成比 / 推定件数",
+                "evidence_to_check": "コンサルモデル / 前提条件",
+                "frequency": "低",
+                "accuracy": "中",
+                "tags": [],
+            },
+            {
+                "scope": "企画書固有",
+                "category": "資金",
+                "question": "なぜ開発費を償却で見ているのか？",
+                "answer": (
+                    "開発投資は将来収益に効く投資として整理し、PLでは償却費で見せています。"
+                    " そのほうが cash と P/L の説明責任を分けやすくなります。"
+                ),
+                "metrics_to_check": "開発投資額 / 当期償却額 / 未償却残高",
+                "evidence_to_check": "費用計画の開発償却ブロック",
+                "frequency": "中",
+                "accuracy": "高",
+                "tags": [],
+            },
+            {
+                "scope": "企画書固有",
+                "category": "資金",
+                "question": "収益計画が前提とする投資の順番は何か？",
+                "answer": (
+                    "先に検証を支える運営投資、その後に営業投資、必要に応じて開発投資を積み上げる順番です。"
+                    " 先に sales を厚くしすぎないのが計画の特徴です。"
+                ),
+                "metrics_to_check": "費用計画の人件費 / マーケ費 / 開発費",
+                "evidence_to_check": "仮説の詳細 / 費用計画",
+                "frequency": "中",
+                "accuracy": "中",
+                "tags": ["staged", "sales"],
+            },
+        ]
+    else:
+        qa_specs = [
+            {
+                "scope": "一般",
+                "category": "収益",
+                "question": "売上は誰に何をどう売って伸ばす計画か？",
             "answer": (
                 f"売上の主軸は {' / '.join(segments) or 'ミール・アカデミー・コンサル'} の3系統です。"
                 f" FY1 {_fmt_int(assumptions['revenue_target'][0])} から FY5 {_fmt_int(assumptions['revenue_target'][-1])} まで伸ばす前提で、"
@@ -1528,21 +1867,21 @@ def _build_workbook_qa_items(
             "accuracy": "中",
             "tags": ["staged"],
         },
-        {
-            "scope": "企画書固有",
-            "category": "資金",
-            "question": "資金の使い道は何を優先する計画か？",
+            {
+                "scope": "企画書固有",
+                "category": "資金",
+                "question": "資金の使い道は何を優先する計画か？",
             "answer": (
                 "優先順位は、検証を支える運営投資、その後の営業投資、そして必要な開発投資です。"
                 " 先に sales を厚くしすぎず、勝ち筋確認後に投下する構えです。"
             ),
             "metrics_to_check": "人件費 / マーケ費 / 開発費（償却）",
             "evidence_to_check": "費用計画 / 仮説の詳細",
-            "frequency": "中",
-            "accuracy": "中",
-            "tags": ["staged", "sales"],
-        },
-    ]
+                "frequency": "中",
+                "accuracy": "中",
+                "tags": ["staged", "sales"],
+            },
+        ]
 
     items: list[dict[str, Any]] = []
     for spec in qa_specs:
