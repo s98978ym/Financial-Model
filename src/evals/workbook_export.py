@@ -181,6 +181,9 @@ SUBTOTAL_FILL = PatternFill(fill_type="solid", fgColor="D9E2F3")
 TOTAL_FILL = PatternFill(fill_type="solid", fgColor="A6A6A6")
 BOLD_FONT = Font(bold=True)
 TOTAL_FONT = Font(bold=True, color="FFFFFF")
+NUMBER_FORMAT = "#,##0"
+COUNT_DECIMAL_FORMAT = "#,##0.0"
+PERCENT_FORMAT = "0.0%"
 
 
 def export_candidate_workbook(
@@ -297,6 +300,25 @@ def _write_pl_sheet(sheet) -> None:
     _style_subtotal_rows(sheet, [PL_ROWS["academy_revenue"], PL_ROWS["consult_revenue"], PL_ROWS["meal_revenue"]])
     _style_formula_rows(sheet, [PL_ROWS["gross_margin_ratio"], PL_ROWS["operating_margin"]])
     _style_total_rows(sheet, [PL_ROWS["revenue_total"], PL_ROWS["gross_profit"], PL_ROWS["opex_total"], PL_ROWS["operating_profit"]])
+    _set_number_format_rows(
+        sheet,
+        [
+            PL_ROWS["revenue_total"],
+            PL_ROWS["academy_revenue"],
+            PL_ROWS["consult_revenue"],
+            PL_ROWS["meal_revenue"],
+            PL_ROWS["cogs"],
+            PL_ROWS["gross_profit"],
+            PL_ROWS["personnel_cost"],
+            PL_ROWS["marketing_cost"],
+            PL_ROWS["development_cost"],
+            PL_ROWS["other_opex"],
+            PL_ROWS["opex_total"],
+            PL_ROWS["operating_profit"],
+        ],
+        number_format=NUMBER_FORMAT,
+    )
+    _set_number_format_rows(sheet, [PL_ROWS["gross_margin_ratio"], PL_ROWS["operating_margin"]], number_format=PERCENT_FORMAT)
 
 
 def _write_meal_sheet(sheet) -> None:
@@ -326,6 +348,8 @@ def _write_meal_sheet(sheet) -> None:
         sheet[f"{model_col}7"] = f"={model_col}2*{model_col}3*{model_col}4*{model_col}6"
     _style_formula_rows(sheet, [2, 3, 4, 5, 6])
     _style_subtotal_rows(sheet, [7])
+    _set_number_format_rows(sheet, [2, 3, 4, 6, 7], number_format=NUMBER_FORMAT)
+    _set_number_format_rows(sheet, [5], number_format=PERCENT_FORMAT)
 
 
 def _write_academy_sheet(sheet) -> None:
@@ -395,6 +419,7 @@ def _write_academy_sheet(sheet) -> None:
     _style_formula_rows(sheet, [3, 4, 5, 6, 8, 9, 10, 11, 13, 14, 15, 16, 18, 19, 20, 21])
     _style_subtotal_rows(sheet, [ACADEMY_ROW_LAYOUT["total_students"]])
     _style_total_rows(sheet, [ACADEMY_ROW_LAYOUT["total_revenue"]])
+    _set_number_format_rows(sheet, [3, 4, 5, 6, 8, 9, 10, 11, 13, 14, 15, 16, 18, 19, 20, 21, ACADEMY_ROW_LAYOUT["total_students"], ACADEMY_ROW_LAYOUT["total_revenue"]], number_format=NUMBER_FORMAT)
 
 
 def _write_consulting_sheet(sheet) -> None:
@@ -458,6 +483,13 @@ def _write_consulting_sheet(sheet) -> None:
         _apply_row_style(sheet, row_index, 8, 22, fill=FORMULA_FILL)
     _style_subtotal_rows(sheet, [CONSULT_TOTAL_REVENUE_ROW, CONSULT_TOTAL_DELIVERY_ROW], start_col=1, end_col=17)
     _style_total_rows(sheet, [CONSULT_TOTAL_GROSS_PROFIT_ROW], start_col=1, end_col=17)
+    for row_index in range(CONSULT_DETAIL_START_ROW, CONSULT_DETAIL_START_ROW + len(CONSULT_SKUS)):
+        _set_number_format_rows(sheet, [row_index], number_format=NUMBER_FORMAT, start_col=4, end_col=4)
+        _set_number_format_rows(sheet, [row_index], number_format=PERCENT_FORMAT, start_col=5, end_col=5)
+        _set_number_format_rows(sheet, [row_index], number_format=NUMBER_FORMAT, start_col=6, end_col=7)
+        _set_number_format_rows(sheet, [row_index], number_format=COUNT_DECIMAL_FORMAT, start_col=8, end_col=12)
+        _set_number_format_rows(sheet, [row_index], number_format=NUMBER_FORMAT, start_col=13, end_col=22)
+    _set_number_format_rows(sheet, [CONSULT_TOTAL_REVENUE_ROW, CONSULT_TOTAL_DELIVERY_ROW, CONSULT_TOTAL_GROSS_PROFIT_ROW], number_format=NUMBER_FORMAT)
 
 
 def _write_cost_summary_sheet(sheet) -> None:
@@ -498,6 +530,7 @@ def _write_cost_summary_sheet(sheet) -> None:
         )
     _style_subtotal_rows(sheet, [2, 3, 4, 5])
     _style_total_rows(sheet, [COST_SUMMARY_ROWS["opex_total"]])
+    _set_number_format_rows(sheet, [2, 3, 4, 5, COST_SUMMARY_ROWS["opex_total"]], number_format=NUMBER_FORMAT)
 
 
 def _write_cost_list_sheet(sheet) -> None:
@@ -520,6 +553,7 @@ def _write_cost_list_sheet(sheet) -> None:
             sheet[f"{model_col}{row_index}"] = f"={_sheet_ref('費用まとめ', f'{summary_col}{cost_row}')}*{share}"
     for row_index in range(2, 2 + len(COST_LIST_ROWS)):
         _apply_row_style(sheet, row_index, 3, 7, fill=FORMULA_FILL)
+        _set_number_format_rows(sheet, [row_index], number_format=NUMBER_FORMAT, start_col=3, end_col=7)
 
 
 def _write_plan_assumptions_sheet(sheet, assumptions: dict[str, list[float]]) -> None:
@@ -637,6 +671,36 @@ def _write_plan_assumptions_sheet(sheet, assumptions: dict[str, list[float]]) ->
     ]
     _style_input_rows(sheet, input_rows)
     _style_formula_rows(sheet, derived_rows)
+    percentage_rows = [
+        ASSUMPTION_ROWS["meal_retention_rate"],
+        ASSUMPTION_ROWS["consult_retention"],
+        ASSUMPTION_ROWS["gross_margin_ratio"],
+        ASSUMPTION_ROWS["personnel_ratio"],
+        ASSUMPTION_ROWS["marketing_ratio"],
+        ASSUMPTION_ROWS["development_ratio"],
+        ASSUMPTION_ROWS["other_ratio"],
+        ASSUMPTION_ROWS["academy_c_share"],
+        ASSUMPTION_ROWS["academy_b_share"],
+        ASSUMPTION_ROWS["academy_a_share"],
+        ASSUMPTION_ROWS["academy_s_share"],
+        ASSUMPTION_ROWS["academy_c_to_b"],
+        ASSUMPTION_ROWS["academy_b_to_a"],
+        ASSUMPTION_ROWS["academy_a_to_s"],
+        ASSUMPTION_ROWS["academy_c_completion"],
+        ASSUMPTION_ROWS["academy_c_certification"],
+        ASSUMPTION_ROWS["academy_b_completion"],
+        ASSUMPTION_ROWS["academy_b_certification"],
+        ASSUMPTION_ROWS["academy_a_completion"],
+        ASSUMPTION_ROWS["academy_a_certification"],
+        ASSUMPTION_ROWS["academy_s_completion"],
+        ASSUMPTION_ROWS["academy_s_certification"],
+    ]
+    decimal_count_rows = [ASSUMPTION_ROWS["consult_project_count"]]
+    for row_index in input_rows + derived_rows:
+        fmt = PERCENT_FORMAT if row_index in percentage_rows else NUMBER_FORMAT
+        if row_index in decimal_count_rows:
+            fmt = COUNT_DECIMAL_FORMAT
+        _set_number_format_rows(sheet, [row_index], number_format=fmt)
 
 
 def _academy_raw_student_expr(code: str, assumption_col: str, previous_model_col: str | None) -> str:
@@ -822,6 +886,12 @@ def _style_subtotal_rows(sheet, row_indexes: list[int], *, start_col: int = 1, e
 def _style_total_rows(sheet, row_indexes: list[int], *, start_col: int = 1, end_col: int = 6) -> None:
     for row_index in row_indexes:
         _apply_row_style(sheet, row_index, start_col, end_col, fill=TOTAL_FILL, font=TOTAL_FONT)
+
+
+def _set_number_format_rows(sheet, row_indexes: list[int], *, number_format: str, start_col: int = 2, end_col: int = 6) -> None:
+    for row_index in row_indexes:
+        for column_index in range(start_col, end_col + 1):
+            sheet.cell(row=row_index, column=column_index).number_format = number_format
 
 
 def _write_key_value_rows(sheet, rows: list[list[Any]]) -> None:

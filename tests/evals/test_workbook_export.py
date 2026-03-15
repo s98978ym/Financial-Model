@@ -74,8 +74,11 @@ def test_export_candidate_workbook_writes_expected_sheets(tmp_path) -> None:
     assert "人件費比率" in assumption_labels
     assert assumptions_sheet["B2"].fill.fill_type == "solid"
     assert _rgb_suffix(assumptions_sheet["B2"]) == "DDEBF7"
+    assert assumptions_sheet["B2"].number_format == "#,##0"
     assert assumptions_sheet["B10"].fill.fill_type == "solid"
     assert _rgb_suffix(assumptions_sheet["B10"]) == "E2F0D9"
+    assert assumptions_sheet["B10"].number_format == "#,##0"
+    assert assumptions_sheet["B28"].number_format == "0.0%"
 
     cost_sheet = workbook["費用まとめ"]
     cost_labels = {
@@ -88,6 +91,7 @@ def test_export_candidate_workbook_writes_expected_sheets(tmp_path) -> None:
     assert _rgb_suffix(cost_sheet["A6"]) == "A6A6A6"
     assert cost_sheet["B6"].fill.fill_type == "solid"
     assert _rgb_suffix(cost_sheet["B6"]) == "A6A6A6"
+    assert cost_sheet["B6"].number_format == "#,##0"
 
 
 def test_export_candidate_workbook_expands_academy_and_consulting_structure(tmp_path) -> None:
@@ -155,6 +159,9 @@ def test_export_candidate_workbook_expands_academy_and_consulting_structure(tmp_
     assert isinstance(consult_sheet["I3"].value, str) and consult_sheet["I3"].value.startswith("=")
     assert consult_sheet["M15"].fill.fill_type == "solid"
     assert _rgb_suffix(consult_sheet["M15"]) == "D9E2F3"
+    assert consult_sheet["D3"].number_format == "#,##0"
+    assert consult_sheet["E3"].number_format == "0.0%"
+    assert consult_sheet["H3"].number_format == "#,##0.0"
 
     assumptions_sheet = workbook["（全Ver）前提条件"]
     assumption_labels = {
@@ -176,3 +183,6 @@ def test_export_candidate_workbook_expands_academy_and_consulting_structure(tmp_
     assert _rgb_suffix(pl_sheet["B14"]) == "A6A6A6"
     assert pl_sheet["A3"].fill.fill_type == "solid"
     assert _rgb_suffix(pl_sheet["A3"]) == "D9E2F3"
+    assert pl_sheet["B2"].number_format == "#,##0"
+    assert pl_sheet["B8"].number_format == "0.0%"
+    assert pl_sheet["B15"].number_format == "0.0%"
