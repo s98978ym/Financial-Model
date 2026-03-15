@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from openpyxl import Workbook
-from openpyxl.styles import Font, PatternFill
+from openpyxl.styles import Alignment, Font, PatternFill
 
 
 YEAR_HEADERS = ["FY1", "FY2", "FY3", "FY4", "FY5"]
@@ -184,6 +184,10 @@ TOTAL_FONT = Font(bold=True, color="FFFFFF")
 NUMBER_FORMAT = "#,##0"
 COUNT_DECIMAL_FORMAT = "#,##0.0"
 PERCENT_FORMAT = "0.0%"
+LEFT_ALIGN = Alignment(horizontal="left", vertical="center")
+RIGHT_ALIGN = Alignment(horizontal="right", vertical="center")
+CENTER_ALIGN = Alignment(horizontal="center", vertical="center")
+WRAP_LEFT_ALIGN = Alignment(horizontal="left", vertical="center", wrap_text=True)
 
 
 def export_candidate_workbook(
@@ -237,6 +241,11 @@ def _write_summary_sheet(
         ["baseline_total", baseline_total],
     ]
     _write_key_value_rows(sheet, rows)
+    sheet.freeze_panes = "B2"
+    _set_column_widths(sheet, {"A": 22, "B": 42})
+    _set_row_heights(sheet, {1: 22, 2: 36, 3: 42, 4: 24, 5: 42})
+    _align_range(sheet, start_row=1, end_row=len(rows), start_col=1, end_col=1, alignment=LEFT_ALIGN)
+    _align_range(sheet, start_row=1, end_row=len(rows), start_col=2, end_col=2, alignment=WRAP_LEFT_ALIGN)
 
 
 def _write_pl_sheet(sheet) -> None:
@@ -319,6 +328,16 @@ def _write_pl_sheet(sheet) -> None:
         number_format=NUMBER_FORMAT,
     )
     _set_number_format_rows(sheet, [PL_ROWS["gross_margin_ratio"], PL_ROWS["operating_margin"]], number_format=PERCENT_FORMAT)
+    _apply_standard_layout(sheet, freeze_panes="B2", label_width=18, year_width=12)
+    _set_row_heights(
+        sheet,
+        {
+            PL_ROWS["revenue_total"]: 24,
+            PL_ROWS["gross_profit"]: 24,
+            PL_ROWS["opex_total"]: 24,
+            PL_ROWS["operating_profit"]: 26,
+        },
+    )
 
 
 def _write_meal_sheet(sheet) -> None:
@@ -350,6 +369,7 @@ def _write_meal_sheet(sheet) -> None:
     _style_subtotal_rows(sheet, [7])
     _set_number_format_rows(sheet, [2, 3, 4, 6, 7], number_format=NUMBER_FORMAT)
     _set_number_format_rows(sheet, [5], number_format=PERCENT_FORMAT)
+    _apply_standard_layout(sheet, freeze_panes="B2", label_width=20, year_width=12)
 
 
 def _write_academy_sheet(sheet) -> None:
@@ -420,6 +440,18 @@ def _write_academy_sheet(sheet) -> None:
     _style_subtotal_rows(sheet, [ACADEMY_ROW_LAYOUT["total_students"]])
     _style_total_rows(sheet, [ACADEMY_ROW_LAYOUT["total_revenue"]])
     _set_number_format_rows(sheet, [3, 4, 5, 6, 8, 9, 10, 11, 13, 14, 15, 16, 18, 19, 20, 21, ACADEMY_ROW_LAYOUT["total_students"], ACADEMY_ROW_LAYOUT["total_revenue"]], number_format=NUMBER_FORMAT)
+    _apply_standard_layout(sheet, freeze_panes="B2", label_width=18, year_width=12)
+    _set_row_heights(
+        sheet,
+        {
+            2: 24,
+            7: 24,
+            12: 24,
+            17: 24,
+            ACADEMY_ROW_LAYOUT["total_students"]: 24,
+            ACADEMY_ROW_LAYOUT["total_revenue"]: 26,
+        },
+    )
 
 
 def _write_consulting_sheet(sheet) -> None:
@@ -490,6 +522,40 @@ def _write_consulting_sheet(sheet) -> None:
         _set_number_format_rows(sheet, [row_index], number_format=COUNT_DECIMAL_FORMAT, start_col=8, end_col=12)
         _set_number_format_rows(sheet, [row_index], number_format=NUMBER_FORMAT, start_col=13, end_col=22)
     _set_number_format_rows(sheet, [CONSULT_TOTAL_REVENUE_ROW, CONSULT_TOTAL_DELIVERY_ROW, CONSULT_TOTAL_GROSS_PROFIT_ROW], number_format=NUMBER_FORMAT)
+    sheet.freeze_panes = "A3"
+    _set_column_widths(
+        sheet,
+        {
+            "A": 10,
+            "B": 28,
+            "C": 12,
+            "D": 14,
+            "E": 12,
+            "F": 16,
+            "G": 12,
+            "H": 12,
+            "I": 12,
+            "J": 12,
+            "K": 12,
+            "L": 12,
+            "M": 14,
+            "N": 14,
+            "O": 14,
+            "P": 14,
+            "Q": 14,
+            "R": 14,
+            "S": 14,
+            "T": 14,
+            "U": 14,
+            "V": 14,
+        },
+    )
+    _set_row_heights(sheet, {1: 22, 2: 22, CONSULT_TOTAL_REVENUE_ROW: 24, CONSULT_TOTAL_DELIVERY_ROW: 24, CONSULT_TOTAL_GROSS_PROFIT_ROW: 26})
+    for row_index in range(CONSULT_DETAIL_START_ROW, CONSULT_DETAIL_START_ROW + len(CONSULT_SKUS)):
+        sheet.row_dimensions[row_index].height = 32
+    _align_range(sheet, start_row=1, end_row=sheet.max_row, start_col=1, end_col=1, alignment=LEFT_ALIGN)
+    _align_range(sheet, start_row=1, end_row=sheet.max_row, start_col=2, end_col=2, alignment=WRAP_LEFT_ALIGN)
+    _align_range(sheet, start_row=1, end_row=sheet.max_row, start_col=3, end_col=22, alignment=RIGHT_ALIGN)
 
 
 def _write_cost_summary_sheet(sheet) -> None:
@@ -531,6 +597,8 @@ def _write_cost_summary_sheet(sheet) -> None:
     _style_subtotal_rows(sheet, [2, 3, 4, 5])
     _style_total_rows(sheet, [COST_SUMMARY_ROWS["opex_total"]])
     _set_number_format_rows(sheet, [2, 3, 4, 5, COST_SUMMARY_ROWS["opex_total"]], number_format=NUMBER_FORMAT)
+    _apply_standard_layout(sheet, freeze_panes="B2", label_width=18, year_width=12)
+    _set_row_heights(sheet, {COST_SUMMARY_ROWS["opex_total"]: 24})
 
 
 def _write_cost_list_sheet(sheet) -> None:
@@ -554,6 +622,11 @@ def _write_cost_list_sheet(sheet) -> None:
     for row_index in range(2, 2 + len(COST_LIST_ROWS)):
         _apply_row_style(sheet, row_index, 3, 7, fill=FORMULA_FILL)
         _set_number_format_rows(sheet, [row_index], number_format=NUMBER_FORMAT, start_col=3, end_col=7)
+    sheet.freeze_panes = "C2"
+    _set_column_widths(sheet, {"A": 24, "B": 14, "C": 12, "D": 12, "E": 12, "F": 12, "G": 12})
+    _set_row_heights(sheet, {1: 22})
+    _align_range(sheet, start_row=1, end_row=sheet.max_row, start_col=1, end_col=2, alignment=LEFT_ALIGN)
+    _align_range(sheet, start_row=1, end_row=sheet.max_row, start_col=3, end_col=7, alignment=RIGHT_ALIGN)
 
 
 def _write_plan_assumptions_sheet(sheet, assumptions: dict[str, list[float]]) -> None:
@@ -701,6 +774,23 @@ def _write_plan_assumptions_sheet(sheet, assumptions: dict[str, list[float]]) ->
         if row_index in decimal_count_rows:
             fmt = COUNT_DECIMAL_FORMAT
         _set_number_format_rows(sheet, [row_index], number_format=fmt)
+    sheet.freeze_panes = "B2"
+    _set_column_widths(
+        sheet,
+        {
+            "A": 20,
+            "B": 12,
+            "C": 12,
+            "D": 12,
+            "E": 12,
+            "F": 12,
+            "G": 34,
+        },
+    )
+    _set_row_heights(sheet, {1: 22})
+    _align_range(sheet, start_row=1, end_row=sheet.max_row, start_col=1, end_col=1, alignment=LEFT_ALIGN)
+    _align_range(sheet, start_row=1, end_row=sheet.max_row, start_col=2, end_col=6, alignment=RIGHT_ALIGN)
+    _align_range(sheet, start_row=1, end_row=sheet.max_row, start_col=7, end_col=7, alignment=WRAP_LEFT_ALIGN)
 
 
 def _academy_raw_student_expr(code: str, assumption_col: str, previous_model_col: str | None) -> str:
@@ -892,6 +982,41 @@ def _set_number_format_rows(sheet, row_indexes: list[int], *, number_format: str
     for row_index in row_indexes:
         for column_index in range(start_col, end_col + 1):
             sheet.cell(row=row_index, column=column_index).number_format = number_format
+
+
+def _set_column_widths(sheet, widths: dict[str, float]) -> None:
+    for column, width in widths.items():
+        sheet.column_dimensions[column].width = width
+
+
+def _set_row_heights(sheet, heights: dict[int, float]) -> None:
+    for row_index, height in heights.items():
+        sheet.row_dimensions[row_index].height = height
+
+
+def _align_range(sheet, *, start_row: int, end_row: int, start_col: int, end_col: int, alignment: Alignment) -> None:
+    for row_index in range(start_row, end_row + 1):
+        for column_index in range(start_col, end_col + 1):
+            sheet.cell(row=row_index, column=column_index).alignment = alignment
+
+
+def _apply_standard_layout(sheet, *, freeze_panes: str, label_width: float = 20, year_width: float = 12) -> None:
+    sheet.freeze_panes = freeze_panes
+    _set_column_widths(
+        sheet,
+        {
+            "A": label_width,
+            "B": year_width,
+            "C": year_width,
+            "D": year_width,
+            "E": year_width,
+            "F": year_width,
+        },
+    )
+    _set_row_heights(sheet, {1: 22})
+    _align_range(sheet, start_row=1, end_row=sheet.max_row, start_col=1, end_col=1, alignment=LEFT_ALIGN)
+    if sheet.max_column >= 2:
+        _align_range(sheet, start_row=1, end_row=sheet.max_row, start_col=2, end_col=min(6, sheet.max_column), alignment=RIGHT_ALIGN)
 
 
 def _write_key_value_rows(sheet, rows: list[list[Any]]) -> None:

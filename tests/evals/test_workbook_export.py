@@ -54,7 +54,16 @@ def test_export_candidate_workbook_writes_expected_sheets(tmp_path) -> None:
         "Artifacts",
     ]
 
+    summary_sheet = workbook["Summary"]
+    assert summary_sheet.freeze_panes == "B2"
+    assert summary_sheet.column_dimensions["A"].width >= 20
+    assert summary_sheet.column_dimensions["B"].width >= 36
+
     pl_sheet = workbook["PL設計"]
+    assert pl_sheet.freeze_panes == "B2"
+    assert pl_sheet.column_dimensions["A"].width >= 18
+    assert 10 <= pl_sheet.column_dimensions["B"].width <= 14
+    assert pl_sheet.row_dimensions[1].height >= 20
     pl_rows = {
         pl_sheet.cell(row=row_index, column=1).value: row_index
         for row_index in range(1, pl_sheet.max_row + 1)
@@ -65,6 +74,9 @@ def test_export_candidate_workbook_writes_expected_sheets(tmp_path) -> None:
     assert pl_sheet.cell(row=pl_rows["営業利益"], column=2).value.startswith("=")
 
     assumptions_sheet = workbook["（全Ver）前提条件"]
+    assert assumptions_sheet.freeze_panes == "B2"
+    assert assumptions_sheet.column_dimensions["A"].width >= 18
+    assert assumptions_sheet.column_dimensions["G"].width >= 28
     assumption_labels = {
         assumptions_sheet.cell(row=row_index, column=1).value
         for row_index in range(1, assumptions_sheet.max_row + 1)
@@ -81,6 +93,8 @@ def test_export_candidate_workbook_writes_expected_sheets(tmp_path) -> None:
     assert assumptions_sheet["B28"].number_format == "0.0%"
 
     cost_sheet = workbook["費用まとめ"]
+    assert cost_sheet.freeze_panes == "B2"
+    assert cost_sheet.column_dimensions["A"].width >= 18
     cost_labels = {
         cost_sheet.cell(row=row_index, column=1).value
         for row_index in range(1, cost_sheet.max_row + 1)
@@ -122,6 +136,8 @@ def test_export_candidate_workbook_expands_academy_and_consulting_structure(tmp_
     workbook = load_workbook(output_path, data_only=False)
 
     academy_sheet = workbook["アカデミーモデル"]
+    assert academy_sheet.freeze_panes == "B2"
+    assert academy_sheet.column_dimensions["A"].width >= 18
     academy_labels = {
         academy_sheet.cell(row=row_index, column=1).value
         for row_index in range(1, academy_sheet.max_row + 1)
@@ -138,6 +154,9 @@ def test_export_candidate_workbook_expands_academy_and_consulting_structure(tmp_
     assert all(isinstance(value, str) and value.startswith("=") for value in academy_formula_cells)
 
     consult_sheet = workbook["コンサルモデル"]
+    assert consult_sheet.freeze_panes == "A3"
+    assert consult_sheet.column_dimensions["B"].width >= 20
+    assert consult_sheet.column_dimensions["H"].width >= 12
     consult_headers = [consult_sheet.cell(row=2, column=column_index).value for column_index in range(1, 8)]
     assert consult_headers == [
         "SKU",
@@ -162,6 +181,7 @@ def test_export_candidate_workbook_expands_academy_and_consulting_structure(tmp_
     assert consult_sheet["D3"].number_format == "#,##0"
     assert consult_sheet["E3"].number_format == "0.0%"
     assert consult_sheet["H3"].number_format == "#,##0.0"
+    assert consult_sheet["B3"].alignment.wrap_text is True
 
     assumptions_sheet = workbook["（全Ver）前提条件"]
     assumption_labels = {
@@ -186,3 +206,4 @@ def test_export_candidate_workbook_expands_academy_and_consulting_structure(tmp_
     assert pl_sheet["B2"].number_format == "#,##0"
     assert pl_sheet["B8"].number_format == "0.0%"
     assert pl_sheet["B15"].number_format == "0.0%"
+    assert pl_sheet["A3"].alignment.horizontal == "left"
