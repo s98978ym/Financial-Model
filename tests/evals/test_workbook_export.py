@@ -110,13 +110,17 @@ def test_export_candidate_workbook_writes_expected_sheets(tmp_path) -> None:
     assert "費用サマリー" in cost_labels
     assert "費用明細" in cost_labels
     assert "OPEX合計" in cost_labels
+    assert cost_sheet["B10"].value == "FY1"
+    assert cost_sheet["F10"].value == "FY5"
+    assert cost_sheet["G10"].value == "カテゴリ"
     assert cost_sheet["A7"].fill.fill_type == "solid"
     assert _rgb_suffix(cost_sheet["A7"]) == "A6A6A6"
     assert cost_sheet["B7"].fill.fill_type == "solid"
     assert _rgb_suffix(cost_sheet["B7"]) == "A6A6A6"
     assert cost_sheet["B7"].number_format == "#,##0"
     assert isinstance(cost_sheet["C11"].value, str)
-    assert cost_sheet["C11"].value.startswith("=")
+    assert cost_sheet["B11"].value.startswith("=")
+    assert cost_sheet["G11"].value == "人件費"
 
 
 def test_export_candidate_workbook_expands_academy_and_consulting_structure(tmp_path) -> None:

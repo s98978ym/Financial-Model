@@ -681,30 +681,30 @@ def _write_cost_plan_sheet(sheet) -> None:
     _apply_row_style(sheet, COST_PLAN_ROWS["detail_title"], 1, 7, fill=SUBTOTAL_FILL, font=BOLD_FONT)
     detail_header_row = COST_PLAN_ROWS["detail_header"]
     sheet.cell(row=detail_header_row, column=1, value="アイテム")
-    sheet.cell(row=detail_header_row, column=2, value="カテゴリ")
-    for column_index, header in enumerate(YEAR_HEADERS, start=3):
+    for column_index, header in enumerate(YEAR_HEADERS, start=2):
         sheet.cell(row=detail_header_row, column=column_index, value=header)
+    sheet.cell(row=detail_header_row, column=7, value="カテゴリ")
     sheet["A10"].font = Font(bold=True)
-    sheet["B10"].font = Font(bold=True)
-    for column_index in range(3, 8):
+    sheet["G10"].font = Font(bold=True)
+    for column_index in range(2, 7):
         sheet.cell(row=detail_header_row, column=column_index).font = Font(bold=True)
 
     for row_index, (item_name, category_name, share, cost_key) in enumerate(COST_LIST_ROWS, start=COST_PLAN_ROWS["detail_start"]):
         sheet.cell(row=row_index, column=1, value=item_name)
-        sheet.cell(row=row_index, column=2, value=category_name)
+        sheet.cell(row=row_index, column=7, value=category_name)
         cost_row = COST_SUMMARY_ROWS[cost_key]
-        for column_index in range(3, 8):
+        for column_index in range(2, 7):
             model_col = excel_col(column_index)
-            summary_col = excel_col(column_index - 1)
-            sheet[f"{model_col}{row_index}"] = f"={_sheet_ref('費用計画', f'{summary_col}{cost_row}')}*{share}"
+            sheet[f"{model_col}{row_index}"] = f"={_sheet_ref('費用計画', f'{model_col}{cost_row}')}*{share}"
     for row_index in range(COST_PLAN_ROWS["detail_start"], COST_PLAN_ROWS["detail_start"] + len(COST_LIST_ROWS)):
-        _apply_row_style(sheet, row_index, 3, 7, fill=FORMULA_FILL)
-        _set_number_format_rows(sheet, [row_index], number_format=NUMBER_FORMAT, start_col=3, end_col=7)
+        _apply_row_style(sheet, row_index, 2, 6, fill=FORMULA_FILL)
+        _set_number_format_rows(sheet, [row_index], number_format=NUMBER_FORMAT, start_col=2, end_col=6)
     _apply_standard_layout(sheet, freeze_panes="B2", label_width=22, year_width=12)
-    _set_column_widths(sheet, {"A": 24, "B": 14, "C": 12, "D": 12, "E": 12, "F": 12, "G": 12})
+    _set_column_widths(sheet, {"A": 24, "B": 12, "C": 12, "D": 12, "E": 12, "F": 12, "G": 14})
     _set_row_heights(sheet, {COST_SUMMARY_ROWS["opex_total"]: 24, COST_PLAN_ROWS["summary_title"]: 24, COST_PLAN_ROWS["detail_title"]: 24})
-    _align_range(sheet, start_row=1, end_row=sheet.max_row, start_col=1, end_col=2, alignment=LEFT_ALIGN)
-    _align_range(sheet, start_row=1, end_row=sheet.max_row, start_col=3, end_col=7, alignment=RIGHT_ALIGN)
+    _align_range(sheet, start_row=1, end_row=sheet.max_row, start_col=1, end_col=1, alignment=LEFT_ALIGN)
+    _align_range(sheet, start_row=1, end_row=sheet.max_row, start_col=2, end_col=6, alignment=RIGHT_ALIGN)
+    _align_range(sheet, start_row=1, end_row=sheet.max_row, start_col=7, end_col=7, alignment=LEFT_ALIGN)
 
 
 def _write_plan_assumptions_sheet(sheet, assumptions: dict[str, list[float]]) -> None:
