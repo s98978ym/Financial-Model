@@ -66,6 +66,10 @@ def test_export_candidate_workbook_writes_expected_sheets(tmp_path) -> None:
     assert "根拠と前提" in pdca_labels
     assert "関連ファイル" in pdca_labels
     assert "次の改善施策" in pdca_labels
+    assert review_sheet["A12"].value == "今回の仮説"
+    assert review_sheet["D12"].value
+    assert review_sheet["A13"].value == "仮説の詳細"
+    assert review_sheet["D13"].value
 
     pl_sheet = workbook["PL設計"]
     assert pl_sheet.freeze_panes == "B2"

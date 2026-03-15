@@ -89,7 +89,14 @@ def test_run_reference_pdca_writes_workbook_exports(tmp_path) -> None:
         if pdca_sheet.cell(row=row_index, column=1).value
     }
     assert "PDCA全体推移" in pdca_labels
-    trend_header = [pdca_sheet.cell(row=17, column=column_index).value for column_index in range(1, 14)]
+    trend_section_row = next(
+        row_index
+        for row_index in range(1, pdca_sheet.max_row + 1)
+        if pdca_sheet.cell(row=row_index, column=1).value == "PDCA全体推移"
+    )
+    trend_header_row = trend_section_row + 1
+    first_data_row = trend_section_row + 2
+    trend_header = [pdca_sheet.cell(row=trend_header_row, column=column_index).value for column_index in range(1, 14)]
     assert trend_header == [
         "回",
         "候補",
@@ -105,10 +112,10 @@ def test_run_reference_pdca_writes_workbook_exports(tmp_path) -> None:
         "判定",
         "次の施策",
     ]
-    assert pdca_sheet["B19"].value == "candidate-better"
-    assert "fixture 改善候補の検証" in str(pdca_sheet["C19"].value)
-    assert "fixture_better" in str(pdca_sheet["D19"].value)
-    assert pdca_sheet["L19"].value == "hit"
+    assert pdca_sheet.cell(row=first_data_row + 1, column=2).value == "candidate-better"
+    assert "fixture 改善候補の検証" in str(pdca_sheet.cell(row=first_data_row + 1, column=3).value)
+    assert "fixture_better" in str(pdca_sheet.cell(row=first_data_row + 1, column=4).value)
+    assert pdca_sheet.cell(row=first_data_row + 1, column=12).value == "hit"
 
 
 def test_summary_contains_hypothesis_logic_evidence_and_next_actions(tmp_path) -> None:

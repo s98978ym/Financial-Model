@@ -273,6 +273,8 @@ def _write_pdca_check_sheet(
     row += 1
     row = _write_section_title(sheet, row, "仮説")
     hypothesis_rows = [
+        ("今回の仮説", hypothesis.get("title", "") or "-"),
+        ("仮説の詳細", hypothesis.get("detail", "") or "-"),
         ("ONにした要素", ", ".join(logic.get("toggles_on", [])) or "-"),
         ("OFFにした要素", ", ".join(logic.get("toggles_off", [])) or "-"),
         ("ロジック", "\n".join(logic.get("steps", [])) or "-"),
