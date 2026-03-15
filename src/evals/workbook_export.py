@@ -854,6 +854,9 @@ def _write_qa_sheet(
         "今回更新Iteration",
         "状態",
         "採用状況",
+        "根拠区分",
+        "根拠の数値・内容",
+        "根拠ソース",
     ]
     for column_index, header in enumerate(headers, start=1):
         cell = sheet.cell(row=1, column=column_index, value=header)
@@ -884,6 +887,9 @@ def _write_qa_sheet(
         sheet.cell(row=row_index, column=10, value=item["last_updated_iteration"])
         sheet.cell(row=row_index, column=11, value=item["status"])
         sheet.cell(row=row_index, column=12, value=item["adoption"])
+        sheet.cell(row=row_index, column=13, value=item["support_categories"])
+        sheet.cell(row=row_index, column=14, value=item["support_details"])
+        sheet.cell(row=row_index, column=15, value=item["support_sources"])
         if item["status"] == "新規":
             sheet.cell(row=row_index, column=11).fill = FORMULA_FILL
         elif item["status"] == "更新":
@@ -909,13 +915,17 @@ def _write_qa_sheet(
             "J": 14,
             "K": 10,
             "L": 12,
+            "M": 14,
+            "N": 42,
+            "O": 34,
         },
     )
     _align_range(sheet, start_row=1, end_row=sheet.max_row, start_col=1, end_col=2, alignment=CENTER_ALIGN)
     _align_range(sheet, start_row=1, end_row=sheet.max_row, start_col=3, end_col=6, alignment=WRAP_LEFT_ALIGN)
     _align_range(sheet, start_row=1, end_row=sheet.max_row, start_col=7, end_col=8, alignment=CENTER_ALIGN)
     _align_range(sheet, start_row=1, end_row=sheet.max_row, start_col=9, end_col=10, alignment=RIGHT_ALIGN)
-    _align_range(sheet, start_row=1, end_row=sheet.max_row, start_col=11, end_col=12, alignment=CENTER_ALIGN)
+    _align_range(sheet, start_row=1, end_row=sheet.max_row, start_col=11, end_col=13, alignment=CENTER_ALIGN)
+    _align_range(sheet, start_row=1, end_row=sheet.max_row, start_col=14, end_col=15, alignment=WRAP_LEFT_ALIGN)
 
 
 def _write_plan_assumptions_sheet(sheet, assumptions: dict[str, list[float]]) -> None:
@@ -1964,6 +1974,24 @@ def _build_workbook_qa_items(
         first_added, last_updated = _iteration_range_for_tags(iteration_summaries, spec["tags"])
         status = _qa_status(first_added, last_updated, current_iteration)
         adoption = _qa_adoption(spec["tags"], diagnosis)
+        support_buckets = _build_qa_support_buckets(
+            spec=spec,
+            pdf_facts=pdf_facts,
+            external_label=external_label,
+            current_summary=current_summary,
+            next_actions=next_actions,
+            assumptions=assumptions,
+            gross_margin_start=gross_margin_start,
+            gross_margin_end=gross_margin_end,
+            meal_retention_start=meal_retention_start,
+            consult_retention_start=consult_retention_start,
+            personnel_ratio_start=personnel_ratio_start,
+            marketing_ratio_start=marketing_ratio_start,
+            development_ratio_start=development_ratio_start,
+            development_years=development_years,
+            pl_delta=pl_delta,
+            total_delta=total_delta,
+        )
         answer = (
             f"{spec['answer']} "
             f"確認ポイント: 見る数値={spec['metrics_to_check']} / 見る根拠={spec['evidence_to_check']}"
@@ -1982,9 +2010,118 @@ def _build_workbook_qa_items(
                 "last_updated_iteration": last_updated,
                 "status": status,
                 "adoption": adoption,
+                "support_categories": " / ".join(bucket["category"] for bucket in support_buckets),
+                "support_details": "\n".join(f"{bucket['category']}: {bucket['detail']}" for bucket in support_buckets),
+                "support_sources": "\n".join(f"{bucket['category']}: {bucket['source']}" for bucket in support_buckets),
             }
         )
     return items
+
+
+def _build_qa_support_buckets(
+    *,
+    spec: dict[str, Any],
+    pdf_facts: list[str],
+    external_label: str,
+    current_summary: dict[str, Any],
+    next_actions: list[str],
+    assumptions: dict[str, list[float]],
+    gross_margin_start: float,
+    gross_margin_end: float,
+    meal_retention_start: float,
+    consult_retention_start: float,
+    personnel_ratio_start: float,
+    marketing_ratio_start: float,
+    development_ratio_start: float,
+    development_years: float,
+    pl_delta: float,
+    total_delta: float,
+) -> list[dict[str, str]]:
+    category = spec["category"]
+    question = spec["question"]
+    tags = spec["tags"]
+
+    fact_detail = pdf_facts[0] if pdf_facts else "事業計画本文から直接確認できる明示方針は限定的です。"
+    if "価格・数量・継続率" in question:
+        fact_detail = "売上はミール・アカデミー・コンサルの3構造に分け、数量と継続率を主軸に検討しています。"
+    elif "市場成長ではなく" in question:
+        fact_detail = "市場の追い風そのものではなく、検証後に営業効率の高いチャネルへ投資を寄せる方針です。"
+    elif "先行指標" in question:
+        fact_detail = "現状のモデルで直接追える先行指標は、受講人数・食数・コンサル構成比です。"
+    elif "営業体制と採用計画" in question:
+        fact_detail = "営業容量と採用計画は、現時点では仮説が先行しており実測根拠が薄い状態です。"
+    elif "下振れした場合" in question:
+        fact_detail = "下振れ時はまず獲得効率が崩れ、その後に PL に波及する前提で見ています。"
+    elif "追加資金が必要になる条件" in question:
+        fact_detail = "営業投資だけが先行して売上がついてこないケースを最も警戒しています。"
+    elif "投資回収" in question:
+        fact_detail = "投資回収は営業利益率と OPEX のバランスで見る設計ですが、回収期間の詳細指標は未実装です。"
+    elif "検証期間" in question or "解放条件" in question or "追加投資" in question:
+        fact_detail = "3年間はユニットエコノミクスを磨き、確認後に営業とマーケ費を投入する方針です。"
+    elif "sales efficiency" in question:
+        fact_detail = "比較候補の中で sales efficiency を重ねた案が最良候補でした。"
+    elif "partner" in question or "branding" in question:
+        fact_detail = "partner と branding は比較したものの、主軸ではなく補助レバーとして残っています。"
+    elif "役割分担" in question:
+        fact_detail = "事業はミール・アカデミー・コンサルの3本柱として整理しています。"
+
+    if category == "収益":
+        data_detail = (
+            f"売上目標は FY1 {_fmt_int(assumptions['revenue_target'][0])} -> FY5 {_fmt_int(assumptions['revenue_target'][-1])}、"
+            f"継続率は meal {_fmt_pct(meal_retention_start)} / consult {_fmt_pct(consult_retention_start)} です。"
+        )
+    elif category == "収益性":
+        data_detail = (
+            f"粗利率は FY1 {_fmt_pct(gross_margin_start)} -> FY5 {_fmt_pct(gross_margin_end)}、"
+            f"PL差分は {pl_delta:+.4f} です。"
+        )
+    elif category == "コスト":
+        data_detail = (
+            f"費用比率は人件費 {_fmt_pct(personnel_ratio_start)} / マーケ費 {_fmt_pct(marketing_ratio_start)} / "
+            f"開発費 {_fmt_pct(development_ratio_start)} です。"
+        )
+    elif category == "資金":
+        data_detail = (
+            f"開発費は {development_years:.0f} 年償却、総合差分は {total_delta:+.4f}、PL差分は {pl_delta:+.4f} です。"
+        )
+    elif category == "オペレーション":
+        data_detail = (
+            f"アカデミー受講人数 FY1 {_fmt_int(assumptions['academy_students'][0])}、"
+            f"meal 食数/年 FY1 {_fmt_int(assumptions['meal_meals_per_year'][0])} を起点にしています。"
+        )
+    else:
+        data_detail = (
+            f"売上目標 FY1 {_fmt_int(assumptions['revenue_target'][0])}、PL差分 {pl_delta:+.4f}、"
+            f"次アクション {next_actions[0]}"
+        )
+
+    plan_detail = spec["evidence_to_check"]
+    other_detail = external_label if external_label != "pdf" else current_summary.get("improved_points", "-")
+    if not other_detail:
+        other_detail = next_actions[0]
+
+    return [
+        {
+            "category": "ファクト",
+            "detail": fact_detail,
+            "source": "事業計画PDF / PDF抽出ファクト",
+        },
+        {
+            "category": "データ",
+            "detail": data_detail,
+            "source": spec["metrics_to_check"],
+        },
+        {
+            "category": "事業計画",
+            "detail": plan_detail,
+            "source": "PL設計 / モデルシート / 費用計画 / （全Ver）前提条件",
+        },
+        {
+            "category": "その他",
+            "detail": other_detail,
+            "source": f"外部比較 / PDCA全体推移 / 次の改善施策 / tags={', '.join(tags) or '-'}",
+        },
+    ]
 
 
 def _current_iteration(iteration_summaries: list[dict[str, Any]], candidate_id: str) -> int:
