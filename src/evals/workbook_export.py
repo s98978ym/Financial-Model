@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from openpyxl import Workbook
-from openpyxl.styles import Font
+from openpyxl.styles import Font, PatternFill
 
 
 YEAR_HEADERS = ["FY1", "FY2", "FY3", "FY4", "FY5"]
@@ -175,6 +175,13 @@ CONSULT_TOTAL_REVENUE_ROW = 15
 CONSULT_TOTAL_DELIVERY_ROW = 16
 CONSULT_TOTAL_GROSS_PROFIT_ROW = 17
 
+INPUT_FILL = PatternFill(fill_type="solid", fgColor="DDEBF7")
+FORMULA_FILL = PatternFill(fill_type="solid", fgColor="E2F0D9")
+SUBTOTAL_FILL = PatternFill(fill_type="solid", fgColor="D9E2F3")
+TOTAL_FILL = PatternFill(fill_type="solid", fgColor="A6A6A6")
+BOLD_FONT = Font(bold=True)
+TOTAL_FONT = Font(bold=True, color="FFFFFF")
+
 
 def export_candidate_workbook(
     *,
@@ -287,6 +294,9 @@ def _write_pl_sheet(sheet) -> None:
         sheet[f"{model_col}{PL_ROWS['operating_margin']}"] = (
             f"=IF({model_col}{PL_ROWS['revenue_total']}<>0,{model_col}{PL_ROWS['operating_profit']}/{model_col}{PL_ROWS['revenue_total']},0)"
         )
+    _style_subtotal_rows(sheet, [PL_ROWS["academy_revenue"], PL_ROWS["consult_revenue"], PL_ROWS["meal_revenue"]])
+    _style_formula_rows(sheet, [PL_ROWS["gross_margin_ratio"], PL_ROWS["operating_margin"]])
+    _style_total_rows(sheet, [PL_ROWS["revenue_total"], PL_ROWS["gross_profit"], PL_ROWS["opex_total"], PL_ROWS["operating_profit"]])
 
 
 def _write_meal_sheet(sheet) -> None:
@@ -314,6 +324,8 @@ def _write_meal_sheet(sheet) -> None:
         for row_index, assumption_key in mapping.items():
             sheet[f"{model_col}{row_index}"] = f"={_sheet_ref('（全Ver）前提条件', f'{assumption_col}{ASSUMPTION_ROWS[assumption_key]}')}"
         sheet[f"{model_col}7"] = f"={model_col}2*{model_col}3*{model_col}4*{model_col}6"
+    _style_formula_rows(sheet, [2, 3, 4, 5, 6])
+    _style_subtotal_rows(sheet, [7])
 
 
 def _write_academy_sheet(sheet) -> None:
@@ -380,6 +392,9 @@ def _write_academy_sheet(sheet) -> None:
             f"=SUM({model_col}{ACADEMY_ROW_LAYOUT['c']['revenue']},{model_col}{ACADEMY_ROW_LAYOUT['b']['revenue']},"
             f"{model_col}{ACADEMY_ROW_LAYOUT['a']['revenue']},{model_col}{ACADEMY_ROW_LAYOUT['s']['revenue']})"
         )
+    _style_formula_rows(sheet, [3, 4, 5, 6, 8, 9, 10, 11, 13, 14, 15, 16, 18, 19, 20, 21])
+    _style_subtotal_rows(sheet, [ACADEMY_ROW_LAYOUT["total_students"]])
+    _style_total_rows(sheet, [ACADEMY_ROW_LAYOUT["total_revenue"]])
 
 
 def _write_consulting_sheet(sheet) -> None:
@@ -395,9 +410,9 @@ def _write_consulting_sheet(sheet) -> None:
         sheet.cell(row=1, column=8 + idx, value=f"{year} 件数")
         sheet.cell(row=1, column=13 + idx, value=f"{year} 売上")
         sheet.cell(row=1, column=18 + idx, value=f"{year} 原価")
-        sheet.cell(row=1, column=8 + idx).font = Font(bold=True)
-        sheet.cell(row=1, column=13 + idx).font = Font(bold=True)
-        sheet.cell(row=1, column=18 + idx).font = Font(bold=True)
+        sheet.cell(row=1, column=8 + idx).font = BOLD_FONT
+        sheet.cell(row=1, column=13 + idx).font = BOLD_FONT
+        sheet.cell(row=1, column=18 + idx).font = BOLD_FONT
 
     unit_price_scale_ref = _sheet_ref("（全Ver）前提条件", f"B{ASSUMPTION_ROWS['consult_unit_price']}")
     retention_ref = _sheet_ref("（全Ver）前提条件", f"B{ASSUMPTION_ROWS['consult_retention']}")
@@ -438,6 +453,11 @@ def _write_consulting_sheet(sheet) -> None:
         sheet[f"{summary_col}{CONSULT_TOTAL_REVENUE_ROW}"] = f"=SUM({revenue_col}{CONSULT_DETAIL_START_ROW}:{revenue_col}{CONSULT_DETAIL_START_ROW + len(CONSULT_SKUS) - 1})"
         sheet[f"{summary_col}{CONSULT_TOTAL_DELIVERY_ROW}"] = f"=SUM({cost_col}{CONSULT_DETAIL_START_ROW}:{cost_col}{CONSULT_DETAIL_START_ROW + len(CONSULT_SKUS) - 1})"
         sheet[f"{summary_col}{CONSULT_TOTAL_GROSS_PROFIT_ROW}"] = f"={summary_col}{CONSULT_TOTAL_REVENUE_ROW}-{summary_col}{CONSULT_TOTAL_DELIVERY_ROW}"
+    for row_index in range(CONSULT_DETAIL_START_ROW, CONSULT_DETAIL_START_ROW + len(CONSULT_SKUS)):
+        _apply_row_style(sheet, row_index, 4, 6, fill=FORMULA_FILL)
+        _apply_row_style(sheet, row_index, 8, 22, fill=FORMULA_FILL)
+    _style_subtotal_rows(sheet, [CONSULT_TOTAL_REVENUE_ROW, CONSULT_TOTAL_DELIVERY_ROW], start_col=1, end_col=17)
+    _style_total_rows(sheet, [CONSULT_TOTAL_GROSS_PROFIT_ROW], start_col=1, end_col=17)
 
 
 def _write_cost_summary_sheet(sheet) -> None:
@@ -476,6 +496,8 @@ def _write_cost_summary_sheet(sheet) -> None:
         sheet[f"{model_col}{COST_SUMMARY_ROWS['opex_total']}"] = (
             f"=SUM({model_col}{COST_SUMMARY_ROWS['personnel_cost']}:{model_col}{COST_SUMMARY_ROWS['other_opex']})"
         )
+    _style_subtotal_rows(sheet, [2, 3, 4, 5])
+    _style_total_rows(sheet, [COST_SUMMARY_ROWS["opex_total"]])
 
 
 def _write_cost_list_sheet(sheet) -> None:
@@ -496,6 +518,8 @@ def _write_cost_list_sheet(sheet) -> None:
             model_col = excel_col(column_index)
             summary_col = excel_col(column_index - 1)
             sheet[f"{model_col}{row_index}"] = f"={_sheet_ref('費用まとめ', f'{summary_col}{cost_row}')}*{share}"
+    for row_index in range(2, 2 + len(COST_LIST_ROWS)):
+        _apply_row_style(sheet, row_index, 3, 7, fill=FORMULA_FILL)
 
 
 def _write_plan_assumptions_sheet(sheet, assumptions: dict[str, list[float]]) -> None:
@@ -598,6 +622,21 @@ def _write_plan_assumptions_sheet(sheet, assumptions: dict[str, list[float]]) ->
         sheet[f"{col}{ASSUMPTION_ROWS['gross_margin_ratio']}"] = (
             f"=IF({col}{ASSUMPTION_ROWS['revenue_target']}<>0,{col}{ASSUMPTION_ROWS['gross_profit_target']}/{col}{ASSUMPTION_ROWS['revenue_target']},0)"
         )
+    derived_rows = [
+        ASSUMPTION_ROWS["academy_effective_price"],
+        ASSUMPTION_ROWS["meal_unit_count"],
+        ASSUMPTION_ROWS["meal_revenue"],
+        ASSUMPTION_ROWS["consult_revenue"],
+        ASSUMPTION_ROWS["consult_project_count"],
+        ASSUMPTION_ROWS["gross_margin_ratio"],
+    ]
+    input_rows = [
+        row_index
+        for row_key, row_index in ASSUMPTION_ROWS.items()
+        if row_key not in {"academy_effective_price", "meal_unit_count", "meal_revenue", "consult_revenue", "consult_project_count", "gross_margin_ratio"}
+    ]
+    _style_input_rows(sheet, input_rows)
+    _style_formula_rows(sheet, derived_rows)
 
 
 def _academy_raw_student_expr(code: str, assumption_col: str, previous_model_col: str | None) -> str:
@@ -751,10 +790,38 @@ def _series_product(left: list[float], right: list[float]) -> list[float]:
 
 def _write_header_row(sheet) -> None:
     sheet.cell(row=1, column=1, value="項目")
-    sheet["A1"].font = Font(bold=True)
+    sheet["A1"].font = BOLD_FONT
     for column_index, header in enumerate(YEAR_HEADERS, start=2):
         sheet.cell(row=1, column=column_index, value=header)
-        sheet.cell(row=1, column=column_index).font = Font(bold=True)
+        sheet.cell(row=1, column=column_index).font = BOLD_FONT
+
+
+def _apply_row_style(sheet, row_index: int, start_col: int, end_col: int, *, fill: PatternFill, font: Font | None = None) -> None:
+    for column_index in range(start_col, end_col + 1):
+        cell = sheet.cell(row=row_index, column=column_index)
+        cell.fill = fill
+        if font is not None:
+            cell.font = font
+
+
+def _style_input_rows(sheet, row_indexes: list[int], *, start_col: int = 2, end_col: int = 6) -> None:
+    for row_index in row_indexes:
+        _apply_row_style(sheet, row_index, start_col, end_col, fill=INPUT_FILL)
+
+
+def _style_formula_rows(sheet, row_indexes: list[int], *, start_col: int = 2, end_col: int = 6) -> None:
+    for row_index in row_indexes:
+        _apply_row_style(sheet, row_index, start_col, end_col, fill=FORMULA_FILL)
+
+
+def _style_subtotal_rows(sheet, row_indexes: list[int], *, start_col: int = 1, end_col: int = 6) -> None:
+    for row_index in row_indexes:
+        _apply_row_style(sheet, row_index, start_col, end_col, fill=SUBTOTAL_FILL, font=BOLD_FONT)
+
+
+def _style_total_rows(sheet, row_indexes: list[int], *, start_col: int = 1, end_col: int = 6) -> None:
+    for row_index in row_indexes:
+        _apply_row_style(sheet, row_index, start_col, end_col, fill=TOTAL_FILL, font=TOTAL_FONT)
 
 
 def _write_key_value_rows(sheet, rows: list[list[Any]]) -> None:

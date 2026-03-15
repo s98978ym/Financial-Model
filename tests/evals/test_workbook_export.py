@@ -10,6 +10,10 @@ from src.evals.scoring import score_candidate
 from src.evals.workbook_export import export_candidate_workbook
 
 
+def _rgb_suffix(cell) -> str:
+    return (cell.fill.fgColor.rgb or "").upper()[-6:]
+
+
 def test_export_candidate_workbook_writes_expected_sheets(tmp_path) -> None:
     fixture_dir = Path("tests/fixtures/evals")
     candidate = json.loads((fixture_dir / "candidate_result.json").read_text(encoding="utf-8"))
@@ -68,6 +72,10 @@ def test_export_candidate_workbook_writes_expected_sheets(tmp_path) -> None:
     }
     assert "売上目標" in assumption_labels
     assert "人件費比率" in assumption_labels
+    assert assumptions_sheet["B2"].fill.fill_type == "solid"
+    assert _rgb_suffix(assumptions_sheet["B2"]) == "DDEBF7"
+    assert assumptions_sheet["B10"].fill.fill_type == "solid"
+    assert _rgb_suffix(assumptions_sheet["B10"]) == "E2F0D9"
 
     cost_sheet = workbook["費用まとめ"]
     cost_labels = {
@@ -76,6 +84,10 @@ def test_export_candidate_workbook_writes_expected_sheets(tmp_path) -> None:
         if cost_sheet.cell(row=row_index, column=1).value
     }
     assert "OPEX合計" in cost_labels
+    assert cost_sheet["A6"].fill.fill_type == "solid"
+    assert _rgb_suffix(cost_sheet["A6"]) == "A6A6A6"
+    assert cost_sheet["B6"].fill.fill_type == "solid"
+    assert _rgb_suffix(cost_sheet["B6"]) == "A6A6A6"
 
 
 def test_export_candidate_workbook_expands_academy_and_consulting_structure(tmp_path) -> None:
@@ -141,6 +153,8 @@ def test_export_candidate_workbook_expands_academy_and_consulting_structure(tmp_
     assert {"P1", "P2", "P3", "P4", "P5", "P6", "P8", "P9", "P10", "P11", "P12"}.issubset(sku_rows)
     assert isinstance(consult_sheet["H3"].value, str) and consult_sheet["H3"].value.startswith("=")
     assert isinstance(consult_sheet["I3"].value, str) and consult_sheet["I3"].value.startswith("=")
+    assert consult_sheet["M15"].fill.fill_type == "solid"
+    assert _rgb_suffix(consult_sheet["M15"]) == "D9E2F3"
 
     assumptions_sheet = workbook["（全Ver）前提条件"]
     assumption_labels = {
@@ -152,3 +166,13 @@ def test_export_candidate_workbook_expands_academy_and_consulting_structure(tmp_
     assert "C→B進級率" in assumption_labels
     assert "P1売上構成比" in assumption_labels
     assert "ブレンド時給" in assumption_labels
+    assert _rgb_suffix(assumptions_sheet["B33"]) == "DDEBF7"
+    assert _rgb_suffix(assumptions_sheet["B58"]) == "DDEBF7"
+
+    pl_sheet = workbook["PL設計"]
+    assert pl_sheet["A14"].fill.fill_type == "solid"
+    assert _rgb_suffix(pl_sheet["A14"]) == "A6A6A6"
+    assert pl_sheet["B14"].fill.fill_type == "solid"
+    assert _rgb_suffix(pl_sheet["B14"]) == "A6A6A6"
+    assert pl_sheet["A3"].fill.fill_type == "solid"
+    assert _rgb_suffix(pl_sheet["A3"]) == "D9E2F3"
