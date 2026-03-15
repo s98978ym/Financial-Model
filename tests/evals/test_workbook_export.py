@@ -246,46 +246,71 @@ def test_export_candidate_workbook_adds_qa_sheet_with_iteration_tracking(tmp_pat
     workbook = load_workbook(output_path, data_only=False)
     qa_sheet = workbook["想定Q&A"]
     assert qa_sheet.freeze_panes == "A2"
-    headers = [qa_sheet.cell(row=1, column=column_index).value for column_index in range(1, 9)]
+    headers = [qa_sheet.cell(row=1, column=column_index).value for column_index in range(1, 13)]
     assert headers == [
+        "区分",
         "カテゴリ",
         "想定質問",
         "回答",
-        "根拠",
+        "見る数値",
+        "見る根拠",
+        "頻度",
+        "精度",
         "初回追加Iteration",
         "今回更新Iteration",
         "状態",
         "採用状況",
     ]
-    categories = {
+    sections = {
         qa_sheet.cell(row=row_index, column=1).value
         for row_index in range(2, qa_sheet.max_row + 1)
         if qa_sheet.cell(row=row_index, column=1).value
     }
+    assert {"一般", "企画書固有"}.issubset(sections)
+    categories = {
+        qa_sheet.cell(row=row_index, column=2).value
+        for row_index in range(2, qa_sheet.max_row + 1)
+        if qa_sheet.cell(row=row_index, column=2).value
+    }
     assert {"収益", "コスト", "収益性", "成長性", "リスク", "市場", "オペレーション", "資金"}.issubset(categories)
-    statuses = {
+    assert qa_sheet.max_row >= 21
+    frequencies = {
         qa_sheet.cell(row=row_index, column=7).value
         for row_index in range(2, qa_sheet.max_row + 1)
         if qa_sheet.cell(row=row_index, column=7).value
     }
-    assert "新規" in statuses
-    assert "継続" in statuses
-    adoption = {
+    assert {"高", "中", "低"}.issubset(frequencies)
+    accuracies = {
         qa_sheet.cell(row=row_index, column=8).value
         for row_index in range(2, qa_sheet.max_row + 1)
         if qa_sheet.cell(row=row_index, column=8).value
+    }
+    assert {"高", "中"}.issubset(accuracies)
+    statuses = {
+        qa_sheet.cell(row=row_index, column=11).value
+        for row_index in range(2, qa_sheet.max_row + 1)
+        if qa_sheet.cell(row=row_index, column=11).value
+    }
+    assert "新規" in statuses
+    assert "継続" in statuses
+    adoption = {
+        qa_sheet.cell(row=row_index, column=12).value
+        for row_index in range(2, qa_sheet.max_row + 1)
+        if qa_sheet.cell(row=row_index, column=12).value
     }
     assert "今回採用" in adoption
     assert "比較のみ" in adoption
     revenue_rows = [
         row_index
         for row_index in range(2, qa_sheet.max_row + 1)
-        if qa_sheet.cell(row=row_index, column=1).value == "収益"
+        if qa_sheet.cell(row=row_index, column=2).value == "収益"
     ]
     assert revenue_rows
     first_revenue_row = revenue_rows[0]
-    assert qa_sheet.cell(row=first_revenue_row, column=5).value == 1
-    assert qa_sheet.cell(row=first_revenue_row, column=6).value == 1
+    assert qa_sheet.cell(row=first_revenue_row, column=9).value == 1
+    assert qa_sheet.cell(row=first_revenue_row, column=10).value == 1
+    assert qa_sheet.cell(row=first_revenue_row, column=5).value
+    assert qa_sheet.cell(row=first_revenue_row, column=6).value
 
 
 def test_export_candidate_workbook_expands_academy_and_consulting_structure(tmp_path) -> None:
