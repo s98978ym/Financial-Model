@@ -4,7 +4,7 @@ from pathlib import Path
 from openpyxl import load_workbook
 
 from src.evals.diagnosis import build_candidate_diagnosis
-from src.evals.candidate_profiles import fixture_profiles
+from src.evals.candidate_profiles import CandidateProfile, fixture_profiles
 from src.evals.reference_workbook import extract_reference_workbook
 from src.evals.scoring import score_candidate
 from src.evals.workbook_export import export_candidate_workbook
@@ -43,6 +43,7 @@ def test_export_candidate_workbook_writes_expected_sheets(tmp_path) -> None:
     workbook = load_workbook(output_path, data_only=False)
     assert workbook.sheetnames == [
         "PDCAチェックシート",
+        "想定Q&A",
         "PL設計",
         "ミールモデル",
         "アカデミーモデル",
@@ -146,6 +147,145 @@ def test_export_candidate_workbook_writes_expected_sheets(tmp_path) -> None:
     assert isinstance(cost_sheet["B18"].value, str)
     assert cost_sheet["B18"].value.startswith("=")
     assert cost_sheet["G18"].value == "人件費"
+
+
+def test_export_candidate_workbook_adds_qa_sheet_with_iteration_tracking(tmp_path) -> None:
+    fixture_dir = Path("tests/fixtures/evals")
+    candidate = json.loads((fixture_dir / "candidate_result.json").read_text(encoding="utf-8"))
+    baseline = json.loads((fixture_dir / "baseline_result.json").read_text(encoding="utf-8"))
+    reference = extract_reference_workbook(fixture_dir / "reference_workbook_minimal.xlsx")
+    candidate_score = score_candidate(reference, candidate)
+    baseline_score = score_candidate(reference, baseline)
+    profile = CandidateProfile(
+        candidate_id="candidate-revenue-staged-sales",
+        label="Revenue staged sales candidate",
+        hypothesis_title="検証後アクセルに営業効率を重ねる",
+        hypothesis_detail="3年間の検証後に営業投資を加速し、sales efficiency overlay を重ねると PL 再現が改善するはず。",
+        toggles_on=["staged", "sales"],
+        toggles_off=["partner", "branding"],
+        logic_steps=[
+            "前半3年を検証期間として扱う。",
+            "後半で営業投資を加速させる。",
+            "sales efficiency overlay を consulting/revenue 系列に反映する。",
+        ],
+        expected_impacts={"pl": 0.03},
+        evidence_source_types=["pdf", "external"],
+        next_if_success=["consulting driver と revenue line の橋渡しをさらに強化する。"],
+        next_if_fail=["sales overlay の効き方を見直す。"],
+    )
+    diagnosis = build_candidate_diagnosis(
+        profile,
+        candidate_score,
+        baseline_score,
+        evidence_summary={
+            "pdf_facts": ["3年間ユニットエコノミクスを磨く方針"],
+            "external_sources": [{"title": "Sales benchmark", "quote": "高効率営業は win rate を改善する。"}],
+            "benchmark_fills": [],
+            "seed_notes": [],
+        },
+    )
+    iteration_summaries = [
+        {
+            "iteration": 0,
+            "candidate_id": "baseline",
+            "hypothesis": "baseline",
+            "changed_levers": "-",
+            "improved_points": "-",
+            "worsened_points": "-",
+            "structure_delta": 0.0,
+            "model_sheets_delta": 0.0,
+            "pl_delta": 0.0,
+            "explainability_delta": 0.0,
+            "artifact_impact": "比較基準",
+            "verdict": "baseline",
+            "next_action": "以降の候補を比較する",
+        },
+        {
+            "iteration": 1,
+            "candidate_id": "candidate-revenue-staged-sales",
+            "hypothesis": "検証後アクセルに営業効率を重ねる",
+            "changed_levers": "ON: staged, sales / OFF: partner, branding",
+            "improved_points": "pl +0.0478 / explainability +0.0027",
+            "worsened_points": "-",
+            "structure_delta": 0.0,
+            "model_sheets_delta": 0.0,
+            "pl_delta": 0.0478,
+            "explainability_delta": 0.0027,
+            "artifact_impact": "PL改善 / 説明強化",
+            "verdict": "hit",
+            "next_action": "consulting driver と revenue line の橋渡しをさらに強化する。",
+        },
+        {
+            "iteration": 2,
+            "candidate_id": "candidate-revenue-staged-partner",
+            "hypothesis": "検証後アクセルにパートナー戦略を重ねる",
+            "changed_levers": "ON: staged, partner / OFF: sales, branding",
+            "improved_points": "pl +0.0417 / explainability +0.0027",
+            "worsened_points": "model_sheets -0.0045",
+            "structure_delta": 0.0,
+            "model_sheets_delta": -0.0045,
+            "pl_delta": 0.0417,
+            "explainability_delta": 0.0027,
+            "artifact_impact": "PL改善 / 説明強化 / 一部悪化",
+            "verdict": "partial_hit",
+            "next_action": "partner 寄与を sales efficiency と複合して比較する。",
+        },
+    ]
+
+    output_path = tmp_path / "candidate.xlsx"
+    export_candidate_workbook(
+        output_path=output_path,
+        candidate_id=profile.candidate_id,
+        candidate_payload=candidate,
+        diagnosis=diagnosis,
+        baseline_total=baseline_score.total_score,
+        run_root=tmp_path,
+        iteration_summaries=iteration_summaries,
+    )
+
+    workbook = load_workbook(output_path, data_only=False)
+    qa_sheet = workbook["想定Q&A"]
+    assert qa_sheet.freeze_panes == "A2"
+    headers = [qa_sheet.cell(row=1, column=column_index).value for column_index in range(1, 9)]
+    assert headers == [
+        "カテゴリ",
+        "想定質問",
+        "回答",
+        "根拠",
+        "初回追加Iteration",
+        "今回更新Iteration",
+        "状態",
+        "採用状況",
+    ]
+    categories = {
+        qa_sheet.cell(row=row_index, column=1).value
+        for row_index in range(2, qa_sheet.max_row + 1)
+        if qa_sheet.cell(row=row_index, column=1).value
+    }
+    assert {"収益", "コスト", "収益性", "成長性", "リスク", "市場", "オペレーション", "資金"}.issubset(categories)
+    statuses = {
+        qa_sheet.cell(row=row_index, column=7).value
+        for row_index in range(2, qa_sheet.max_row + 1)
+        if qa_sheet.cell(row=row_index, column=7).value
+    }
+    assert "新規" in statuses
+    assert "継続" in statuses
+    adoption = {
+        qa_sheet.cell(row=row_index, column=8).value
+        for row_index in range(2, qa_sheet.max_row + 1)
+        if qa_sheet.cell(row=row_index, column=8).value
+    }
+    assert "今回採用" in adoption
+    assert "比較のみ" in adoption
+    revenue_rows = [
+        row_index
+        for row_index in range(2, qa_sheet.max_row + 1)
+        if qa_sheet.cell(row=row_index, column=1).value == "収益"
+    ]
+    assert revenue_rows
+    first_revenue_row = revenue_rows[0]
+    assert qa_sheet.cell(row=first_revenue_row, column=5).value == 1
+    assert qa_sheet.cell(row=first_revenue_row, column=6).value == 1
 
 
 def test_export_candidate_workbook_expands_academy_and_consulting_structure(tmp_path) -> None:

@@ -193,6 +193,7 @@ INPUT_FILL = PatternFill(fill_type="solid", fgColor="DDEBF7")
 FORMULA_FILL = PatternFill(fill_type="solid", fgColor="E2F0D9")
 SUBTOTAL_FILL = PatternFill(fill_type="solid", fgColor="D9E2F3")
 TOTAL_FILL = PatternFill(fill_type="solid", fgColor="A6A6A6")
+UPDATED_FILL = PatternFill(fill_type="solid", fgColor="FFF2CC")
 BOLD_FONT = Font(bold=True)
 TOTAL_FONT = Font(bold=True, color="FFFFFF")
 NUMBER_FORMAT = "#,##0"
@@ -229,6 +230,14 @@ def export_candidate_workbook(
         baseline_total=baseline_total,
         candidate_payload=candidate_payload,
         run_root=run_root,
+        iteration_summaries=iteration_summaries or [],
+    )
+    _write_qa_sheet(
+        workbook.create_sheet("想定Q&A"),
+        candidate_id=candidate_id,
+        candidate_payload=candidate_payload,
+        diagnosis=diagnosis,
+        assumptions=assumptions,
         iteration_summaries=iteration_summaries or [],
     )
     _write_pl_sheet(workbook.create_sheet("PL設計"))
@@ -810,6 +819,78 @@ def _write_cost_plan_sheet(sheet, assumptions: dict[str, list[float]]) -> None:
     )
     _align_range(sheet, start_row=1, end_row=sheet.max_row, start_col=1, end_col=1, alignment=LEFT_ALIGN)
     _align_range(sheet, start_row=1, end_row=sheet.max_row, start_col=2, end_col=6, alignment=RIGHT_ALIGN)
+
+
+def _write_qa_sheet(
+    sheet,
+    *,
+    candidate_id: str,
+    candidate_payload: dict[str, Any],
+    diagnosis: dict[str, Any],
+    assumptions: dict[str, list[float]],
+    iteration_summaries: list[dict[str, Any]],
+) -> None:
+    headers = [
+        "カテゴリ",
+        "想定質問",
+        "回答",
+        "根拠",
+        "初回追加Iteration",
+        "今回更新Iteration",
+        "状態",
+        "採用状況",
+    ]
+    for column_index, header in enumerate(headers, start=1):
+        cell = sheet.cell(row=1, column=column_index, value=header)
+        cell.font = BOLD_FONT
+        cell.fill = SUBTOTAL_FILL
+        cell.alignment = CENTER_ALIGN if column_index >= 5 else LEFT_ALIGN
+
+    for row_index, item in enumerate(
+        _build_workbook_qa_items(
+            candidate_id=candidate_id,
+            candidate_payload=candidate_payload,
+            diagnosis=diagnosis,
+            assumptions=assumptions,
+            iteration_summaries=iteration_summaries,
+        ),
+        start=2,
+    ):
+        sheet.cell(row=row_index, column=1, value=item["category"])
+        sheet.cell(row=row_index, column=2, value=item["question"])
+        sheet.cell(row=row_index, column=3, value=item["answer"])
+        sheet.cell(row=row_index, column=4, value=item["evidence"])
+        sheet.cell(row=row_index, column=5, value=item["first_added_iteration"])
+        sheet.cell(row=row_index, column=6, value=item["last_updated_iteration"])
+        sheet.cell(row=row_index, column=7, value=item["status"])
+        sheet.cell(row=row_index, column=8, value=item["adoption"])
+        if item["status"] == "新規":
+            sheet.cell(row=row_index, column=7).fill = FORMULA_FILL
+        elif item["status"] == "更新":
+            sheet.cell(row=row_index, column=7).fill = UPDATED_FILL
+        if item["adoption"] == "今回採用":
+            sheet.cell(row=row_index, column=8).fill = INPUT_FILL
+        elif item["adoption"] == "比較のみ":
+            sheet.cell(row=row_index, column=8).fill = SUBTOTAL_FILL
+
+    sheet.freeze_panes = "A2"
+    _set_column_widths(
+        sheet,
+        {
+            "A": 12,
+            "B": 28,
+            "C": 52,
+            "D": 32,
+            "E": 14,
+            "F": 14,
+            "G": 10,
+            "H": 12,
+        },
+    )
+    _align_range(sheet, start_row=1, end_row=sheet.max_row, start_col=1, end_col=1, alignment=CENTER_ALIGN)
+    _align_range(sheet, start_row=1, end_row=sheet.max_row, start_col=2, end_col=4, alignment=WRAP_LEFT_ALIGN)
+    _align_range(sheet, start_row=1, end_row=sheet.max_row, start_col=5, end_col=6, alignment=RIGHT_ALIGN)
+    _align_range(sheet, start_row=1, end_row=sheet.max_row, start_col=7, end_col=8, alignment=CENTER_ALIGN)
     _align_range(sheet, start_row=1, end_row=sheet.max_row, start_col=7, end_col=7, alignment=LEFT_ALIGN)
 
 
@@ -1085,6 +1166,187 @@ def _write_labeled_values(
         sheet.cell(row=row_index, column=target_col, value=value)
         row_index += 1
     return row_index
+
+
+def _build_workbook_qa_items(
+    *,
+    candidate_id: str,
+    candidate_payload: dict[str, Any],
+    diagnosis: dict[str, Any],
+    assumptions: dict[str, list[float]],
+    iteration_summaries: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    current_iteration = _current_iteration(iteration_summaries, candidate_id)
+    current_summary = next(
+        (item for item in iteration_summaries if item.get("candidate_id") == candidate_id),
+        {},
+    )
+    score_layers = diagnosis.get("score", {}).get("layers", {})
+    next_actions = diagnosis.get("next_actions") or ["次の改善施策は未設定です。"]
+    source_types = ", ".join(diagnosis.get("evidence", {}).get("source_types", [])) or "pdf"
+    pdf_facts = diagnosis.get("evidence", {}).get("pdf_facts", []) or []
+    external_sources = diagnosis.get("evidence", {}).get("external_sources", []) or []
+    external_label = ", ".join(source.get("title", "") for source in external_sources if source.get("title")) or source_types
+    segments = list(candidate_payload.get("model_sheets", {}).keys())
+
+    qa_specs = [
+        {
+            "category": "収益",
+            "question": "売上は何を主因に伸ばす計画か？",
+            "answer": (
+                f"FY1 {_fmt_int(assumptions['revenue_target'][0])} から FY5 {_fmt_int(assumptions['revenue_target'][-1])} へ伸ばす前提です。"
+                f" 今回採用した仮説は「{diagnosis.get('hypothesis', {}).get('title', '-') }」で、"
+                "検証後アクセルと営業効率で売上再現を高める考え方です。"
+            ),
+            "evidence": f"根拠タイプ: {source_types}" if not pdf_facts else f"PDF: {pdf_facts[0]} / 根拠タイプ: {source_types}",
+            "tags": ["sales"],
+        },
+        {
+            "category": "コスト",
+            "question": "費用計画はどのような前提で管理しているか？",
+            "answer": (
+                f"人件費比率 {_fmt_pct(assumptions['personnel_ratio'][0])}、マーケ費比率 {_fmt_pct(assumptions['marketing_ratio'][0])}、"
+                f"開発費比率 {_fmt_pct(assumptions['development_ratio'][0])} を起点に費用計画を置いています。"
+            ),
+            "evidence": "費用計画 / （全Ver）前提条件",
+            "tags": [],
+        },
+        {
+            "category": "収益性",
+            "question": "今回の改善で収益性はどう良くなったか？",
+            "answer": (
+                f"PL 再現度は {score_layers.get('pl', {}).get('delta', 0.0):+.4f}、"
+                f"説明責任は {score_layers.get('explainability', {}).get('delta', 0.0):+.4f} 改善しました。"
+                " 収益性の観点では、売上を落とさずに PL 側を押し上げた点が主要な改善です。"
+            ),
+            "evidence": current_summary.get("improved_points", "-"),
+            "tags": ["sales"],
+        },
+        {
+            "category": "成長性",
+            "question": "なぜ最初の数年を検証期間としているのか？",
+            "answer": (
+                "前半でユニットエコノミクスを確認し、後半で投資アクセルを踏む段階設計を採っています。"
+                " これにより、検証前に固定費を先行させすぎるリスクを抑えます。"
+            ),
+            "evidence": diagnosis.get("hypothesis", {}).get("detail", "-"),
+            "tags": ["staged"],
+        },
+        {
+            "category": "リスク",
+            "question": "現時点での主要リスクと次の改善論点は何か？",
+            "answer": (
+                f"最大のリスクは {next_actions[0]} "
+                "現状では workbook の質改善と PL の橋渡しを続ける必要があります。"
+            ),
+            "evidence": current_summary.get("worsened_points", "-"),
+            "tags": ["sales"],
+        },
+        {
+            "category": "市場",
+            "question": "営業以外に市場浸透で比較した施策は何か？",
+            "answer": (
+                "パートナー戦略やブランド波及も比較候補として検証しました。"
+                " 現時点では営業効率を重ねた案が最も有力ですが、市場浸透の補助レバーとして継続監視します。"
+            ),
+            "evidence": external_label,
+            "tags": ["partner", "branding"],
+        },
+        {
+            "category": "オペレーション",
+            "question": "事業モデルはどの単位で運用設計しているか？",
+            "answer": (
+                f"モデルは {' / '.join(segments) or 'ミール / アカデミー / コンサル'} の3系統で分けて運用します。"
+                " それぞれ別の driver を持ち、PL 設計に接続しています。"
+            ),
+            "evidence": "モデルシート構成",
+            "tags": [],
+        },
+        {
+            "category": "資金",
+            "question": "開発投資は PL 上でどのように扱っているか？",
+            "answer": (
+                f"開発投資はキャッシュ支出と PL 計上を分け、定額法 {int(assumptions['development_amortization_years'][0])} 年で償却しています。"
+                " そのため PL の開発費は当期投資額そのものではなく償却額です。"
+            ),
+            "evidence": "費用計画の開発償却ブロック",
+            "tags": [],
+        },
+    ]
+
+    items: list[dict[str, Any]] = []
+    for spec in qa_specs:
+        first_added, last_updated = _iteration_range_for_tags(iteration_summaries, spec["tags"])
+        status = _qa_status(first_added, last_updated, current_iteration)
+        adoption = _qa_adoption(spec["tags"], diagnosis)
+        items.append(
+            {
+                "category": spec["category"],
+                "question": spec["question"],
+                "answer": spec["answer"],
+                "evidence": spec["evidence"],
+                "first_added_iteration": first_added,
+                "last_updated_iteration": last_updated,
+                "status": status,
+                "adoption": adoption,
+            }
+        )
+    return items
+
+
+def _current_iteration(iteration_summaries: list[dict[str, Any]], candidate_id: str) -> int:
+    for item in iteration_summaries:
+        if item.get("candidate_id") == candidate_id:
+            return int(item.get("iteration", 0))
+    return max((int(item.get("iteration", 0)) for item in iteration_summaries), default=0)
+
+
+def _iteration_range_for_tags(iteration_summaries: list[dict[str, Any]], tags: list[str]) -> tuple[int, int]:
+    if not tags:
+        return (0, 0)
+    matched_iterations: list[int] = []
+    for item in iteration_summaries:
+        changed_levers = str(item.get("changed_levers", ""))
+        on_levers = changed_levers
+        if " / OFF:" in changed_levers:
+            on_levers = changed_levers.split(" / OFF:", 1)[0]
+        haystack = " ".join(
+            [
+                str(item.get("candidate_id", "")).lower(),
+                str(item.get("hypothesis", "")).lower(),
+                on_levers.lower(),
+            ]
+        )
+        if any(tag.lower() in haystack for tag in tags):
+            matched_iterations.append(int(item.get("iteration", 0)))
+    if not matched_iterations:
+        return (0, 0)
+    return (min(matched_iterations), max(matched_iterations))
+
+
+def _qa_status(first_added: int, last_updated: int, current_iteration: int) -> str:
+    if first_added == 0 and last_updated == 0:
+        return "継続"
+    if last_updated == current_iteration:
+        return "新規" if first_added == current_iteration else "更新"
+    return "継続"
+
+
+def _qa_adoption(tags: list[str], diagnosis: dict[str, Any]) -> str:
+    if not tags:
+        return "今回採用"
+    toggles_on = set(diagnosis.get("logic", {}).get("toggles_on", []) or [])
+    if any(tag in toggles_on for tag in tags):
+        return "今回採用"
+    return "比較のみ"
+
+
+def _fmt_int(value: float) -> str:
+    return f"{int(round(value)):,}"
+
+
+def _fmt_pct(value: float) -> str:
+    return f"{value * 100:.1f}%"
 
 
 def _write_score_table(sheet, row_index: int, score: dict[str, Any], baseline_total: float) -> int:
